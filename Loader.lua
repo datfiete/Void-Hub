@@ -7,7 +7,7 @@ print("🎮 Game Name: " .. GameName)
 local GameScripts = {
     [109715918987082] = "baddiecardcollection.lua",
     [79305036070450] = "spinabaddie.lua",
-    [93999763241813] = "SpinanAnime.lua",  -- fixed capitalization
+    [93999763241813] = "SpinanAnime.lua",
     [77258312157727] = "SlotsRNG.lua",
     [102210353081918] = "SpinABaddieNew.lua",
     [85050171250159] = "Poopapoop.lua",
@@ -54,7 +54,7 @@ local GameScripts = {
 local scriptName = GameScripts[PlaceId]
 
 if scriptName then
-    local rawUrl = "https://raw.githubusercontent.com/fietewoozle-dot/MyHub/refs/heads/main/game/" .. scriptName
+    local rawUrl = "https://raw.githubusercontent.com/datfiete/Void-Hub/refs/heads/main/game/" .. scriptName
     
     print("✅ Game matched! Loading: " .. scriptName)
     
