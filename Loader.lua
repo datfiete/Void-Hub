@@ -49,6 +49,7 @@ local GameScripts = {
     [75034791252172] = "ParkourForBrainrots.lua",
     [74144293690546] = "EggCaseFarm.lua",
     [137233438285284] = "ChickenFarm.lua",
+    [88891488197895] = "GrowaBeehive.lua",
 }
 
 local scriptName = GameScripts[PlaceId]
