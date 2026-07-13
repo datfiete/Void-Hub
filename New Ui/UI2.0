@@ -1,0 +1,1823 @@
+--[[
+    ModernUI  �  Rewritten UI loader
+    Fixed dropdown layout, slider thumb positioning, background preview,
+    live theme updates, and improved UI styling.
+]]
+
+local ModernUI = {}
+ModernUI.__index = ModernUI
+
+-- ============================================================================
+-- Services
+-- ============================================================================
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local HttpService = game:GetService("HttpService")
+local CoreGui = game:GetService("CoreGui")
+local Lighting = game:GetService("Lighting")
+local LocalPlayer = Players.LocalPlayer
+
+-- ============================================================================
+-- Configuration
+-- ============================================================================
+local Config = {
+    LibraryName = "ModernUI",
+    Version = "1.1.0",
+    DiscordInvite = "https://discord.gg/pmJABXQtw",
+    DefaultTheme = "Dark",
+    AnimationsEnabled = true,
+    SoundsEnabled = true,
+    BlurEnabled = false,
+    TweenSpeed = 0.22,
+    TweenStyle = Enum.EasingStyle.Quint,
+    TweenDir = Enum.EasingDirection.Out,
+    ConfigFolder = "ModernUI/Configs",
+    NotificationDuration = 5,
+}
+
+local Assets = {
+    Sounds = {
+        Click = "rbxassetid://6895079853",
+        Hover = "rbxassetid://6895079091",
+        Toggle = "rbxassetid://6895079837",
+        Open = "rbxassetid://6895079802",
+        Close = "rbxassetid://6895079968",
+        Notification = "rbxassetid://6895079931",
+        Error = "rbxassetid://6895079781",
+    },
+    Shadow = "rbxassetid://5028857084",
+    Icons = {
+        home = "�",
+        settings = "?",
+        palette = "?",
+        star = "?",
+        bell = "??",
+        discord = "??",
+        close = "?",
+        minimize = "�",
+        chevronDown = "?",
+        chevronUp = "?",
+        dot = "?",
+    },
+}
+
+local function ResolveIcon(icon)
+    if typeof(icon) == "number" then
+        return "Image", "rbxassetid://" .. tostring(icon)
+    elseif typeof(icon) == "string" then
+        if Assets.Icons[icon] then
+            return "Text", Assets.Icons[icon]
+        elseif icon:match("^rbxassetid://") then
+            return "Image", icon
+        else
+            return "Text", icon
+        end
+    end
+    return "Text", ""
+end
+
+local Themes = {
+    Dark = {
+        Background = Color3.fromRGB(18, 18, 22),
+        Secondary = Color3.fromRGB(28, 28, 33),
+        Elevated = Color3.fromRGB(34, 35, 41),
+        ElevatedHi = Color3.fromRGB(44, 45, 52),
+        Stroke = Color3.fromRGB(58, 62, 79),
+        Text = Color3.fromRGB(245, 245, 247),
+        SubText = Color3.fromRGB(177, 180, 190),
+        Accent = Color3.fromRGB(100, 121, 255),
+        Glow = Color3.fromRGB(156, 176, 255),
+        Success = Color3.fromRGB(100, 201, 124),
+        Warning = Color3.fromRGB(244, 165, 44),
+        Error = Color3.fromRGB(239, 84, 87),
+    },
+    Light = {
+        Background = Color3.fromRGB(244, 245, 248),
+        Secondary = Color3.fromRGB(255, 255, 255),
+        Elevated = Color3.fromRGB(248, 249, 252),
+        ElevatedHi = Color3.fromRGB(233, 236, 242),
+        Stroke = Color3.fromRGB(207, 210, 218),
+        Text = Color3.fromRGB(24, 24, 28),
+        SubText = Color3.fromRGB(105, 109, 122),
+        Accent = Color3.fromRGB(84, 100, 242),
+        Glow = Color3.fromRGB(122, 141, 249),
+        Success = Color3.fromRGB(50, 167, 90),
+        Warning = Color3.fromRGB(189, 131, 20),
+        Error = Color3.fromRGB(195, 55, 60),
+    },
+}
+Themes.Custom = {}
+for k, v in pairs(Themes.Dark) do
+    Themes.Custom[k] = v
+end
+
+-- ============================================================================
+-- Utilities
+-- ============================================================================
+local Utility = {}
+Utility.Connections = {}
+Utility.Tweens = {}
+
+function Utility.Create(className, props, children)
+    local inst = Instance.new(className)
+    for prop, value in pairs(props or {}) do
+        inst[prop] = value
+    end
+    for _, child in ipairs(children or {}) do
+        child.Parent = inst
+    end
+    return inst
+end
+
+function Utility.Corner(radius)
+    return Utility.Create("UICorner", { CornerRadius = UDim.new(0, radius or 10) })
+end
+
+function Utility.Stroke(color, thickness, transparency)
+    return Utility.Create("UIStroke", {
+        Color = color or Color3.new(1, 1, 1),
+        Thickness = thickness or 1,
+        Transparency = transparency or 0,
+        ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+    })
+end
+
+function Utility.Gradient(colorSequence, rotation)
+    return Utility.Create("UIGradient", {
+        Color = colorSequence,
+        Rotation = rotation or 0,
+    })
+end
+
+function Utility.Padding(all, top, bottom, left, right)
+    return Utility.Create("UIPadding", {
+        PaddingTop = UDim.new(0, top or all or 0),
+        PaddingBottom = UDim.new(0, bottom or all or 0),
+        PaddingLeft = UDim.new(0, left or all or 0),
+        PaddingRight = UDim.new(0, right or all or 0),
+    })
+end
+
+function Utility.ListLayout(direction, padding, alignX, alignY)
+    return Utility.Create("UIListLayout", {
+        FillDirection = direction or Enum.FillDirection.Vertical,
+        Padding = UDim.new(0, padding or 8),
+        HorizontalAlignment = alignX or Enum.HorizontalAlignment.Left,
+        VerticalAlignment = alignY or Enum.VerticalAlignment.Top,
+        SortOrder = Enum.SortOrder.LayoutOrder,
+    })
+end
+
+function Utility.Tween(instance, props, duration, style, direction)
+    if not Config.AnimationsEnabled then
+        for prop, value in pairs(props) do
+            instance[prop] = value
+        end
+        return
+    end
+    local info = TweenInfo.new(
+        duration or Config.TweenSpeed,
+        style or Config.TweenStyle,
+        direction or Config.TweenDir
+    )
+    local tween = TweenService:Create(instance, info, props)
+    Utility.Tweens[tween] = true
+    tween.Completed:Connect(function()
+        Utility.Tweens[tween] = nil
+    end)
+    tween:Play()
+    return tween
+end
+
+function Utility.Connect(signal, fn)
+    local conn = signal:Connect(fn)
+    table.insert(Utility.Connections, conn)
+    return conn
+end
+
+function Utility.CleanupAll()
+    for _, conn in ipairs(Utility.Connections) do
+        pcall(function() conn:Disconnect() end)
+    end
+    Utility.Connections = {}
+    for tween in pairs(Utility.Tweens) do
+        pcall(function() tween:Cancel() end)
+    end
+    Utility.Tweens = {}
+end
+
+function Utility.MakeDraggable(frame, handle)
+    handle = handle or frame
+    local dragging = false
+    local dragStart, startPos
+
+    Utility.Connect(handle.InputBegan, function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = frame.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+
+    Utility.Connect(UserInputService.InputChanged, function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
+            or input.UserInputType == Enum.UserInputType.Touch) then
+            local delta = input.Position - dragStart
+            frame.Position = UDim2.new(
+                startPos.X.Scale, startPos.X.Offset + delta.X,
+                startPos.Y.Scale, startPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+end
+
+function Utility.Ripple(button, colorOverride)
+    Utility.Connect(button.InputBegan, function(input)
+        if input.UserInputType ~= Enum.UserInputType.MouseButton1
+            and input.UserInputType ~= Enum.UserInputType.Touch then
+            return
+        end
+        local ripple = Utility.Create("Frame", {
+            BackgroundColor3 = colorOverride or Color3.new(1, 1, 1),
+            BackgroundTransparency = 0.7,
+            BorderSizePixel = 0,
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.new(0.5, 0, 0.5, 0),
+            Size = UDim2.new(0, 0, 0, 0),
+            ZIndex = button.ZIndex + 1,
+        }, { Utility.Corner(999) })
+        ripple.Parent = button
+        local diameter = math.max(button.AbsoluteSize.X, button.AbsoluteSize.Y) * 1.8
+        Utility.Tween(ripple, { Size = UDim2.new(0, diameter, 0, diameter), BackgroundTransparency = 1 }, 0.35)
+        task.delay(0.36, function()
+            if ripple then ripple:Destroy() end
+        end)
+    end)
+end
+
+function Utility.AddShadow(parent, transparency, padding)
+    local shadow = Utility.Create("ImageLabel", {
+        Name = "Shadow",
+        Image = Assets.Shadow,
+        ImageColor3 = Color3.new(0, 0, 0),
+        ImageTransparency = transparency or 0.55,
+        ScaleType = Enum.ScaleType.Slice,
+        SliceCenter = Rect.new(23, 23, 277, 277),
+        BackgroundTransparency = 1,
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.new(0.5, 0, 0.5, padding or 12),
+        Size = UDim2.new(1, (padding or 12) * 2, 1, (padding or 12) * 2),
+        ZIndex = parent.ZIndex - 1,
+    })
+    shadow.Parent = parent
+    return shadow
+end
+
+local function GetGuiParent()
+    local ok, gui = pcall(function() return gethui() end)
+    if ok and gui then return gui end
+    return CoreGui
+end
+
+-- ============================================================================
+-- Sound / Notification / Config services
+-- ============================================================================
+local SoundService_ = {}
+do
+    local soundFolder = Utility.Create("Folder", { Name = "ModernUI_Sounds" })
+    soundFolder.Parent = CoreGui
+
+    function SoundService_.Play(name)
+        if not Config.SoundsEnabled then
+            return
+        end
+        local id = Assets.Sounds[name]
+        if not id then
+            return
+        end
+        local sound = Utility.Create("Sound", {
+            SoundId = id,
+            Volume = 0.45,
+            Looped = false,
+            Parent = soundFolder,
+        })
+        sound:Play()
+        game:GetService("Debris"):AddItem(sound, 4)
+    end
+end
+
+local NotificationService = { Holder = nil, Active = 0, Order = 0 }
+
+function NotificationService.Init(screenGui, theme)
+    if NotificationService.Holder and NotificationService.Holder.Parent == screenGui then
+        return
+    end
+    local holder = Utility.Create("Frame", {
+        Name = "NotificationHolder",
+        BackgroundTransparency = 1,
+        AnchorPoint = Vector2.new(1, 1),
+        Position = UDim2.new(1, -16, 1, -16),
+        Size = UDim2.new(0, 320, 0, 0),
+        ZIndex = 120,
+    }, {
+        Utility.ListLayout(Enum.FillDirection.Vertical, 8, Enum.HorizontalAlignment.Right, Enum.VerticalAlignment.Bottom),
+    })
+    holder.Parent = screenGui
+    NotificationService.Holder = holder
+end
+
+function NotificationService.Notify(opts, theme)
+    if not NotificationService.Holder then
+        return
+    end
+    opts = opts or {}
+    local title = opts.Title or "Notification"
+    local content = opts.Content or ""
+    local duration = opts.Duration or Config.NotificationDuration
+    local kind = opts.Image or "info"
+    local accent = theme.Accent
+    if kind == "success" then accent = theme.Success
+    elseif kind == "warning" then accent = theme.Warning
+    elseif kind == "error" then accent = theme.Error end
+
+    NotificationService.Order = NotificationService.Order + 1
+    NotificationService.Active = NotificationService.Active + 1
+
+    local card = Utility.Create("Frame", {
+        BackgroundColor3 = theme.Elevated,
+        BorderSizePixel = 0,
+        Size = UDim2.new(1, 0, 0, 0),
+        AutomaticSize = Enum.AutomaticSize.Y,
+        LayoutOrder = NotificationService.Order,
+        ClipsDescendants = false,
+    }, {
+        Utility.Corner(14),
+        Utility.Stroke(Color3.new(0, 0, 0), 1, 0.8),
+    })
+    card.Parent = NotificationService.Holder
+    Utility.AddShadow(card, 0.65, 24)
+
+    local header = Utility.Create("Frame", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 0, 36),
+    }, {
+        Utility.ListLayout(Enum.FillDirection.Horizontal, 10, Enum.HorizontalAlignment.Left, Enum.VerticalAlignment.Center),
+        Utility.Padding(12, 12, 12, 12, 12),
+    })
+    header.Parent = card
+
+    Utility.Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(0, 20, 0, 20),
+        Font = Enum.Font.GothamBold,
+        Text = kind == "success" and "?" or kind == "warning" and "?" or kind == "error" and "?" or "?",
+        TextColor3 = accent,
+        TextSize = 16,
+    }).Parent = header
+
+    local contentFrame = Utility.Create("Frame", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, -30, 0, 24),
+    })
+    contentFrame.Parent = header
+
+    Utility.Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 0, 18),
+        Font = Enum.Font.GothamBold,
+        Text = title,
+        TextColor3 = theme.Text,
+        TextSize = 14,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    }).Parent = contentFrame
+
+    Utility.Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 0, 0, 18),
+        Size = UDim2.new(1, 0, 0, 18),
+        Font = Enum.Font.Gotham,
+        Text = content,
+        TextColor3 = theme.SubText,
+        TextSize = 13,
+        TextWrapped = true,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    }).Parent = contentFrame
+
+    card.Position = UDim2.new(1.2, 0, 0, 0)
+    Utility.Tween(card, { Position = UDim2.new(0, 0, 0, 0) }, 0.35, Enum.EasingStyle.Back)
+    SoundService_.Play("Notification")
+
+    task.delay(duration, function()
+        if not card or not card.Parent then
+            return
+        end
+        Utility.Tween(card, { Position = UDim2.new(1.2, 0, 0, 0) }, 0.25)
+        task.delay(0.26, function()
+            if card then card:Destroy() end
+        end)
+    end)
+end
+
+local ConfigService = {}
+function ConfigService.Save(name, data)
+    local ok = pcall(function()
+        if not isfolder(Config.ConfigFolder) then
+            makefolder(Config.ConfigFolder)
+        end
+        writefile(Config.ConfigFolder .. "/" .. name .. ".json", HttpService:JSONEncode(data))
+    end)
+    return ok
+end
+
+function ConfigService.Load(name)
+    local result = nil
+    pcall(function()
+        local path = Config.ConfigFolder .. "/" .. name .. ".json"
+        if isfile(path) then
+            result = HttpService:JSONDecode(readfile(path))
+        end
+    end)
+    return result
+end
+
+-- ============================================================================
+-- Core
+-- ============================================================================
+ModernUI.Flags = {}
+ModernUI.FlagObjects = {}
+ModernUI.Windows = {}
+
+function ModernUI:_Retheme(oldTheme, newTheme)
+    local function process(inst)
+        for _, prop in ipairs({ "BackgroundColor3", "TextColor3", "ImageColor3" }) do
+            local ok, current = pcall(function() return inst[prop] end)
+            if ok and typeof(current) == "Color3" then
+                for key, oldColor in pairs(oldTheme) do
+                    if typeof(oldColor) == "Color3" and current == oldColor then
+                        local replacement = newTheme[key]
+                        if replacement then
+                            pcall(function() inst[prop] = replacement end)
+                        end
+                        break
+                    end
+                end
+            end
+        end
+        for _, child in ipairs(inst:GetChildren()) do
+            process(child)
+        end
+    end
+    process(self.Main)
+end
+
+function ModernUI:_InitTabAPI()
+    local window = self
+    function window:CreateTab(name, icon)
+        local theme = window.Theme
+        local tabBtn = Utility.Create("TextButton", {
+            BackgroundColor3 = theme.Elevated,
+            BorderSizePixel = 0,
+            Size = UDim2.new(1, 0, 0, 42),
+            Text = "",
+            AutoButtonColor = false,
+        }, { Utility.Corner(14) })
+        tabBtn.Parent = window.TabListHolder
+
+        local iconType, iconValue = ResolveIcon(icon or "dot")
+        local iconLabel = Utility.Create(iconType == "Image" and "ImageLabel" or "TextLabel", {
+            BackgroundTransparency = 1,
+            Position = UDim2.new(0, 16, 0, 0),
+            Size = UDim2.new(0, 20, 1, 0),
+            Font = Enum.Font.GothamBold,
+            Text = iconType == "Text" and iconValue or "",
+            Image = iconType == "Image" and iconValue or "",
+            TextColor3 = theme.SubText,
+            TextSize = 14,
+            ScaleType = iconType == "Image" and Enum.ScaleType.Fit or nil,
+        })
+        iconLabel.Parent = tabBtn
+
+        local nameLabel = Utility.Create("TextLabel", {
+            BackgroundTransparency = 1,
+            Position = UDim2.new(0, 44, 0, 0),
+            Size = UDim2.new(1, -54, 1, 0),
+            Font = Enum.Font.GothamMedium,
+            Text = name,
+            TextColor3 = theme.SubText,
+            TextSize = 14,
+            TextXAlignment = Enum.TextXAlignment.Left,
+        })
+        nameLabel.Parent = tabBtn
+
+        local page = Utility.Create("ScrollingFrame", {
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, 0, 1, 0),
+            ScrollBarThickness = 4,
+            ScrollBarImageColor3 = theme.Accent,
+            CanvasSize = UDim2.new(0, 0, 0, 0),
+            AutomaticCanvasSize = Enum.AutomaticSize.Y,
+            VerticalScrollBarInset = Enum.ScrollBarInset.ScrollBar,
+            Visible = false,
+        }, {
+            Utility.ListLayout(Enum.FillDirection.Vertical, 10),
+            Utility.Padding(14),
+        })
+        page.Parent = window.ContentArea
+
+        local tabObject = { Name = name, Button = tabBtn, Page = page, Sections = {}, SectionCount = 0 }
+
+        function tabObject:Select()
+            for _, other in ipairs(window.Tabs) do
+                other.Page.Visible = false
+                Utility.Tween(other.Button, { BackgroundColor3 = theme.Elevated }, 0.15)
+                Utility.Tween(other.NameLabel, { TextColor3 = theme.SubText }, 0.15)
+                Utility.Tween(other.IconLabel, { TextColor3 = theme.SubText }, 0.15)
+            end
+            page.Visible = true
+            Utility.Tween(tabBtn, { BackgroundColor3 = theme.Accent }, 0.18)
+            Utility.Tween(nameLabel, { TextColor3 = theme.Text }, 0.18)
+            Utility.Tween(iconLabel, { TextColor3 = theme.Background }, 0.18)
+        end
+
+        tabObject.NameLabel = nameLabel
+        tabObject.IconLabel = iconLabel
+        Utility.Connect(tabBtn.MouseButton1Click, function()
+            SoundService_.Play("Click")
+            tabObject:Select()
+        end)
+        Utility.Ripple(tabBtn, theme.Glow)
+
+        table.insert(window.Tabs, tabObject)
+        if #window.Tabs == 1 then
+            tabObject:Select()
+        end
+
+        function tabObject:CreateSection(sectionName)
+            tabObject.SectionCount = tabObject.SectionCount + 1
+            local section = Utility.Create("TextLabel", {
+                BackgroundTransparency = 1,
+                Size = UDim2.new(1, 0, 0, 24),
+                Font = Enum.Font.GothamBold,
+                Text = sectionName,
+                TextColor3 = theme.SubText,
+                TextSize = 13,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                LayoutOrder = tabObject.SectionCount * 1000,
+            })
+            section.Parent = page
+            return { Name = sectionName, Label = section }
+        end
+
+        window:_AttachComponents(tabObject, page, theme)
+        return tabObject
+    end
+end
+
+local function baseElementFrame(page, height)
+    local holder = Utility.Create("Frame", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 0, height or 44),
+    })
+    holder.Parent = page
+    return holder
+end
+
+function ModernUI:_AttachComponents(tab, page, theme)
+    function tab:CreateButton(opts)
+        opts = opts or {}
+        local holder = baseElementFrame(page, 44)
+        local btn = Utility.Create("TextButton", {
+            BackgroundColor3 = theme.Accent,
+            BorderSizePixel = 0,
+            Size = UDim2.new(1, 0, 1, 0),
+            Text = opts.Name or "Button",
+            Font = Enum.Font.GothamBold,
+            TextColor3 = Color3.new(1, 1, 1),
+            TextSize = 14,
+            AutoButtonColor = false,
+        }, { Utility.Corner(14), Utility.Stroke(Color3.new(0, 0, 0), 1, 0.8) })
+        btn.Parent = holder
+        Utility.Ripple(btn, Color3.new(1, 1, 1))
+        Utility.Connect(btn.MouseEnter, function()
+            Utility.Tween(btn, { BackgroundColor3 = theme.Glow }, 0.12)
+        end)
+        Utility.Connect(btn.MouseLeave, function()
+            Utility.Tween(btn, { BackgroundColor3 = theme.Accent }, 0.12)
+        end)
+        Utility.Connect(btn.MouseButton1Click, function()
+            SoundService_.Play("Click")
+            if opts.Callback then task.spawn(opts.Callback) end
+        end)
+        return { Instance = holder }
+    end
+
+    function tab:CreateToggle(opts)
+        opts = opts or {}
+        local state = opts.CurrentValue or false
+        local holder = baseElementFrame(page, 44)
+        local label = Utility.Create("TextLabel", {
+            BackgroundTransparency = 1,
+            Size = UDim2.new(0.65, 0, 1, 0),
+            Font = Enum.Font.GothamMedium,
+            Text = opts.Name or "Toggle",
+            TextColor3 = theme.Text,
+            TextSize = 14,
+            TextXAlignment = Enum.TextXAlignment.Left,
+        })
+        label.Parent = holder
+
+        local switchBg = Utility.Create("Frame", {
+            AnchorPoint = Vector2.new(1, 0.5),
+            Position = UDim2.new(1, -8, 0.5, 0),
+            Size = UDim2.new(0, 56, 0, 28),
+            BackgroundColor3 = state and theme.Accent or theme.ElevatedHi,
+            BorderSizePixel = 0,
+        }, { Utility.Corner(16) })
+        switchBg.Parent = holder
+
+        local thumb = Utility.Create("Frame", {
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = state and UDim2.new(0.85, 0, 0.5, 0) or UDim2.new(0.15, 0, 0.5, 0),
+            Size = UDim2.new(0, 22, 0, 22),
+            BackgroundColor3 = Color3.new(1, 1, 1),
+            BorderSizePixel = 0,
+        }, { Utility.Corner(12) })
+        thumb.Parent = switchBg
+
+        local button = Utility.Create("TextButton", {
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, 1, 1, 0),
+            Text = "",
+            AutoButtonColor = false,
+        })
+        button.Parent = switchBg
+
+        local toggleObj = { Value = state }
+        local function refresh(animated)
+            local duration = animated and 0.18 or 0
+            Utility.Tween(switchBg, { BackgroundColor3 = toggleObj.Value and theme.Accent or theme.ElevatedHi }, duration)
+            Utility.Tween(thumb, { Position = toggleObj.Value and UDim2.new(0.85, 0, 0.5, 0) or UDim2.new(0.15, 0, 0.5, 0) }, duration)
+        end
+
+        function toggleObj:Set(value)
+            toggleObj.Value = value
+            refresh(true)
+            if opts.Flag then ModernUI.Flags[opts.Flag] = value end
+            if opts.Callback then task.spawn(opts.Callback, value) end
+        end
+
+        Utility.Connect(button.MouseButton1Click, function()
+            SoundService_.Play("Toggle")
+            toggleObj:Set(not toggleObj.Value)
+        end)
+
+        if opts.Flag then
+            ModernUI.Flags[opts.Flag] = state
+            ModernUI.FlagObjects[opts.Flag] = toggleObj
+        end
+
+        return toggleObj
+    end
+
+    function tab:CreateSlider(opts)
+        opts = opts or {}
+        local range = opts.Range or { 0, 100 }
+        local increment = opts.Increment or 1
+        local suffix = opts.Suffix or ""
+        local value = opts.CurrentValue or range[1]
+        local holder = baseElementFrame(page, 58)
+
+        Utility.Create("TextLabel", {
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, -72, 0, 20),
+            Font = Enum.Font.GothamMedium,
+            Text = opts.Name or "Slider",
+            TextColor3 = theme.Text,
+            TextSize = 14,
+            TextXAlignment = Enum.TextXAlignment.Left,
+        }).Parent = holder
+
+        local valueLabel = Utility.Create("TextLabel", {
+            BackgroundTransparency = 1,
+            AnchorPoint = Vector2.new(1, 0),
+            Position = UDim2.new(1, -4, 0, 0),
+            Size = UDim2.new(0, 64, 0, 20),
+            Font = Enum.Font.GothamBold,
+            Text = tostring(value) .. suffix,
+            TextColor3 = theme.Accent,
+            TextSize = 13,
+            TextXAlignment = Enum.TextXAlignment.Right,
+        })
+        valueLabel.Parent = holder
+
+        local track = Utility.Create("Frame", {
+            Position = UDim2.new(0, 0, 0, 32),
+            Size = UDim2.new(1, 0, 0, 10),
+            BackgroundColor3 = theme.Elevated,
+            BorderSizePixel = 0,
+        }, { Utility.Corner(5) })
+        track.Parent = holder
+
+        local fill = Utility.Create("Frame", {
+            Size = UDim2.new(0, 0, 1, 0),
+            BackgroundColor3 = theme.Accent,
+            BorderSizePixel = 0,
+        }, { Utility.Corner(5) })
+        fill.Parent = track
+
+        local thumb = Utility.Create("Frame", {
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.new(0, 0, 0.5, 0),
+            Size = UDim2.new(0, 18, 0, 18),
+            BackgroundColor3 = Color3.new(1, 1, 1),
+            BorderSizePixel = 0,
+        }, { Utility.Corner(9) })
+        thumb.Parent = track
+
+        local knobButton = Utility.Create("TextButton", {
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, 0, 1, 0),
+            Text = "",
+        })
+        knobButton.Parent = track
+
+        local sliderObj = { Value = value }
+        local function setAlpha(alpha, animate)
+            alpha = math.clamp(alpha, 0, 1)
+            local raw = range[1] + (range[2] - range[1]) * alpha
+            raw = math.floor(raw / increment + 0.5) * increment
+            raw = math.clamp(raw, range[1], range[2])
+            sliderObj.Value = raw
+            local target = UDim2.new((raw - range[1]) / (range[2] - range[1]), 0, 1, 0)
+            local position = UDim2.new((raw - range[1]) / (range[2] - range[1]), 0, 0.5, 0)
+            if animate then
+                Utility.Tween(fill, { Size = target }, 0.18)
+                Utility.Tween(thumb, { Position = position }, 0.18)
+            else
+                fill.Size = target
+                thumb.Position = position
+            end
+            valueLabel.Text = tostring(raw) .. suffix
+            if opts.Flag then ModernUI.Flags[opts.Flag] = raw end
+            if opts.Callback then task.spawn(opts.Callback, raw) end
+        end
+
+        function sliderObj:Set(v)
+            setAlpha((v - range[1]) / (range[2] - range[1]), true)
+        end
+
+        local dragging = false
+        Utility.Connect(knobButton.InputBegan, function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1
+                or input.UserInputType == Enum.UserInputType.Touch then
+                dragging = true
+            end
+        end)
+        Utility.Connect(UserInputService.InputEnded, function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1
+                or input.UserInputType == Enum.UserInputType.Touch then
+                dragging = false
+            end
+        end)
+        Utility.Connect(UserInputService.InputChanged, function(input)
+            if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
+                or input.UserInputType == Enum.UserInputType.Touch) then
+                local alpha = (input.Position.X - track.AbsolutePosition.X) / track.AbsoluteSize.X
+                setAlpha(alpha, false)
+            end
+        end)
+
+        sliderObj:Set(value)
+        if opts.Flag then
+            ModernUI.Flags[opts.Flag] = value
+            ModernUI.FlagObjects[opts.Flag] = sliderObj
+        end
+        return sliderObj
+    end
+
+    function tab:CreateDropdown(opts)
+        opts = opts or {}
+        local options = opts.Options or {}
+        local multi = opts.MultipleOptions or false
+        local current = opts.CurrentOption
+        local holder = baseElementFrame(page, 44)
+        holder.AutomaticSize = Enum.AutomaticSize.Y
+        holder.ClipsDescendants = false
+
+        local head = Utility.Create("TextButton", {
+            BackgroundColor3 = theme.Elevated,
+            BorderSizePixel = 0,
+            Size = UDim2.new(1, 0, 0, 44),
+            Text = "",
+            AutoButtonColor = false,
+        }, { Utility.Corner(14), Utility.Stroke(theme.Stroke, 1) })
+        head.Parent = holder
+
+        local title = Utility.Create("TextLabel", {
+            BackgroundTransparency = 1,
+            Position = UDim2.new(0, 16, 0, 0),
+            Size = UDim2.new(1, -110, 1, 0),
+            Font = Enum.Font.GothamMedium,
+            Text = opts.Name or "Dropdown",
+            TextColor3 = theme.Text,
+            TextSize = 14,
+            TextXAlignment = Enum.TextXAlignment.Left,
+        })
+        title.Parent = head
+
+        local selectedLabel = Utility.Create("TextLabel", {
+            BackgroundTransparency = 1,
+            AnchorPoint = Vector2.new(1, 0.5),
+            Position = UDim2.new(1, -42, 0.5, 0),
+            Size = UDim2.new(0, 92, 0, 18),
+            Font = Enum.Font.Gotham,
+            Text = typeof(current) == "table" and table.concat(current, ", ") or tostring(current or "..."),
+            TextColor3 = theme.SubText,
+            TextSize = 12,
+            TextXAlignment = Enum.TextXAlignment.Right,
+            TextTruncate = Enum.TextTruncate.AtEnd,
+        })
+        selectedLabel.Parent = head
+
+        local chevron = Utility.Create("TextLabel", {
+            BackgroundTransparency = 1,
+            AnchorPoint = Vector2.new(1, 0.5),
+            Position = UDim2.new(1, -16, 0.5, 0),
+            Size = UDim2.new(0, 16, 0, 16),
+            Font = Enum.Font.GothamBold,
+            Text = Assets.Icons.chevronDown,
+            TextColor3 = theme.SubText,
+            TextSize = 14,
+        })
+        chevron.Parent = head
+
+        local listFrame = Utility.Create("ScrollingFrame", {
+            BackgroundColor3 = theme.ElevatedHi,
+            BorderSizePixel = 0,
+            Position = UDim2.new(0, 0, 0, 48),
+            Size = UDim2.new(1, 0, 0, 0),
+            ScrollBarThickness = 4,
+            ScrollBarImageColor3 = theme.Accent,
+            CanvasSize = UDim2.new(0, 0, 0, 0),
+            AutomaticCanvasSize = Enum.AutomaticSize.Y,
+            ClipsDescendants = true,
+            Visible = false,
+        }, {
+            Utility.ListLayout(Enum.FillDirection.Vertical, 4),
+            Utility.Padding(6),
+        })
+        listFrame.Parent = holder
+
+        local dropdownObj = { Open = false, Selected = multi and (current or {}) or current }
+
+        local function isSelected(choice)
+            if multi then
+                for _, value in ipairs(dropdownObj.Selected or {}) do
+                    if value == choice then
+                        return true
+                    end
+                end
+                return false
+            else
+                return dropdownObj.Selected == choice
+            end
+        end
+
+        local optionButtons = {}
+        local function refreshLabel()
+            if multi then
+                selectedLabel.Text = #dropdownObj.Selected > 0 and table.concat(dropdownObj.Selected, ", ") or "..."
+            else
+                selectedLabel.Text = tostring(dropdownObj.Selected or "...")
+            end
+        end
+
+        local function updateButtonState(button)
+            local selected = isSelected(button.OptValue)
+            Utility.Tween(button.Btn, { BackgroundColor3 = selected and theme.Accent or theme.Elevated }, 0.14)
+            if button.Label then
+                button.Label.TextColor3 = selected and theme.Background or theme.Text
+            end
+        end
+
+        local function selectOption(choice)
+            if multi then
+                local selected = dropdownObj.Selected
+                local removed = false
+                for index, value in ipairs(selected) do
+                    if value == choice then
+                        table.remove(selected, index)
+                        removed = true
+                        break
+                    end
+                end
+                if not removed then
+                    table.insert(selected, choice)
+                end
+            else
+                dropdownObj.Selected = choice
+            end
+            refreshLabel()
+            for _, btn in ipairs(optionButtons) do
+                updateButtonState(btn)
+            end
+            if opts.Flag then ModernUI.Flags[opts.Flag] = dropdownObj.Selected end
+            if opts.Callback then task.spawn(opts.Callback, dropdownObj.Selected) end
+        end
+
+        for i, choice in ipairs(options) do
+            local optionButton = Utility.Create("TextButton", {
+                BackgroundColor3 = isSelected(choice) and theme.Accent or theme.Elevated,
+                BorderSizePixel = 0,
+                Size = UDim2.new(1, 0, 0, 34),
+                Text = "",
+                AutoButtonColor = false,
+            }, { Utility.Corner(10) })
+            optionButton.Parent = listFrame
+
+            local label = Utility.Create("TextLabel", {
+                BackgroundTransparency = 1,
+                Position = UDim2.new(0, 14, 0, 0),
+                Size = UDim2.new(1, -24, 1, 0),
+                Font = Enum.Font.Gotham,
+                Text = tostring(choice),
+                TextColor3 = theme.Text,
+                TextSize = 13,
+                TextXAlignment = Enum.TextXAlignment.Left,
+            })
+            label.Parent = optionButton
+
+            optionButtons[#optionButtons + 1] = { Btn = optionButton, Label = label, OptValue = choice }
+            Utility.Connect(optionButton.MouseButton1Click, function()
+                SoundService_.Play("Click")
+                selectOption(choice)
+            end)
+        end
+
+        local function toggleOpen()
+            dropdownObj.Open = not dropdownObj.Open
+            if dropdownObj.Open then
+                listFrame.Visible = true
+                local targetHeight = math.min(#options * 38 + 12, 180)
+                Utility.Tween(listFrame, { Size = UDim2.new(1, 0, 0, targetHeight) }, 0.18)
+                Utility.Tween(chevron, { Rotation = 180 }, 0.18)
+            else
+                Utility.Tween(listFrame, { Size = UDim2.new(1, 0, 0, 0) }, 0.16)
+                Utility.Tween(chevron, { Rotation = 0 }, 0.16)
+                task.delay(0.16, function()
+                    if listFrame then
+                        listFrame.Visible = false
+                    end
+                end)
+            end
+        end
+
+        Utility.Connect(head.MouseButton1Click, function()
+            SoundService_.Play("Click")
+            toggleOpen()
+        end)
+
+        if opts.Flag then
+            ModernUI.Flags[opts.Flag] = current
+            ModernUI.FlagObjects[opts.Flag] = dropdownObj
+        end
+
+        return dropdownObj
+    end
+
+    function tab:CreateInput(opts)
+        opts = opts or {}
+        local holder = baseElementFrame(page, 48)
+        local box = Utility.Create("Frame", {
+            BackgroundColor3 = theme.Elevated,
+            BorderSizePixel = 0,
+            Size = UDim2.new(1, 0, 1, 0),
+        }, { Utility.Corner(14), Utility.Stroke(theme.Stroke, 1) })
+        box.Parent = holder
+
+        Utility.Create("TextLabel", {
+            BackgroundTransparency = 1,
+            Position = UDim2.new(0, 16, 0, 0),
+            Size = UDim2.new(0.5, 0, 1, 0),
+            Font = Enum.Font.GothamMedium,
+            Text = opts.Name or "Input",
+            TextColor3 = theme.Text,
+            TextSize = 14,
+            TextXAlignment = Enum.TextXAlignment.Left,
+        }).Parent = box
+
+        local textBox = Utility.Create("TextBox", {
+            BackgroundTransparency = 1,
+            Position = UDim2.new(0.5, 0, 0, 0),
+            Size = UDim2.new(0.5, -16, 1, 0),
+            Font = Enum.Font.Gotham,
+            PlaceholderText = opts.PlaceholderText or "...",
+            Text = opts.Text or "",
+            TextColor3 = theme.Text,
+            PlaceholderColor3 = theme.SubText,
+            TextSize = 13,
+            TextXAlignment = Enum.TextXAlignment.Right,
+            ClearTextOnFocus = false,
+            CursorPosition = 0,
+        })
+        textBox.Parent = box
+
+        local inputObj = { Value = textBox.Text }
+        local function apply()
+            inputObj.Value = textBox.Text
+            if opts.Flag then ModernUI.Flags[opts.Flag] = textBox.Text end
+            if opts.Callback then task.spawn(opts.Callback, textBox.Text) end
+        end
+
+        Utility.Connect(textBox.FocusLost, function()
+            apply()
+        end)
+        Utility.Connect(textBox:GetPropertyChangedSignal("Text"), function()
+            if opts.LiveUpdate then
+                apply()
+            end
+        end)
+
+        function inputObj:Set(value)
+            textBox.Text = value
+            apply()
+        end
+
+        if opts.Flag then
+            ModernUI.Flags[opts.Flag] = textBox.Text
+            ModernUI.FlagObjects[opts.Flag] = inputObj
+        end
+        return inputObj
+    end
+
+    function tab:CreateKeybind(opts)
+        opts = opts or {}
+        local currentKey = opts.CurrentKeybind or "None"
+        local holder = baseElementFrame(page, 44)
+
+        local box = Utility.Create("Frame", {
+            BackgroundColor3 = theme.Elevated,
+            BorderSizePixel = 0,
+            Size = UDim2.new(1, 0, 1, 0),
+        }, { Utility.Corner(14), Utility.Stroke(theme.Stroke, 1) })
+        box.Parent = holder
+
+        Utility.Create("TextLabel", {
+            BackgroundTransparency = 1,
+            Position = UDim2.new(0, 16, 0, 0),
+            Size = UDim2.new(1, -120, 1, 0),
+            Font = Enum.Font.GothamMedium,
+            Text = opts.Name or "Keybind",
+            TextColor3 = theme.Text,
+            TextSize = 14,
+            TextXAlignment = Enum.TextXAlignment.Left,
+        }).Parent = box
+
+        local keyBtn = Utility.Create("TextButton", {
+            AnchorPoint = Vector2.new(1, 0.5),
+            Position = UDim2.new(1, -16, 0.5, 0),
+            Size = UDim2.new(0, 90, 0, 28),
+            BackgroundColor3 = theme.ElevatedHi,
+            BorderSizePixel = 0,
+            Font = Enum.Font.GothamBold,
+            Text = currentKey,
+            TextColor3 = theme.Accent,
+            TextSize = 12,
+            AutoButtonColor = false,
+        }, { Utility.Corner(12) })
+        keyBtn.Parent = box
+
+        local listening = false
+        local keybindObj = { Value = currentKey }
+
+        Utility.Connect(keyBtn.MouseButton1Click, function()
+            SoundService_.Play("Click")
+            listening = true
+            keyBtn.Text = "..."
+        end)
+
+        Utility.Connect(UserInputService.InputBegan, function(input, gameProcessed)
+            if listening and input.UserInputType == Enum.UserInputType.Keyboard then
+                listening = false
+                local name = input.KeyCode.Name
+                keybindObj.Value = name
+                keyBtn.Text = name
+                if opts.Flag then ModernUI.Flags[opts.Flag] = name end
+                return
+            end
+            if not gameProcessed and not listening and input.KeyCode and input.KeyCode.Name == keybindObj.Value then
+                if opts.Callback then task.spawn(opts.Callback) end
+            end
+        end)
+
+        if opts.Flag then
+            ModernUI.Flags[opts.Flag] = currentKey
+            ModernUI.FlagObjects[opts.Flag] = keybindObj
+        end
+        return keybindObj
+    end
+
+    function tab:CreateParagraph(opts)
+        opts = opts or {}
+        local holder = Utility.Create("Frame", {
+            BackgroundColor3 = theme.Elevated,
+            BorderSizePixel = 0,
+            AutomaticSize = Enum.AutomaticSize.Y,
+            Size = UDim2.new(1, 0, 0, 0),
+        }, { Utility.Corner(16), Utility.Stroke(theme.Stroke, 1), Utility.Padding(16) })
+        holder.Parent = page
+
+        Utility.Create("TextLabel", {
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, 0, 0, 20),
+            Font = Enum.Font.GothamBold,
+            Text = opts.Title or "Paragraph",
+            TextColor3 = theme.Text,
+            TextSize = 14,
+            TextXAlignment = Enum.TextXAlignment.Left,
+        }).Parent = holder
+
+        Utility.Create("TextLabel", {
+            BackgroundTransparency = 1,
+            Position = UDim2.new(0, 0, 0, 24),
+            Size = UDim2.new(1, 0, 0, 0),
+            AutomaticSize = Enum.AutomaticSize.Y,
+            Font = Enum.Font.Gotham,
+            Text = opts.Content or "",
+            TextColor3 = theme.SubText,
+            TextSize = 13,
+            TextWrapped = true,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            TextYAlignment = Enum.TextYAlignment.Top,
+        }).Parent = holder
+
+        return { Instance = holder }
+    end
+
+    function tab:CreateLabel(text)
+        local label = Utility.Create("TextLabel", {
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, 0, 0, 20),
+            Font = Enum.Font.GothamMedium,
+            Text = text or "",
+            TextColor3 = theme.SubText,
+            TextSize = 13,
+            TextXAlignment = Enum.TextXAlignment.Left,
+        })
+        label.Parent = page
+        return { Instance = label, Set = function(_, value) label.Text = value end }
+    end
+
+    function tab:CreateColorPicker(opts)
+        opts = opts or {}
+        local color = opts.Color or Color3.new(1, 1, 1)
+        local holder = baseElementFrame(page, 44)
+
+        Utility.Create("TextLabel", {
+            BackgroundTransparency = 1,
+            Position = UDim2.new(0, 16, 0, 0),
+            Size = UDim2.new(0.55, 0, 1, 0),
+            Font = Enum.Font.GothamMedium,
+            Text = opts.Name or "Color",
+            TextColor3 = theme.Text,
+            TextSize = 14,
+            TextXAlignment = Enum.TextXAlignment.Left,
+        }).Parent = holder
+
+        local swatch = Utility.Create("TextButton", {
+            AnchorPoint = Vector2.new(1, 0.5),
+            Position = UDim2.new(1, -16, 0.5, 0),
+            Size = UDim2.new(0, 40, 0, 28),
+            BackgroundColor3 = color,
+            BorderSizePixel = 0,
+            Text = "",
+            AutoButtonColor = false,
+        }, { Utility.Corner(12), Utility.Stroke(theme.Stroke, 1) })
+        swatch.Parent = holder
+
+        local popup = Utility.Create("Frame", {
+            BackgroundColor3 = theme.ElevatedHi,
+            BorderSizePixel = 0,
+            Size = UDim2.new(0, 240, 0, 160),
+            Position = UDim2.new(1, -240, 1, 10),
+            Visible = false,
+            ZIndex = 80,
+        }, { Utility.Corner(16), Utility.Stroke(theme.Stroke, 1), Utility.Padding(14) })
+        popup.Parent = holder
+        Utility.AddShadow(popup, 0.55, 18)
+
+        local colorObj = { Value = color }
+        local bars = {}
+        for index, channel in ipairs({ "R", "G", "B" }) do
+            local row = Utility.Create("Frame", {
+                BackgroundTransparency = 1,
+                Position = UDim2.new(0, 0, 0, (index - 1) * 42),
+                Size = UDim2.new(1, 0, 0, 34),
+            })
+            row.Parent = popup
+
+            Utility.Create("TextLabel", {
+                BackgroundTransparency = 1,
+                Size = UDim2.new(0, 24, 0, 24),
+                Font = Enum.Font.GothamBold,
+                Text = channel,
+                TextColor3 = theme.SubText,
+                TextSize = 13,
+            }).Parent = row
+
+            local track = Utility.Create("Frame", {
+                Position = UDim2.new(0, 30, 0, 8),
+                Size = UDim2.new(1, -30, 0, 18),
+                BackgroundColor3 = theme.Elevated,
+                BorderSizePixel = 0,
+            }, { Utility.Corner(9) })
+            track.Parent = row
+
+            local fill = Utility.Create("Frame", {
+                Size = UDim2.new(colorObj.Value[channel] or 0, 0, 1, 0),
+                BackgroundColor3 = theme.Accent,
+                BorderSizePixel = 0,
+            }, { Utility.Corner(9) })
+            fill.Parent = track
+
+            local dragButton = Utility.Create("TextButton", {
+                BackgroundTransparency = 1,
+                Size = UDim2.new(1, 0, 1, 0),
+                Text = "",
+            })
+            dragButton.Parent = track
+            bars[channel] = { Track = track, Fill = fill }
+
+            local dragging = false
+            Utility.Connect(dragButton.InputBegan, function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                    dragging = true
+                end
+            end)
+            Utility.Connect(UserInputService.InputEnded, function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                    dragging = false
+                end
+            end)
+            Utility.Connect(UserInputService.InputChanged, function(input)
+                if not dragging then return end
+                if input.UserInputType ~= Enum.UserInputType.MouseMovement then return end
+                local alpha = math.clamp((input.Position.X - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
+                bars[channel].Fill.Size = UDim2.new(alpha, 0, 1, 0)
+                local r = bars.R and bars.R.Fill.Size.X.Scale or colorObj.Value.R
+                local g = bars.G and bars.G.Fill.Size.X.Scale or colorObj.Value.G
+                local b = bars.B and bars.B.Fill.Size.X.Scale or colorObj.Value.B
+                colorObj.Value = Color3.new(r, g, b)
+                swatch.BackgroundColor3 = colorObj.Value
+                if opts.Flag then ModernUI.Flags[opts.Flag] = colorObj.Value end
+                if opts.Callback then task.spawn(opts.Callback, colorObj.Value) end
+            end)
+        end
+
+        Utility.Connect(swatch.MouseButton1Click, function()
+            SoundService_.Play("Click")
+            popup.Visible = not popup.Visible
+        end)
+
+        function colorObj:Set(c)
+            colorObj.Value = c
+            swatch.BackgroundColor3 = c
+            if bars.R then bars.R.Fill.Size = UDim2.new(c.R, 0, 1, 0) end
+            if bars.G then bars.G.Fill.Size = UDim2.new(c.G, 0, 1, 0) end
+            if bars.B then bars.B.Fill.Size = UDim2.new(c.B, 0, 1, 0) end
+            if opts.Flag then ModernUI.Flags[opts.Flag] = c end
+            if opts.Callback then task.spawn(opts.Callback, c) end
+        end
+
+        if opts.Flag then
+            ModernUI.Flags[opts.Flag] = color
+            ModernUI.FlagObjects[opts.Flag] = colorObj
+        end
+        return colorObj
+    end
+end
+
+function ModernUI:CreateDialog(opts)
+    opts = opts or {}
+    local overlay = Utility.Create("Frame", {
+        BackgroundColor3 = Color3.new(0, 0, 0),
+        BackgroundTransparency = 0.45,
+        Size = UDim2.new(1, 0, 1, 0),
+        ZIndex = 200,
+    })
+    overlay.Parent = self.ScreenGui
+
+    local box = Utility.Create("Frame", {
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.new(0.5, 0, 0.5, 0),
+        Size = UDim2.new(0, 360, 0, 0),
+        AutomaticSize = Enum.AutomaticSize.Y,
+        BackgroundColor3 = self.Theme.Elevated,
+        BorderSizePixel = 0,
+        ZIndex = 201,
+    }, { Utility.Corner(20), Utility.Stroke(self.Theme.Stroke, 1), Utility.Padding(24) })
+    box.Parent = overlay
+    Utility.AddShadow(box, 0.45, 22)
+
+    Utility.Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 0, 22),
+        Font = Enum.Font.GothamBold,
+        Text = opts.Title or "Dialog",
+        TextColor3 = self.Theme.Text,
+        TextSize = 16,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    }).Parent = box
+
+    Utility.Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 0, 0, 30),
+        Size = UDim2.new(1, 0, 0, 0),
+        AutomaticSize = Enum.AutomaticSize.Y,
+        Font = Enum.Font.Gotham,
+        Text = opts.Content or "",
+        TextColor3 = self.Theme.SubText,
+        TextSize = 14,
+        TextWrapped = true,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    }).Parent = box
+
+    local buttonRow = Utility.Create("Frame", {
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 0, 0, 82),
+        Size = UDim2.new(1, 0, 0, 34),
+    }, {
+        Utility.ListLayout(Enum.FillDirection.Horizontal, 10, Enum.HorizontalAlignment.Right, Enum.VerticalAlignment.Center),
+    })
+    buttonRow.Parent = box
+
+    for _, buttonOpts in ipairs(opts.Buttons or { { Title = "OK" } }) do
+        local btn = Utility.Create("TextButton", {
+            BackgroundColor3 = buttonOpts.Accent and self.Theme.Accent or self.Theme.ElevatedHi,
+            BorderSizePixel = 0,
+            Size = UDim2.new(0, 96, 1, 0),
+            Font = Enum.Font.GothamBold,
+            Text = buttonOpts.Title or "OK",
+            TextColor3 = buttonOpts.Accent and Color3.new(1, 1, 1) or self.Theme.Text,
+            TextSize = 14,
+            AutoButtonColor = false,
+        }, { Utility.Corner(12) })
+        btn.Parent = buttonRow
+        Utility.Ripple(btn, Color3.new(1, 1, 1))
+        Utility.Connect(btn.MouseButton1Click, function()
+            SoundService_.Play("Click")
+            if buttonOpts.Callback then task.spawn(buttonOpts.Callback) end
+            overlay:Destroy()
+        end)
+    end
+
+    return { Instance = overlay }
+end
+
+function ModernUI:Notify(opts)
+    NotificationService.Notify(opts, self.Theme)
+end
+
+function ModernUI:_BuildVisualsTab()
+    local window = self
+    local theme = window.Theme
+    local visualsTab = window:CreateTab("Visuals", "palette")
+
+    visualsTab:CreateSection("Theme")
+
+    visualsTab:CreateDropdown({
+        Name = "Theme",
+        Options = { "Dark", "Light", "Custom" },
+        CurrentOption = window.ThemeName,
+        Flag = "ModernUI_Theme",
+        Callback = function(value)
+            local newDef = Themes[value] or Themes.Dark
+            local oldTheme = {}
+            for k, v in pairs(theme) do oldTheme[k] = v end
+            for k, v in pairs(newDef) do theme[k] = v end
+            window.ThemeName = value
+            window:_Retheme(oldTheme, theme)
+            window:Notify({ Title = "Theme", Content = "Theme set to " .. value .. ".", Image = "success" })
+        end,
+    })
+
+    visualsTab:CreateSlider({
+        Name = "UI Scale",
+        Range = { 50, 150 },
+        Increment = 5,
+        Suffix = "%",
+        CurrentValue = 100,
+        Flag = "ModernUI_Scale",
+        Callback = function(value)
+            local scale = window.Main:FindFirstChildOfClass("UIScale")
+            if not scale then
+                scale = Utility.Create("UIScale", { Scale = 1 })
+                scale.Parent = window.Main
+            end
+            Utility.Tween(scale, { Scale = value / 100 }, 0.15)
+        end,
+    })
+
+    visualsTab:CreateSection("Background")
+
+    visualsTab:CreateToggle({
+        Name = "Enable Background Image",
+        CurrentValue = false,
+        Flag = "ModernUI_BGEnabled",
+        Callback = function(value)
+            window.BackgroundImage.Visible = value
+        end,
+    })
+
+    visualsTab:CreateInput({
+        Name = "Background Image (asset id)",
+        PlaceholderText = "rbxassetid://...",
+        Flag = "ModernUI_BGImage",
+        LiveUpdate = true,
+        Callback = function(text)
+            window.BackgroundImage.Image = text
+        end,
+    })
+
+    visualsTab:CreateSlider({
+        Name = "Background Transparency",
+        Range = { 0, 100 },
+        Increment = 1,
+        Suffix = "%",
+        CurrentValue = 85,
+        Flag = "ModernUI_BGTransparency",
+        Callback = function(value)
+            window.BackgroundImage.ImageTransparency = value / 100
+        end,
+    })
+
+    visualsTab:CreateToggle({
+        Name = "Enable Background Blur",
+        CurrentValue = Config.BlurEnabled,
+        Flag = "ModernUI_Blur",
+        Callback = function(value)
+            window.Blur.Enabled = value
+            Utility.Tween(window.Blur, { Size = value and 16 or 0 }, 0.18)
+        end,
+    })
+
+    visualsTab:CreateSection("Colors")
+
+    visualsTab:CreateColorPicker({
+        Name = "Accent Color",
+        Color = theme.Accent,
+        Flag = "ModernUI_Accent",
+        Callback = function(color)
+            local oldTheme = { Accent = theme.Accent, Glow = theme.Glow }
+            theme.Accent = color
+            window:_Retheme(oldTheme, theme)
+        end,
+    })
+
+    visualsTab:CreateColorPicker({
+        Name = "Glow Color",
+        Color = theme.Glow,
+        Flag = "ModernUI_Glow",
+        Callback = function(color)
+            local oldTheme = { Accent = theme.Accent, Glow = theme.Glow }
+            theme.Glow = color
+            window:_Retheme(oldTheme, theme)
+        end,
+    })
+
+    visualsTab:CreateSection("Behavior")
+
+    visualsTab:CreateToggle({
+        Name = "Animations",
+        CurrentValue = Config.AnimationsEnabled,
+        Flag = "ModernUI_Animations",
+        Callback = function(value)
+            Config.AnimationsEnabled = value
+        end,
+    })
+
+    visualsTab:CreateToggle({
+        Name = "Sounds",
+        CurrentValue = Config.SoundsEnabled,
+        Flag = "ModernUI_Sounds",
+        Callback = function(value)
+            Config.SoundsEnabled = value
+        end,
+    })
+
+    visualsTab:CreateSection("Configuration")
+
+    visualsTab:CreateButton({
+        Name = "Save Current Config",
+        Callback = function()
+            local ok = ConfigService.Save(window.ConfigSaving and window.ConfigSaving.FileName or "config", ModernUI.Flags)
+            window:Notify({
+                Title = "Configuration",
+                Content = ok and "Configuration saved." or "Saving is not supported.",
+                Image = ok and "success" or "error",
+            })
+        end,
+    })
+
+    visualsTab:CreateButton({
+        Name = "Save Custom Theme",
+        Callback = function()
+            Themes.Custom = {}
+            for k, v in pairs(theme) do
+                Themes.Custom[k] = v
+            end
+            ConfigService.Save("custom_theme", {
+                Accent = { theme.Accent.R, theme.Accent.G, theme.Accent.B },
+                Glow = { theme.Glow.R, theme.Glow.G, theme.Glow.B },
+            })
+            window:Notify({ Title = "Theme", Content = "Custom theme saved.", Image = "success" })
+        end,
+    })
+end
+
+function ModernUI:CreateWindow(options)
+    options = options or {}
+    local self = setmetatable({}, ModernUI)
+    self.Tabs = {}
+    local baseTheme = Themes[options.Theme or Config.DefaultTheme] or Themes.Dark
+    self.Theme = {}
+    for k, v in pairs(baseTheme) do
+        self.Theme[k] = v
+    end
+    self.ThemeName = options.Theme or Config.DefaultTheme
+    self.Minimized = false
+    self.Destroyed = false
+    self.ConfigSaving = options.ConfigurationSaving or { Enabled = false }
+
+    if options.Discord and options.Discord.Invite then
+        Config.DiscordInvite = options.Discord.Invite
+    end
+
+    local screenGui = Utility.Create("ScreenGui", {
+        Name = "ModernUI_" .. HttpService:GenerateGUID(false),
+        ResetOnSpawn = false,
+        ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+        DisplayOrder = 999,
+    })
+    screenGui.Parent = GetGuiParent()
+    self.ScreenGui = screenGui
+
+    local blur = Utility.Create("BlurEffect", { Size = 0, Enabled = false })
+    blur.Parent = Lighting
+    self.Blur = blur
+
+    local main = Utility.Create("Frame", {
+        Name = "Main",
+        BackgroundColor3 = self.Theme.Background,
+        BorderSizePixel = 0,
+        Position = UDim2.new(0.5, -300, 0.5, -210),
+        Size = UDim2.new(0, 620, 0, 420),
+        ClipsDescendants = true,
+        ZIndex = 10,
+    }, { Utility.Corner(24), Utility.Stroke(self.Theme.Stroke, 1) })
+    main.Parent = screenGui
+    Utility.AddShadow(main, 0.45, 32)
+    self.Main = main
+
+    local bgImage = Utility.Create("ImageLabel", {
+        Name = "BackgroundImage",
+        BackgroundTransparency = 1,
+        Image = "",
+        ImageTransparency = 0.85,
+        ScaleType = Enum.ScaleType.Crop,
+        Size = UDim2.new(1, 0, 1, 0),
+        Visible = false,
+        ZIndex = 1,
+    })
+    bgImage.Parent = main
+    self.BackgroundImage = bgImage
+
+    local topAccent = Utility.Create("Frame", {
+        BackgroundColor3 = self.Theme.Accent,
+        BorderSizePixel = 0,
+        Position = UDim2.new(0, 0, 0, 0),
+        Size = UDim2.new(1, 0, 0, 6),
+        ZIndex = 10,
+    })
+    topAccent.Parent = main
+
+    local titleBar = Utility.Create("Frame", {
+        Name = "TitleBar",
+        BackgroundColor3 = self.Theme.Secondary,
+        BorderSizePixel = 0,
+        Position = UDim2.new(0, 0, 0, 0),
+        Size = UDim2.new(1, 0, 0, 54),
+        ZIndex = 10,
+    }, { Utility.Corner(24) })
+    titleBar.Parent = main
+
+    local titleText = Utility.Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 24, 0, 0),
+        Size = UDim2.new(1, -180, 1, 0),
+        Font = Enum.Font.GothamBold,
+        Text = options.Name or Config.LibraryName,
+        TextColor3 = self.Theme.Text,
+        TextSize = 17,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    })
+    titleText.Parent = titleBar
+    self.TitleText = titleText
+
+    local controlHolder = Utility.Create("Frame", {
+        BackgroundTransparency = 1,
+        AnchorPoint = Vector2.new(1, 0.5),
+        Position = UDim2.new(1, -18, 0.5, 0),
+        Size = UDim2.new(0, 112, 0, 34),
+    }, {
+        Utility.ListLayout(Enum.FillDirection.Horizontal, 8, Enum.HorizontalAlignment.Right, Enum.VerticalAlignment.Center),
+    })
+    controlHolder.Parent = titleBar
+
+    local function makeControlButton(icon, hoverColor)
+        local btn = Utility.Create("TextButton", {
+            BackgroundColor3 = self.Theme.Elevated,
+            BorderSizePixel = 0,
+            Size = UDim2.new(0, 34, 0, 34),
+            Text = icon,
+            Font = Enum.Font.GothamBold,
+            TextColor3 = self.Theme.SubText,
+            TextSize = 16,
+            AutoButtonColor = false,
+        }, { Utility.Corner(12) })
+        btn.Parent = controlHolder
+        Utility.Connect(btn.MouseEnter, function()
+            Utility.Tween(btn, { BackgroundColor3 = hoverColor }, 0.14)
+            Utility.Tween(btn, { TextColor3 = self.Theme.Text }, 0.14)
+            SoundService_.Play("Hover")
+        end)
+        Utility.Connect(btn.MouseLeave, function()
+            Utility.Tween(btn, { BackgroundColor3 = self.Theme.Elevated }, 0.14)
+            Utility.Tween(btn, { TextColor3 = self.Theme.SubText }, 0.14)
+        end)
+        Utility.Ripple(btn, Color3.new(1, 1, 1))
+        return btn
+    end
+
+    local minimizeBtn = makeControlButton(Assets.Icons.minimize, self.Theme.ElevatedHi)
+    local closeBtn = makeControlButton(Assets.Icons.close, self.Theme.Error)
+
+    local sidebar = Utility.Create("Frame", {
+        Name = "Sidebar",
+        BackgroundColor3 = self.Theme.Secondary,
+        BorderSizePixel = 0,
+        Position = UDim2.new(0, 0, 0, 54),
+        Size = UDim2.new(0, 180, 1, -54),
+        ZIndex = 10,
+    })
+    sidebar.Parent = main
+
+    Utility.Create("TextLabel", {
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 16, 0, 14),
+        Size = UDim2.new(1, -32, 0, 24),
+        Font = Enum.Font.GothamBold,
+        Text = "Sections",
+        TextColor3 = self.Theme.Text,
+        TextSize = 14,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    }).Parent = sidebar
+
+    local tabListHolder = Utility.Create("ScrollingFrame", {
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 0, 0, 48),
+        Size = UDim2.new(1, 0, 1, -110),
+        ScrollBarThickness = 4,
+        ScrollBarImageColor3 = self.Theme.Accent,
+        CanvasSize = UDim2.new(0, 0, 0, 0),
+        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+        VerticalScrollBarInset = Enum.ScrollBarInset.ScrollBar,
+    }, {
+        Utility.ListLayout(Enum.FillDirection.Vertical, 8, Enum.HorizontalAlignment.Center, Enum.VerticalAlignment.Top),
+        Utility.Padding(12, 12, 12, 12, 12),
+    })
+    tabListHolder.Parent = sidebar
+    self.TabListHolder = tabListHolder
+
+    local discordBtn = Utility.Create("TextButton", {
+        Name = "DiscordButton",
+        BackgroundColor3 = self.Theme.Elevated,
+        BorderSizePixel = 0,
+        Position = UDim2.new(0, 16, 1, -72),
+        Size = UDim2.new(1, -32, 0, 44),
+        Text = "Join Discord",
+        Font = Enum.Font.GothamBold,
+        TextColor3 = self.Theme.Text,
+        TextSize = 14,
+        AutoButtonColor = false,
+    }, { Utility.Corner(14), Utility.Stroke(self.Theme.Stroke, 1) })
+    discordBtn.Parent = sidebar
+    Utility.Ripple(discordBtn, self.Theme.Accent)
+    Utility.Connect(discordBtn.MouseButton1Click, function()
+        SoundService_.Play("Click")
+        local success = pcall(function()
+            setclipboard(Config.DiscordInvite)
+        end)
+        NotificationService.Notify({
+            Title = "Discord",
+            Content = success and "Link copied to clipboard." or Config.DiscordInvite,
+            Image = success and "success" or "info",
+            Duration = 4,
+        }, self.Theme)
+    end)
+
+    local contentArea = Utility.Create("Frame", {
+        Name = "ContentArea",
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0, 180, 0, 54),
+        Size = UDim2.new(1, -180, 1, -54),
+        ZIndex = 10,
+    })
+    contentArea.Parent = main
+    self.ContentArea = contentArea
+
+    NotificationService.Init(screenGui, self.Theme)
+
+    Utility.MakeDraggable(main, titleBar)
+
+    local originalSize = main.Size
+    Utility.Connect(minimizeBtn.MouseButton1Click, function()
+        SoundService_.Play("Click")
+        self.Minimized = not self.Minimized
+        if self.Minimized then
+            Utility.Tween(main, { Size = UDim2.new(0, 620, 0, 54) }, 0.25)
+            sidebar.Visible = false
+            contentArea.Visible = false
+        else
+            sidebar.Visible = true
+            contentArea.Visible = true
+            Utility.Tween(main, { Size = originalSize }, 0.25)
+        end
+    end)
+
+    Utility.Connect(closeBtn.MouseButton1Click, function()
+        SoundService_.Play("Close")
+        self:Destroy()
+    end)
+
+    main.Size = UDim2.new(0, 0, 0, 0)
+    main.BackgroundTransparency = 1
+    SoundService_.Play("Open")
+    Utility.Tween(main, { Size = originalSize, BackgroundTransparency = 0 }, 0.35, Enum.EasingStyle.Back)
+
+    table.insert(ModernUI.Windows, self)
+    self:_InitTabAPI()
+    self:_BuildVisualsTab()
+
+    if self.ConfigSaving.Enabled then
+        local loaded = ConfigService.Load(self.ConfigSaving.FileName or "config")
+        if loaded then
+            for flag, value in pairs(loaded) do
+                ModernUI.Flags[flag] = value
+            end
+        end
+    end
+
+    return self
+end
+
+function ModernUI:Destroy()
+    if self.Destroyed then
+        return
+    end
+    self.Destroyed = true
+    Utility.Tween(self.Main, { Size = UDim2.new(0, 0, 0, 0), BackgroundTransparency = 1 }, 0.24)
+    task.delay(0.26, function()
+        pcall(function()
+            if self.Blur then self.Blur:Destroy() end
+            if self.ScreenGui then self.ScreenGui:Destroy() end
+        end)
+    end)
+    for i, window in ipairs(ModernUI.Windows) do
+        if window == self then
+            table.remove(ModernUI.Windows, i)
+            break
+        end
+    end
+    if #ModernUI.Windows == 0 then
+        Utility.CleanupAll()
+    end
+end
+
+ModernUI.Unload = ModernUI.Destroy
+ModernUI.Config = Config
+ModernUI.Assets = Assets
+ModernUI.Themes = Themes
+ModernUI.Utility = Utility
+ModernUI.NotificationService = NotificationService
+ModernUI.ConfigService = ConfigService
+
+return ModernUI
