@@ -1,4 +1,4 @@
-local CyberUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/fietewoozle-dot/MyHub/main/CyberUI/load.lua"))()
+local CyberUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/datfiete/Void-Hub/main/CyberUI/load.lua"))()
 
 local window = CyberUI:CreateWindow({
     Name = "Hoverboard for Brainrots!",
