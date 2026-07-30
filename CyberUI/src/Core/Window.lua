@@ -7,6 +7,31 @@ local Helpers = require(script.Parent.Parent.Utils.Helpers)
 local Tween = require(script.Parent.Parent.Utils.Tween)
 local GUI_Name = "Void Hub"
 
+-- Constants
+local PADDING = {
+	Logo = 14,
+	TitleLeft = 16,
+	ControlSpacing = 12,
+	Sidebar = 8,
+	SearchTop = 40,
+}
+
+local SIZES = {
+	MinWindow = Vector2.new(420, 320),
+	MaxWindow = Vector2.new(1200, 900),
+	FloatingButton = 50,
+	Logo = 36,
+}
+
+local ASSETS = {
+	Backgrounds = {
+		["Solo Leveling"] = "rbxassetid://139001765478120",
+		["Gojo"] = "rbxassetid://111578938106815",
+		["Sukuna"] = "rbxassetid://106318186489675",
+		["Cid Kagenou"] = "rbxassetid://113248988511733",
+	}
+}
+
 local Window = {}
 Window.__index = Window
 
@@ -41,45 +66,130 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 
 	local Players = game:GetService("Players")
 	local UserInputService = game:GetService("UserInputService")
-	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
-	local sharedState = (getgenv and getgenv()) or _G
+	
+	local player = Players.LocalPlayer
+	if not player then return self :: any end
+	
+	local playerGui = player:WaitForChild("PlayerGui", 5)
+	if not playerGui then return self :: any end
 
+	-- Use _G directly for compatibility
+	local sharedState = _G
+
+	-- Cleanup existing UI
 	for _, child in playerGui:GetChildren() do
 		if child:IsA("ScreenGui") and child.Name == "CyberUI" then
 			child:Destroy()
 		end
 	end
 
-	local screenGui = Instance.new("ScreenGui")
-	screenGui.Name = "CyberUI"
-	screenGui.ResetOnSpawn = false
-	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	screenGui.Parent = playerGui
+	-- Build UI components
+	local screenGui = self:_buildScreenGui(playerGui)
+	local loadingFrame = self:_buildLoadingFrame(screenGui, library, windowName, windowSubtitle)
+	
 	self._Maid:Give(screenGui)
+	self._Maid:Give(loadingFrame)
 
+	-- Get window dimensions
 	local windowName = data.Name or data.Title or "CyberUI"
 	local windowSubtitle = data.Subtitle or data.Description
-	local windowSize = data.Size or data.WindowSize or Theme.WindowSize
-
-	if typeof(windowSize) == "UDim2" then
-		windowSize = Vector2.new(windowSize.X.Offset, windowSize.Y.Offset)
-	elseif typeof(windowSize) == "number" then
-		windowSize = Vector2.new(windowSize, windowSize)
-	elseif typeof(windowSize) ~= "Vector2" then
-		windowSize = Vector2.new(800, 560)
-	end
+	local windowSize = self:_getWindowSize(data.Size or data.WindowSize)
 
 	local showSearch = data.ShowSearch ~= false
 	local showWindowControls = data.ShowWindowControls ~= false
 	local topBarHeight = Theme.TopBarHeight or 54
 
-local loadingFrame = Helpers.CreateFrame({
+	-- Build main frame
+	local main = self:_buildMainFrame(screenGui, library, windowSize, data, topBarHeight)
+	self.Main = main
+	self._BackgroundImage = main:FindFirstChild("BackgroundImage")
+
+	-- Build top bar
+	local topBar = self:_buildTopBar(main, library, windowName, windowSubtitle, data, topBarHeight, showWindowControls)
+	self.TopBar = topBar
+
+	-- Build sidebar
+	local sidebar, searchBox, tabList = self:_buildSidebar(main, library, showSearch, topBarHeight)
+	self.Sidebar = sidebar
+	self.SearchBox = searchBox
+	self.TabList = tabList
+
+	-- Build pages
+	local pages = self:_buildPages(main, sidebar, topBarHeight)
+	self.Pages = pages
+
+	-- Build floating button
+	local floatingButton = self:_buildFloatingButton(screenGui, library, windowName, data)
+	self._FloatingButton = floatingButton
+	self._FloatingStroke = floatingButton:FindFirstChild("Stroke")
+
+	-- Setup window controls
+	self:_setupWindowControls(main, topBar, windowSize, topBarHeight)
+
+	-- Setup drag functionality
+	self:_setupDragging(main, topBar, UserInputService)
+
+	-- Setup resize functionality
+	self:_setupResizing(main, UserInputService, SIZES.MinWindow, SIZES.MaxWindow)
+
+	-- Setup theme
+	self:_setupTheme(library, main, topBar, sidebar)
+
+	-- Setup search
+	if searchBox then
+		self:_setupSearch(searchBox, tabList, library)
+	end
+
+	-- Setup keybind
+	self:_setupKeybind(UserInputService)
+
+	-- Initialize state
+	self.Gui = screenGui
+	self._Visible = true
+	self._Minimized = false
+	self._StartupComplete = false
+	self._ToggleKeybind = data.ToggleKey or Enum.KeyCode.RightControl
+	self._OptionsTab = nil
+	self.RefreshTheme = function() self:_refreshTheme(library, main, topBar, sidebar) end
+
+	-- Loading sequence
+	self:_startupSequence(loadingFrame)
+
+	return self :: any
+end
+
+-- Helper: Build ScreenGui
+function Window:_buildScreenGui(parent)
+	local screenGui = Instance.new("ScreenGui")
+	screenGui.Name = "CyberUI"
+	screenGui.ResetOnSpawn = false
+	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	screenGui.Parent = parent
+	self._Maid:Give(screenGui)
+	return screenGui
+end
+
+-- Helper: Get Window Size
+function Window:_getWindowSize(size)
+	if typeof(size) == "UDim2" then
+		return Vector2.new(size.X.Offset, size.Y.Offset)
+	elseif typeof(size) == "number" then
+		return Vector2.new(size, size)
+	elseif typeof(size) == "Vector2" then
+		return size
+	end
+	return Vector2.new(800, 560)
+end
+
+-- Helper: Build Loading Frame
+function Window:_buildLoadingFrame(parent, library, title, subtitle)
+	local loadingFrame = Helpers.CreateFrame({
 		Name = "Loading",
 		Size = UDim2.fromOffset(380, 168),
 		Position = UDim2.fromScale(0.5, 0.5),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundColor3 = library.Theme.Secondary,
-		Parent = screenGui,
+		Parent = parent,
 	})
 	Helpers.Corner(loadingFrame, Theme.CornerRadius)
 	Helpers.Stroke(loadingFrame, library.Theme.Border, 1)
@@ -98,7 +208,7 @@ local loadingFrame = Helpers.CreateFrame({
 		Name = "LoadingTitle",
 		Size = UDim2.new(1, -34, 0, 30),
 		Position = UDim2.fromOffset(18, 0),
-		Text = windowName,
+		Text = title,
 		Font = Theme.FontBold,
 		TextColor3 = library.Theme.Text,
 		TextSize = 20,
@@ -110,7 +220,7 @@ local loadingFrame = Helpers.CreateFrame({
 		Name = "LoadingSubtitle",
 		Size = UDim2.new(1, -34, 0, 22),
 		Position = UDim2.fromOffset(18, 34),
-		Text = windowSubtitle or "Preparing interface",
+		Text = subtitle or "Preparing interface",
 		TextColor3 = library.Theme.TextMuted,
 		TextSize = 13,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -146,12 +256,19 @@ local loadingFrame = Helpers.CreateFrame({
 	Helpers.Corner(progressFill, 3)
 	Tween.Play(progressFill, { Size = UDim2.fromScale(1, 1) }, { Time = 0.85 })
 
-	local bootstrapLoader = sharedState.CyberUI_BootstrapLoader
-	sharedState.CyberUI_BootstrapLoader = nil
-	if bootstrapLoader and bootstrapLoader.Parent then
-		bootstrapLoader:Destroy()
-	end
+	-- Store references for later
+	loadingFrame._Accent = loadingAccent
+	loadingFrame._Title = loadingTitle
+	loadingFrame._Subtitle = loadingSubtitle
+	loadingFrame._Status = loadingStatus
+	loadingFrame._ProgressTrack = progressTrack
+	loadingFrame._ProgressFill = progressFill
 
+	return loadingFrame
+end
+
+-- Helper: Build Main Frame
+function Window:_buildMainFrame(parent, library, windowSize, data, topBarHeight)
 	local main = Helpers.CreateFrame({
 		Name = "Main",
 		Size = UDim2.fromOffset(windowSize.X, windowSize.Y),
@@ -160,31 +277,32 @@ local loadingFrame = Helpers.CreateFrame({
 		BackgroundColor3 = library.Theme.Background,
 		BackgroundTransparency = 0.2,
 		Visible = false,
-		Parent = screenGui,
+		Parent = parent,
 	})
 	Helpers.Corner(main, Theme.CornerRadius)
 	main.ClipsDescendants = true
 	local mainStroke = Helpers.Stroke(main, library.Theme.Border, 1)
+	main._Stroke = mainStroke
 
+	-- Background image
 	local backgroundImage = Instance.new("ImageLabel")
 	backgroundImage.AnchorPoint = Vector2.new(0, 0)
 	backgroundImage.Position = UDim2.new(0, 0, 0, 0)
 	backgroundImage.Name = "BackgroundImage"
 	backgroundImage.Size = UDim2.fromScale(1, 1)
 	backgroundImage.BackgroundTransparency = 1
-	backgroundImage.Image = data.BackgroundImage or "" 
+	backgroundImage.Image = data.BackgroundImage or ""
 	backgroundImage.ImageTransparency = 0.3
 	backgroundImage.ScaleType = Enum.ScaleType.Crop
 	backgroundImage.ZIndex = 0
 	backgroundImage.Parent = main
-	self._BackgroundImage = backgroundImage
-
 	Helpers.Corner(backgroundImage, Theme.CornerRadius)
 
+	-- Overlay
 	local overlay = Instance.new("Frame")
 	overlay.Name = "BackgroundOverlay"
-	overlay.Size = UDim2.fromScale(1,1)
-	overlay.BackgroundColor3 = Color3.new(0,0,0)
+	overlay.Size = UDim2.fromScale(1, 1)
+	overlay.BackgroundColor3 = Color3.new(0, 0, 0)
 	overlay.BackgroundTransparency = 0.75
 	overlay.BorderSizePixel = 0
 	overlay.ZIndex = 1
@@ -194,6 +312,11 @@ local loadingFrame = Helpers.CreateFrame({
 	main.ClipsDescendants = true
 	Helpers.Corner(overlay, Theme.CornerRadius)
 
+	return main
+end
+
+-- Helper: Build Top Bar
+function Window:_buildTopBar(main, library, title, subtitle, data, topBarHeight, showWindowControls)
 	local topBar = Helpers.CreateFrame({
 		Name = "TopBar",
 		Size = UDim2.new(1, 0, 0, topBarHeight),
@@ -206,6 +329,7 @@ local loadingFrame = Helpers.CreateFrame({
 	})
 	topBar.ZIndex = 20
 	Helpers.Corner(topBar, Theme.CornerRadius)
+
 	local topBarMask = Helpers.CreateFrame({
 		Name = "TopBarMask",
 		Size = UDim2.new(1, 0, 0, Theme.CornerRadius),
@@ -215,70 +339,87 @@ local loadingFrame = Helpers.CreateFrame({
 	})
 	topBarMask.ZIndex = 19
 
-	local logoSize = 36
-	local logoAsset = data.Logo
-
+	-- Logo
 	local logoImage = nil
-
-	if logoAsset and logoAsset ~= "" then
+	if data.Logo and data.Logo ~= "" then
 		logoImage = Instance.new("ImageLabel")
 		logoImage.Name = "Logo"
 		logoImage.BackgroundTransparency = 1
-		logoImage.Size = UDim2.fromOffset(logoSize, logoSize)
-		logoImage.Position = UDim2.new(0, 14, 0.5, 0)
+		logoImage.Size = UDim2.fromOffset(SIZES.Logo, SIZES.Logo)
+		logoImage.Position = UDim2.new(0, PADDING.Logo, 0.5, 0)
 		logoImage.AnchorPoint = Vector2.new(0, 0.5)
-		logoImage.Image = logoAsset
+		logoImage.Image = data.Logo
 		logoImage.ScaleType = Enum.ScaleType.Fit
 		logoImage.ZIndex = 30
 		logoImage.Parent = topBar
-
 		Helpers.Corner(logoImage, 8)
 	end
 
-	local titleStartX = if logoAsset then 12 + logoSize + 10 else 16
+	local titleStartX = if logoImage then PADDING.Logo + SIZES.Logo + 10 else PADDING.TitleLeft
 
-	local title = Helpers.CreateLabel({
+	local titleLabel = Helpers.CreateLabel({
 		Name = "Title",
 		Size = UDim2.new(0, 220, 0, 22),
 		Position = UDim2.new(0, titleStartX, 0, 10),
-		Text = windowName,
+		Text = title,
 		Font = Theme.FontBold,
 		TextSize = 17,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = library.Theme.Text,
 		Parent = topBar,
 	})
-	title.ZIndex = 21
+	titleLabel.ZIndex = 21
 
-	local subtitle
-	if windowSubtitle then
-		subtitle = Helpers.CreateLabel({
+	local subtitleLabel = nil
+	if subtitle then
+		subtitleLabel = Helpers.CreateLabel({
 			Name = "Subtitle",
 			Size = UDim2.new(0, 220, 0, 16),
 			Position = UDim2.new(0, titleStartX, 0, 30),
-			Text = windowSubtitle,
+			Text = subtitle,
 			TextColor3 = library.Theme.TextMuted,
 			TextSize = 11,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			Parent = topBar,
 		})
-		subtitle.ZIndex = 21
+		subtitleLabel.ZIndex = 21
 	end
 
+	-- Badges
+	local badgeHolder = self:_buildBadges(topBar, library, data)
+
+	-- Window controls
+	local minimizeButton, closeButton = nil, nil
+	if showWindowControls then
+		minimizeButton, closeButton = self:_buildWindowControls(topBar, library)
+	end
+
+	topBar._Title = titleLabel
+	topBar._Subtitle = subtitleLabel
+	topBar._BadgeHolder = badgeHolder
+	topBar._MinimizeButton = minimizeButton
+	topBar._CloseButton = closeButton
+
+	return topBar
+end
+
+-- Helper: Build Badges
+function Window:_buildBadges(topBar, library, data)
 	local badgeHolder = Helpers.CreateFrame({
 		Name = "Badges",
 		Size = UDim2.new(0, 260, 0, 26),
-		Position = UDim2.new(0, titleStartX + 180, 0.5, 0),
+		Position = UDim2.new(0, 180, 0.5, 0),
 		AnchorPoint = Vector2.new(0, 0.5),
 		BackgroundTransparency = 1,
 		Parent = topBar,
 	})
 	badgeHolder.ZIndex = 21
 	Helpers.ListLayout(badgeHolder, 6)
-	local badgeList: any = badgeHolder:FindFirstChildOfClass("UIListLayout")
+	local badgeList = badgeHolder:FindFirstChildOfClass("UIListLayout")
 	if badgeList then
 		badgeList.FillDirection = Enum.FillDirection.Horizontal
 		badgeList.VerticalAlignment = Enum.VerticalAlignment.Center
+		badgeList.SortOrder = Enum.SortOrder.LayoutOrder
 	end
 
 	if data.Badges then
@@ -291,6 +432,7 @@ local loadingFrame = Helpers.CreateFrame({
 				AutomaticSize = Enum.AutomaticSize.X,
 				BackgroundColor3 = color,
 				Parent = badgeHolder,
+				LayoutOrder = i,
 			})
 			pill.ZIndex = 22
 			Helpers.Corner(pill, 13)
@@ -310,256 +452,54 @@ local loadingFrame = Helpers.CreateFrame({
 		end
 	end
 
-	local minimizeButton, closeButton
-	if showWindowControls then
-		closeButton = Instance.new("TextButton")
-		closeButton.Name = "Close"
-		closeButton.Size = UDim2.fromOffset(32, 32)
-		closeButton.Position = UDim2.new(1, -12, 0.5, 0)
-		closeButton.AnchorPoint = Vector2.new(1, 0.5)
+	return badgeHolder
+end
 
-		closeButton.BackgroundColor3 = library.Theme.Background
-		closeButton.BackgroundTransparency = 0.25
+-- Helper: Build Window Controls
+function Window:_buildWindowControls(topBar, library)
+	local closeButton = Instance.new("TextButton")
+	closeButton.Name = "Close"
+	closeButton.Size = UDim2.fromOffset(32, 32)
+	closeButton.Position = UDim2.new(1, -12, 0.5, 0)
+	closeButton.AnchorPoint = Vector2.new(1, 0.5)
+	closeButton.BackgroundColor3 = library.Theme.Background
+	closeButton.BackgroundTransparency = 0.25
+	closeButton.Text = "✕"
+	closeButton.Font = Theme.FontBold
+	closeButton.TextSize = 15
+	closeButton.TextColor3 = library.Theme.TextMuted
+	closeButton.AutoButtonColor = false
+	closeButton.ZIndex = 21
+	closeButton.Parent = topBar
+	Helpers.Corner(closeButton, 8)
+	Helpers.Stroke(closeButton, library.Theme.Border, 1)
 
-		closeButton.Text = "X"
-		closeButton.Font = Theme.FontBold
-		closeButton.TextSize = 15
-		closeButton.TextColor3 = library.Theme.TextMuted
+	local minimizeButton = Instance.new("TextButton")
+	minimizeButton.Name = "Minimize"
+	minimizeButton.Size = UDim2.fromOffset(28, 28)
+	minimizeButton.Position = UDim2.new(1, -50, 0.5, 0)
+	minimizeButton.AnchorPoint = Vector2.new(1, 0.5)
+	minimizeButton.BackgroundTransparency = 1
+	minimizeButton.Text = "—"
+	minimizeButton.Font = Theme.FontBold
+	minimizeButton.TextSize = 16
+	minimizeButton.TextColor3 = library.Theme.TextMuted
+	minimizeButton.AutoButtonColor = false
+	minimizeButton.ZIndex = 21
+	minimizeButton.Parent = topBar
 
-		closeButton.AutoButtonColor = false
-		closeButton.ZIndex = 21
-		closeButton.Parent = topBar
+	-- Hover animations (cached)
+	local hoverTween = Tween.new(closeButton, { BackgroundTransparency = 0 }, { Time = 0.15 })
+	local leaveTween = Tween.new(closeButton, { BackgroundTransparency = 0.25 }, { Time = 0.15 })
+	
+	closeButton.MouseEnter:Connect(function() hoverTween:Play() end)
+	closeButton.MouseLeave:Connect(function() leaveTween:Play() end)
 
-		Helpers.Corner(closeButton, 8)
-		Helpers.Stroke(closeButton, library.Theme.Border, 1)
+	return minimizeButton, closeButton
+end
 
-		minimizeButton = Instance.new("TextButton")
-		minimizeButton.Name = "Minimize"
-		minimizeButton.Size = UDim2.fromOffset(28, 28)
-		minimizeButton.Position = UDim2.new(1, -50, 0.5, 0)
-		minimizeButton.AnchorPoint = Vector2.new(1, 0.5)
-		minimizeButton.BackgroundTransparency = 1
-		minimizeButton.Text = "—"
-		minimizeButton.Font = Theme.FontBold
-		minimizeButton.TextSize = 16
-		minimizeButton.TextColor3 = library.Theme.TextMuted
-		minimizeButton.AutoButtonColor = false
-		minimizeButton.ZIndex = 21
-		minimizeButton.Parent = topBar
-	end
-
-	closeButton.MouseEnter:Connect(function()
-	Tween.Play(closeButton, {
-		BackgroundTransparency = 0
-	}, {
-		Time = 0.15
-	})
-	end)
-
-	closeButton.MouseLeave:Connect(function()
-		Tween.Play(closeButton, {
-			BackgroundTransparency = 0.25
-		}, {
-			Time = 0.15
-		})
-	end)
-
-	local floatingButton = Instance.new("ImageButton")
-	floatingButton.Name = "FloatingToggle"
-	floatingButton.Size = UDim2.fromOffset(50, 50)
-	floatingButton.Position = UDim2.new(0.5, 0, 0, 20)
-	floatingButton.BackgroundColor3 = library.Theme.Secondary
-	floatingButton.BackgroundTransparency = 0.1
-	floatingButton.Image = data.Logo or ""
-	floatingButton.ScaleType = Enum.ScaleType.Fit
-	floatingButton.ImageTransparency = 0
-	floatingButton.Visible = false
-	floatingButton.AutoButtonColor = false
-	floatingButton.ZIndex = 50
-	floatingButton.Active = true
-	floatingButton.Selectable = true
-	floatingButton.Parent = screenGui
-	Helpers.Corner(floatingButton, 25)
-	local floatingStroke = Helpers.Stroke(floatingButton, library.Theme.Accent, 1.5)
-
-	if not data.Logo or data.Logo == "" then
-		local fallbackLabel = Helpers.CreateLabel({
-			Name = "FallbackIcon",
-			Size = UDim2.fromScale(1, 1),
-			Text = string.sub(windowName, 1, 1),
-			Font = Theme.FontBold,
-			TextSize = 20,
-			TextColor3 = library.Theme.Text,
-			TextXAlignment = Enum.TextXAlignment.Center,
-			Parent = floatingButton,
-		})
-		fallbackLabel.ZIndex = 51
-	end
-
-	floatingButton.MouseEnter:Connect(function()
-		Tween.Play(floatingButton, { BackgroundTransparency = 0 }, { Time = 0.15 })
-	end)
-	floatingButton.MouseLeave:Connect(function()
-		Tween.Play(floatingButton, { BackgroundTransparency = 0.1 }, { Time = 0.15 })
-	end)
-
-	floatingButton.MouseButton1Click:Connect(function()
-		self:SetVisible(true)
-	end)
-
-	self._FloatDragging = false
-	self._FloatDragStart = Vector2.new()
-	self._FloatStart = UDim2.new()
-	self._FloatDragInputType = nil :: Enum.UserInputType?
-
-	self._Maid:GiveTask(floatingButton.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			self._FloatDragging = true
-			self._FloatDragStart = input.Position
-			self._FloatStart = floatingButton.Position
-			self._FloatDragInputType = input.UserInputType
-		end
-	end))
-
-	self._Maid:GiveTask(UserInputService.InputChanged:Connect(function(input)
-		if not self._FloatDragging or self._FloatDragInputType == nil then
-			return
-		end
-		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-			local delta = input.Position - self._FloatDragStart
-			floatingButton.Position = UDim2.new(
-				self._FloatStart.X.Scale, self._FloatStart.X.Offset + delta.X,
-				self._FloatStart.Y.Scale, self._FloatStart.Y.Offset + delta.Y
-			)
-		end
-	end))
-
-	self._Maid:GiveTask(UserInputService.InputEnded:Connect(function(input)
-		if self._FloatDragInputType ~= nil and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
-			self._FloatDragging = false
-			self._FloatDragInputType = nil
-		end
-	end))
-
-	self._Maid:Give(floatingButton)
-	self._FloatingButton = floatingButton
-	self._FloatingStroke = floatingStroke
-
-	local dragging = false
-	local dragStart = Vector2.new()
-	local windowStart = UDim2.new()
-	local dragInputType = nil :: Enum.UserInputType?
-
-	local function startDragging(input: InputObject)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			dragging = true
-			dragStart = input.Position
-			windowStart = main.Position
-			dragInputType = input.UserInputType
-		end
-	end
-
-	self._Maid:GiveTask(topBar.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			startDragging(input)
-		end
-	end))
-
-	self._Maid:GiveTask(UserInputService.InputChanged:Connect(function(input)
-		if not dragging or dragInputType == nil then
-			return
-		end
-
-		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-			local delta = input.Position - dragStart
-			main.Position = UDim2.new(
-				windowStart.X.Scale,
-				windowStart.X.Offset + delta.X,
-				windowStart.Y.Scale,
-				windowStart.Y.Offset + delta.Y
-			)
-		end
-	end))
-
-	self._Maid:GiveTask(UserInputService.InputEnded:Connect(function(input)
-		if dragInputType ~= nil and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
-			dragging = false
-			dragInputType = nil
-		end
-	end))
-
-	local minWindowSize = Vector2.new(420, 320)
-	local maxWindowSize = Vector2.new(1200, 900)
-
-	local resizeHandle = Instance.new("Frame")
-	resizeHandle.Name = "ResizeHandle"
-	resizeHandle.Size = UDim2.fromOffset(18, 18)
-	resizeHandle.Position = UDim2.new(1, -4, 1, -4)
-	resizeHandle.AnchorPoint = Vector2.new(1, 1)
-	resizeHandle.BackgroundTransparency = 1
-	resizeHandle.Active = true
-	resizeHandle.Selectable = true
-	resizeHandle.ZIndex = 25
-	resizeHandle.Parent = main
-
-	for i = 1, 3 do
-		local line = Instance.new("Frame")
-		line.Name = "Line" .. i
-		line.Size = UDim2.fromOffset(2, 2 + i * 3)
-		line.Position = UDim2.new(1, -4 - (i * 5), 1, -4)
-		line.AnchorPoint = Vector2.new(1, 1)
-		line.BackgroundColor3 = library.Theme.TextMuted
-		line.BorderSizePixel = 0
-		line.Rotation = 45
-		line.ZIndex = 26
-		line.Parent = resizeHandle
-	end
-
-	local resizing = false
-	local resizeStart = Vector2.new()
-	local sizeStart = UDim2.new()
-	local resizeInputType = nil :: Enum.UserInputType?
-
-	self._Maid:GiveTask(resizeHandle.InputBegan:Connect(function(input)
-		if self._Minimized then return end
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			resizing = true
-			resizeStart = input.Position
-			sizeStart = main.Size
-			resizeInputType = input.UserInputType
-		end
-	end))
-
-	self._Maid:GiveTask(UserInputService.InputChanged:Connect(function(input)
-		if not resizing or resizeInputType == nil then return end
-		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-			local delta = input.Position - resizeStart
-			local newX = math.clamp(sizeStart.X.Offset + delta.X, minWindowSize.X, maxWindowSize.X)
-			local newY = math.clamp(sizeStart.Y.Offset + delta.Y, minWindowSize.Y, maxWindowSize.Y)
-			main.Size = UDim2.fromOffset(newX, newY)
-		end
-	end))
-
-	self._Maid:GiveTask(UserInputService.InputEnded:Connect(function(input)
-		if resizeInputType ~= nil and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
-			resizing = false
-			resizeInputType = nil
-		end
-	end))
-
-	resizeHandle.MouseEnter:Connect(function()
-		for _, line in resizeHandle:GetChildren() do
-			Tween.Play(line, { BackgroundColor3 = library.Theme.Accent }, { Time = 0.12 })
-		end
-	end)
-	resizeHandle.MouseLeave:Connect(function()
-		for _, line in resizeHandle:GetChildren() do
-			Tween.Play(line, { BackgroundColor3 = library.Theme.TextMuted }, { Time = 0.12 })
-		end
-	end)
-
-	self._ResizeHandle = resizeHandle
-
+-- Helper: Build Sidebar
+function Window:_buildSidebar(main, library, showSearch, topBarHeight)
 	local contentArea = Helpers.CreateFrame({
 		Name = "ContentArea",
 		Size = UDim2.new(1, 0, 1, -topBarHeight),
@@ -579,7 +519,7 @@ local loadingFrame = Helpers.CreateFrame({
 	sidebar.ClipsDescendants = true
 	Helpers.Padding(sidebar, Theme.Padding)
 
-	local searchBox
+	local searchBox = nil
 	local searchTop = 0
 	if showSearch then
 		local searchHolder = Helpers.CreateFrame({
@@ -607,7 +547,7 @@ local loadingFrame = Helpers.CreateFrame({
 		searchBox.ClearTextOnFocus = false
 		searchBox.Parent = searchHolder
 
-		searchTop = 40
+		searchTop = PADDING.SearchTop
 	end
 
 	local tabList = Helpers.CreateFrame({
@@ -619,129 +559,141 @@ local loadingFrame = Helpers.CreateFrame({
 		Parent = sidebar,
 	})
 	Helpers.ListLayout(tabList, Theme.Gap)
-
-	if searchBox then
-		local previouslyMatched = {} :: { [Instance]: boolean }
-
-		self._Maid:GiveTask(searchBox:GetPropertyChangedSignal("Text"):Connect(function()
-			local query = searchBox.Text:lower()
-
-			for _, child in tabList:GetChildren() do
-				if child:IsA("GuiObject") then
-					local matches = query == "" or child.Name:lower():find(query, 1, true) ~= nil
-					child.Visible = matches
-
-					if matches and query ~= "" and not previouslyMatched[child] then
-						local isActiveTab = self._ActiveTab and self._ActiveTab.Button == child
-						local restColor = if isActiveTab then library.Theme.Secondary else library.Theme.Background
-
-						Tween.Play(child, { BackgroundColor3 = library.Theme.Accent }, { Time = 0.12 })
-						task.delay(0.12, function()
-							if child and child.Parent then
-								Tween.Play(child, { BackgroundColor3 = restColor }, { Time = 0.35 })
-							end
-						end)
-					end
-
-					previouslyMatched[child] = matches
-				end
-			end
-		end))
+	local layout = tabList:FindFirstChildOfClass("UIListLayout")
+	if layout then
+		layout.SortOrder = Enum.SortOrder.LayoutOrder
 	end
 
-	if data.Footer then
-		local footer = Helpers.CreateFrame({
-			Name = "Footer",
-			Size = UDim2.new(1, 0, 0, 40),
-			Position = UDim2.new(0, 0, 1, -40),
-			BackgroundTransparency = 1,
-			Parent = sidebar,
-		})
+	return sidebar, searchBox, tabList
+end
 
-		local avatarImage
-		if data.Footer.Avatar and data.Footer.Avatar ~= "" then
-			avatarImage = Instance.new("ImageLabel")
-			avatarImage.Name = "Avatar"
-			avatarImage.Size = UDim2.fromOffset(30, 30)
-			avatarImage.Position = UDim2.new(0, 0, 0.5, 0)
-			avatarImage.AnchorPoint = Vector2.new(0, 0.5)
-			avatarImage.BackgroundColor3 = library.Theme.Background
-			avatarImage.Image = data.Footer.Avatar
-			avatarImage.Parent = footer
-			Helpers.Corner(avatarImage, 15)
-		end
-
-		local footerLabel = Helpers.CreateLabel({
-			Name = "WelcomeLabel",
-			Size = UDim2.new(1, if avatarImage then -40 else 0, 1, 0),
-			Position = UDim2.new(0, if avatarImage then 40 else 0, 0, 0),
-			Text = "Welcome, " .. (data.Footer.Username or "Player"),
-			TextColor3 = library.Theme.TextMuted,
-			TextSize = 12,
-			TextXAlignment = Enum.TextXAlignment.Left,
-			Parent = footer,
-		})
-	end
-
-	local function refreshWindowTheme()
-		main.BackgroundColor3 = library.Theme.Background
-		topBar.BackgroundColor3 = library.Theme.Secondary
-		topBarMask.BackgroundColor3 = library.Theme.Secondary
-		sidebar.BackgroundColor3 = library.Theme.Secondary
-		title.TextColor3 = library.Theme.Text
-		if subtitle then
-			subtitle.TextColor3 = library.Theme.TextMuted
-		end
-		if minimizeButton then
-			minimizeButton.TextColor3 = library.Theme.TextMuted
-		end
-		if closeButton then
-			closeButton.TextColor3 = library.Theme.TextMuted
-		end
-		mainStroke.Color = library.Theme.Border
-		for _, tab in self._Tabs do
-			tab:RefreshTheme()
-		end
-	end
-
-	local themeConnection = library.Theme.Changed:Connect(function()
-		refreshWindowTheme()
-	end)
-	self._Maid:GiveTask(themeConnection)
+-- Helper: Build Pages
+function Window:_buildPages(main, sidebar, topBarHeight)
+	local contentArea = main:FindFirstChild("ContentArea")
+	if not contentArea then return nil end
 
 	local pages = Instance.new("Frame")
 	pages.Name = "Pages"
-	pages.Position = UDim2.new(0, Theme.SidebarWidth + 8, 0, 0)
-	pages.Size = UDim2.new(1, -(Theme.SidebarWidth + 8), 1, 0)
+	pages.Position = UDim2.new(0, Theme.SidebarWidth + PADDING.Sidebar, 0, 0)
+	pages.Size = UDim2.new(1, -(Theme.SidebarWidth + PADDING.Sidebar), 1, 0)
 	pages.BackgroundTransparency = 1
 	pages.BorderSizePixel = 0
-	pages.ClipsDescendants = true 
+	pages.ClipsDescendants = true
 	pages.Parent = contentArea
 
-	self.Gui = screenGui
-	self.Main = main
-	self.TopBar = topBar
-	self.Sidebar = sidebar
-	self.TabList = tabList
-	self.Pages = pages
-	self.TitleLabel = title
-	self.SearchBox = searchBox
-	self._ThemeConnection = themeConnection
-	self._LoadingFrame = loadingFrame
-	self._Visible = true
-	self._Minimized = false
-	self._StartupComplete = false
-	self._ToggleKeybind = data.ToggleKey or Enum.KeyCode.RightControl
-	self._OptionsTab = nil
-	self.RefreshTheme = refreshWindowTheme
+	return pages
+end
+
+-- Helper: Build Floating Button
+function Window:_buildFloatingButton(parent, library, title, data)
+	local floatingButton = Instance.new("ImageButton")
+	floatingButton.Name = "FloatingToggle"
+	floatingButton.Size = UDim2.fromOffset(SIZES.FloatingButton, SIZES.FloatingButton)
+	floatingButton.Position = UDim2.new(0.5, 0, 0, 20)
+	floatingButton.BackgroundColor3 = library.Theme.Secondary
+	floatingButton.BackgroundTransparency = 0.1
+	floatingButton.Image = data.Logo or ""
+	floatingButton.ScaleType = Enum.ScaleType.Fit
+	floatingButton.ImageTransparency = 0
+	floatingButton.Visible = false
+	floatingButton.AutoButtonColor = false
+	floatingButton.ZIndex = 50
+	floatingButton.Active = true
+	floatingButton.Selectable = true
+	floatingButton.Parent = parent
+	Helpers.Corner(floatingButton, 25)
+	local floatingStroke = Helpers.Stroke(floatingButton, library.Theme.Accent, 1.5)
+
+	if not data.Logo or data.Logo == "" then
+		local fallbackLabel = Helpers.CreateLabel({
+			Name = "FallbackIcon",
+			Size = UDim2.fromScale(1, 1),
+			Text = string.sub(title, 1, 1),
+			Font = Theme.FontBold,
+			TextSize = 20,
+			TextColor3 = library.Theme.Text,
+			TextXAlignment = Enum.TextXAlignment.Center,
+			Parent = floatingButton,
+		})
+		fallbackLabel.ZIndex = 51
+	end
+
+	-- Hover animations (cached)
+	local hoverTween = Tween.new(floatingButton, { BackgroundTransparency = 0 }, { Time = 0.15 })
+	local leaveTween = Tween.new(floatingButton, { BackgroundTransparency = 0.1 }, { Time = 0.15 })
+	
+	floatingButton.MouseEnter:Connect(function() hoverTween:Play() end)
+	floatingButton.MouseLeave:Connect(function() leaveTween:Play() end)
+
+	floatingButton.MouseButton1Click:Connect(function()
+		self:SetVisible(true)
+	end)
+
+	-- Floating button dragging
+	self:_setupFloatingDragging(floatingButton)
+
+	return floatingButton
+end
+
+-- Helper: Setup Floating Dragging
+function Window:_setupFloatingDragging(button)
+	local UserInputService = game:GetService("UserInputService")
+	
+	self._FloatDragging = false
+	self._FloatDragStart = Vector2.new()
+	self._FloatStart = UDim2.new()
+	self._FloatDragInputType = nil :: Enum.UserInputType?
+
+	self._Maid:GiveTask(button.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			self._FloatDragging = true
+			self._FloatDragStart = input.Position
+			self._FloatStart = button.Position
+			self._FloatDragInputType = input.UserInputType
+		end
+	end))
+
+	self._Maid:GiveTask(UserInputService.InputChanged:Connect(function(input)
+		if not self._FloatDragging or self._FloatDragInputType == nil then
+			return
+		end
+		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+			local delta = input.Position - self._FloatDragStart
+			button.Position = UDim2.new(
+				self._FloatStart.X.Scale, self._FloatStart.X.Offset + delta.X,
+				self._FloatStart.Y.Scale, self._FloatStart.Y.Offset + delta.Y
+			)
+		end
+	end))
+
+	self._Maid:GiveTask(UserInputService.InputEnded:Connect(function(input)
+		if self._FloatDragInputType ~= nil and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+			self._FloatDragging = false
+			self._FloatDragInputType = nil
+		end
+	end))
+end
+
+-- Helper: Setup Window Controls (minimize/close)
+function Window:_setupWindowControls(main, topBar, windowSize, topBarHeight)
+	local minimizeButton = topBar:FindFirstChild("Minimize")
+	local closeButton = topBar:FindFirstChild("Close")
 
 	if minimizeButton then
 		minimizeButton.MouseButton1Click:Connect(function()
 			self._Minimized = not self._Minimized
 			if self._Minimized then
 				Tween.Play(main, { Size = UDim2.fromOffset(windowSize.X, topBarHeight) }, { Time = 0.18 })
+				local contentArea = main:FindFirstChild("ContentArea")
+				if contentArea then contentArea.Visible = false end
 			else
 				Tween.Play(main, { Size = UDim2.fromOffset(windowSize.X, windowSize.Y) }, { Time = 0.18 })
+				local contentArea = main:FindFirstChild("ContentArea")
+				if contentArea then 
+					task.delay(0.18, function()
+						if contentArea then contentArea.Visible = true end
+					end)
+				end
 			end
 		end)
 	end
@@ -751,31 +703,250 @@ local loadingFrame = Helpers.CreateFrame({
 			self:SetVisible(false)
 		end)
 	end
+end
 
-	self._Maid:GiveTask(UserInputService.InputBegan:Connect(function(input, processed)
-		if processed then
+-- Helper: Setup Dragging
+function Window:_setupDragging(main, topBar, UserInputService)
+	local dragging = false
+	local dragStart = Vector2.new()
+	local windowStart = UDim2.new()
+	local dragInputType = nil :: Enum.UserInputType?
+
+	local function startDragging(input: InputObject)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			dragStart = input.Position
+			windowStart = main.Position
+			dragInputType = input.UserInputType
+		end
+	end
+
+	self._Maid:GiveTask(topBar.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			startDragging(input)
+		end
+	end))
+
+	self._Maid:GiveTask(UserInputService.InputChanged:Connect(function(input)
+		if not dragging or dragInputType == nil then
 			return
 		end
+		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+			local delta = input.Position - dragStart
+			main.Position = UDim2.new(
+				windowStart.X.Scale,
+				windowStart.X.Offset + delta.X,
+				windowStart.Y.Scale,
+				windowStart.Y.Offset + delta.Y
+			)
+		end
+	end))
+
+	self._Maid:GiveTask(UserInputService.InputEnded:Connect(function(input)
+		if dragInputType ~= nil and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+			dragging = false
+			dragInputType = nil
+		end
+	end))
+end
+
+-- Helper: Setup Resizing
+function Window:_setupResizing(main, UserInputService, minSize, maxSize)
+	local resizeHandle = self:_buildResizeHandle(main)
+	if not resizeHandle then return end
+
+	local resizing = false
+	local resizeStart = Vector2.new()
+	local sizeStart = UDim2.new()
+	local resizeInputType = nil :: Enum.UserInputType?
+
+	self._Maid:GiveTask(resizeHandle.InputBegan:Connect(function(input)
+		if self._Minimized then return end
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			resizing = true
+			resizeStart = input.Position
+			sizeStart = main.Size
+			resizeInputType = input.UserInputType
+		end
+	end))
+
+	self._Maid:GiveTask(UserInputService.InputChanged:Connect(function(input)
+		if not resizing or resizeInputType == nil then return end
+		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+			local delta = input.Position - resizeStart
+			local newX = math.clamp(sizeStart.X.Offset + delta.X, minSize.X, maxSize.X)
+			local newY = math.clamp(sizeStart.Y.Offset + delta.Y, minSize.Y, maxSize.Y)
+			main.Size = UDim2.fromOffset(newX, newY)
+		end
+	end))
+
+	self._Maid:GiveTask(UserInputService.InputEnded:Connect(function(input)
+		if resizeInputType ~= nil and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+			resizing = false
+			resizeInputType = nil
+		end
+	end))
+end
+
+-- Helper: Build Resize Handle
+function Window:_buildResizeHandle(main)
+	local resizeHandle = Instance.new("Frame")
+	resizeHandle.Name = "ResizeHandle"
+	resizeHandle.Size = UDim2.fromOffset(18, 18)
+	resizeHandle.Position = UDim2.new(1, -4, 1, -4)
+	resizeHandle.AnchorPoint = Vector2.new(1, 1)
+	resizeHandle.BackgroundTransparency = 1
+	resizeHandle.Active = true
+	resizeHandle.Selectable = true
+	resizeHandle.ZIndex = 25
+	resizeHandle.Parent = main
+
+	local lines = {}
+	for i = 1, 3 do
+		local line = Instance.new("Frame")
+		line.Name = "Line" .. i
+		line.Size = UDim2.fromOffset(2, 2 + i * 3)
+		line.Position = UDim2.new(1, -4 - (i * 5), 1, -4)
+		line.AnchorPoint = Vector2.new(1, 1)
+		line.BackgroundColor3 = main:FindFirstChild("BackgroundOverlay") and main.BackgroundOverlay.BackgroundColor3 or Color3.new(0.5, 0.5, 0.5)
+		line.BorderSizePixel = 0
+		line.Rotation = 45
+		line.ZIndex = 26
+		line.Parent = resizeHandle
+		table.insert(lines, line)
+	end
+
+	-- Cached hover tweens
+	local accentColor = Color3.fromRGB(0, 150, 255)
+	resizeHandle.MouseEnter:Connect(function()
+		for _, line in lines do
+			Tween.Play(line, { BackgroundColor3 = accentColor }, { Time = 0.12 })
+		end
+	end)
+	resizeHandle.MouseLeave:Connect(function()
+		for _, line in lines do
+			Tween.Play(line, { BackgroundColor3 = Color3.new(0.5, 0.5, 0.5) }, { Time = 0.12 })
+		end
+	end)
+
+	self._ResizeHandle = resizeHandle
+	return resizeHandle
+end
+
+-- Helper: Setup Theme
+function Window:_setupTheme(library, main, topBar, sidebar)
+	local function refreshTheme()
+		main.BackgroundColor3 = library.Theme.Background
+		topBar.BackgroundColor3 = library.Theme.Secondary
+		local topBarMask = topBar:FindFirstChild("TopBarMask")
+		if topBarMask then topBarMask.BackgroundColor3 = library.Theme.Secondary end
+		sidebar.BackgroundColor3 = library.Theme.Secondary
+
+		local title = topBar:FindFirstChild("Title")
+		if title then title.TextColor3 = library.Theme.Text end
+		local subtitle = topBar:FindFirstChild("Subtitle")
+		if subtitle then subtitle.TextColor3 = library.Theme.TextMuted end
+
+		local minimizeButton = topBar:FindFirstChild("Minimize")
+		if minimizeButton then minimizeButton.TextColor3 = library.Theme.TextMuted end
+		local closeButton = topBar:FindFirstChild("Close")
+		if closeButton then 
+			closeButton.TextColor3 = library.Theme.TextMuted
+			local stroke = closeButton:FindFirstChild("Stroke")
+			if stroke then stroke.Color = library.Theme.Border end
+		end
+
+		local mainStroke = main:FindFirstChild("Stroke")
+		if mainStroke then mainStroke.Color = library.Theme.Border end
+
+		for _, tab in self._Tabs do
+			if tab.RefreshTheme then tab:RefreshTheme() end
+		end
+	end
+
+	local themeConnection = library.Theme.Changed:Connect(function()
+		refreshTheme()
+	end)
+	self._Maid:GiveTask(themeConnection)
+end
+
+-- Helper: Setup Search
+function Window:_setupSearch(searchBox, tabList, library)
+	local previouslyMatched = setmetatable({}, { __mode = "v" })
+
+	self._Maid:GiveTask(searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+		local query = searchBox.Text:lower()
+		previouslyMatched = setmetatable({}, { __mode = "v" }) -- Clear cache on each search
+
+		for _, child in tabList:GetChildren() do
+			if child:IsA("GuiObject") then
+				local matches = query == "" or child.Name:lower():find(query, 1, true) ~= nil
+				child.Visible = matches
+
+				if matches and query ~= "" then
+					local isActiveTab = self._ActiveTab and self._ActiveTab.Button == child
+					local restColor = if isActiveTab then library.Theme.Secondary else library.Theme.Background
+
+					Tween.Play(child, { BackgroundColor3 = library.Theme.Accent }, { Time = 0.12 })
+					task.delay(0.12, function()
+						if child and child.Parent then
+							Tween.Play(child, { BackgroundColor3 = restColor }, { Time = 0.35 })
+						end
+					end)
+				end
+
+				previouslyMatched[child] = matches
+			end
+		end
+	end))
+
+	-- Auto-focus search
+	task.defer(function()
+		if searchBox and searchBox.Parent then
+			searchBox:CaptureFocus()
+		end
+	end)
+end
+
+-- Helper: Setup Keybind
+function Window:_setupKeybind(UserInputService)
+	self._Maid:GiveTask(UserInputService.InputBegan:Connect(function(input, processed)
+		if processed then return end
 		if self._ToggleKeybind ~= nil and self._ToggleKeybind ~= Enum.KeyCode.Unknown and input.KeyCode == self._ToggleKeybind then
 			self:Toggle()
 		end
 	end))
+end
 
+-- Helper: Startup Sequence
+function Window:_startupSequence(loadingFrame)
 	self._Maid:Give(task.delay(0.8, function()
-		if not self.Gui then
-			return
-		end
+		if not self.Gui then return end
 
 		if loadingFrame and loadingFrame.Parent then
-			loadingStatus.Text = "Ready"
+			local status = loadingFrame:FindFirstChild("Status")
+			if status then status.Text = "Ready" end
 			task.wait(0.25)
-			Tween.Play(loadingFrame, { BackgroundTransparency = 1 }, { Time = 0.2 })
-			Tween.Play(loadingAccent, { BackgroundTransparency = 1 }, { Time = 0.2 })
-			Tween.Play(loadingTitle, { TextTransparency = 1 }, { Time = 0.2 })
-			Tween.Play(loadingSubtitle, { TextTransparency = 1 }, { Time = 0.2 })
-			Tween.Play(loadingStatus, { TextTransparency = 1 }, { Time = 0.2 })
-			Tween.Play(progressTrack, { BackgroundTransparency = 1 }, { Time = 0.2 })
-			Tween.Play(progressFill, { BackgroundTransparency = 1 }, { Time = 0.2 })
+			
+			-- Fade out all loading elements
+			local elements = {
+				loadingFrame,
+				loadingFrame:FindFirstChild("Accent"),
+				loadingFrame:FindFirstChild("LoadingTitle"),
+				loadingFrame:FindFirstChild("LoadingSubtitle"),
+				loadingFrame:FindFirstChild("Status"),
+				loadingFrame:FindFirstChild("ProgressTrack"),
+				loadingFrame:FindFirstChild("ProgressFill"),
+			}
+			
+			for _, elem in elements do
+				if elem then
+					local prop = elem:IsA("Frame") and "BackgroundTransparency" or "TextTransparency"
+					local value = elem:IsA("Frame") and 1 or 1
+					Tween.Play(elem, { [prop] = value }, { Time = 0.2 })
+				end
+			end
+			
 			task.wait(0.2)
 			if loadingFrame and loadingFrame.Parent then
 				loadingFrame:Destroy()
@@ -785,27 +956,27 @@ local loadingFrame = Helpers.CreateFrame({
 		self._StartupComplete = true
 		self:SetVisible(self._Visible)
 	end))
-
-	return self :: any
 end
 
 function Window:SetBackgroundImage(value: string)
 	local bg = self._BackgroundImage
 	if not bg then return end
-	print("Changed BG to: " .. value)
-	if value == "Solo Leveling" then
-		bg.Image = "rbxassetid://139001765478120"
-	elseif value == "Gojo" then
-		bg.Image = "rbxassetid://111578938106815"
-
-	elseif value == "Sukuna" then
-		bg.Image = "rbxassetid://106318186489675"
 	
-	elseif value == "Cid Kagenou" then
-		bg.Image = "rbxassetid://113248988511733"
-
-	else
+	if value == "None" or value == "" then
 		bg.Image = ""
+		return
+	end
+	
+	local assetId = ASSETS.Backgrounds[value]
+	if assetId then
+		bg.Image = assetId
+	else
+		-- Assume direct rbxassetid or full URL
+		if not value:match("^rbxassetid://") and not value:match("^http") then
+			bg.Image = "rbxassetid://" .. value
+		else
+			bg.Image = value
+		end
 	end
 end
 
@@ -817,9 +988,7 @@ function Window:SetBackgroundOverlayTransparency(value: number)
 end
 
 function Window:_selectTab(tab: any)
-	if self._ActiveTab == tab then
-		return
-	end
+	if self._ActiveTab == tab then return end
 
 	local previousTab = self._ActiveTab
 
@@ -850,7 +1019,6 @@ function Window:_selectTab(tab: any)
 	end
 
 	local slideDistance = self.Pages.AbsoluteSize.X * 0.25
-
 	newPage.Visible = true
 	newPage.Position = UDim2.fromOffset(slideDistance * direction, 0)
 	Tween.Play(newPage, { Position = UDim2.fromOffset(0, 0) }, { Time = 0.2 })
@@ -947,9 +1115,7 @@ function Window:_createOptionsTab()
 	})
 
 	self._Maid:GiveTask(self.Library.Theme.Changed:Connect(function(key)
-		if key ~= "Style" then
-			return
-		end
+		if key ~= "Style" then return end
 		for propName, picker in themeColorPickers do
 			if picker and picker.Set then
 				picker:Set(self.Library.Theme[propName])
@@ -958,21 +1124,17 @@ function Window:_createOptionsTab()
 	end))
 
 	visualSection:CreateInput({
-    Name = "Custom Background",
-    PlaceholderText = "rbxassetid://123456789 or 123456789",
-    Callback = function(value)
-        if value == "" then
-            return
-        end
-
-        if not value:match("^rbxassetid://") then
-            value = "rbxassetid://" .. value
-        end
-
-        if self._BackgroundImage then
-            self._BackgroundImage.Image = value
-        end
-    end,
+		Name = "Custom Background",
+		PlaceholderText = "rbxassetid://123456789 or 123456789",
+		Callback = function(value)
+			if value == "" then return end
+			local bg = self._BackgroundImage
+			if not bg then return end
+			if not value:match("^rbxassetid://") and not value:match("^http") then
+				value = "rbxassetid://" .. value
+			end
+			bg.Image = value
+		end,
 	})
 
 	visualSection:CreateDropdown({
@@ -1050,9 +1212,9 @@ function Window:_createOptionsTab()
 	DiscordSection:CreateButton({
 		Name = "Copy Discord Invite",
 		Callback = function()
-			setclipboard("https://discord.gg/D6AvbntAZf")
-			print("Discord invite copied!")
-
+			if setclipboard then
+				setclipboard("https://discord.gg/D6AvbntAZf")
+			end
 			if self.Library and self.Library.Notifications and self.Library.Notifications.Notify then
 				self.Library.Notifications:Notify({
 					Title = "Success",
@@ -1086,73 +1248,55 @@ end
 
 function Window:CreateSection(nameOrData: any)
 	local tab = self:_getActiveTab()
-	if not tab then
-		return nil
-	end
+	if not tab then return nil end
 	return tab:CreateSection(nameOrData)
 end
 
 function Window:CreateDropdown(data: any)
 	local tab = self:_getActiveTab()
-	if not tab then
-		return nil
-	end
+	if not tab then return nil end
 	return tab:CreateDropdown(data)
 end
 
 function Window:CreateToggle(data: any)
 	local tab = self:_getActiveTab()
-	if not tab then
-		return nil
-	end
+	if not tab then return nil end
 	return tab:CreateToggle(data)
 end
 
 function Window:CreateButton(data: any)
 	local tab = self:_getActiveTab()
-	if not tab then
-		return nil
-	end
+	if not tab then return nil end
 	return tab:CreateButton(data)
 end
 
 function Window:CreateSlider(data: any)
 	local tab = self:_getActiveTab()
-	if not tab then
-		return nil
-	end
+	if not tab then return nil end
 	return tab:CreateSlider(data)
 end
 
 function Window:CreateInput(data: any)
 	local tab = self:_getActiveTab()
-	if not tab then
-		return nil
-	end
+	if not tab then return nil end
 	return tab:CreateInput(data)
 end
 
 function Window:CreateKeybind(data: any)
 	local tab = self:_getActiveTab()
-	if not tab then
-		return nil
-	end
+	if not tab then return nil end
 	return tab:CreateKeybind(data)
 end
 
 function Window:CreateColorPicker(data: any)
 	local tab = self:_getActiveTab()
-	if not tab then
-		return nil
-	end
+	if not tab then return nil end
 	return tab:CreateColorPicker(data)
 end
 
 function Window:CreateParagraph(data: any)
 	local tab = self:_getActiveTab()
-	if not tab then
-		return nil
-	end
+	if not tab then return nil end
 	return tab:CreateParagraph(data)
 end
 
@@ -1204,7 +1348,7 @@ function Window:SetVisible(visible: boolean)
 			task.delay(0.18, function()
 				if btn and btn.Parent then
 					Tween.Play(btn, {
-						Size = UDim2.fromOffset(50, 50),
+						Size = UDim2.fromOffset(SIZES.FloatingButton, SIZES.FloatingButton),
 						Rotation = 0,
 					}, { Time = 0.12 })
 				end
@@ -1234,5 +1378,5 @@ function Window:Destroy()
 		self.Gui:Destroy()
 	end
 end
-print("You use the CyberUI - UI!")
+
 return Window
