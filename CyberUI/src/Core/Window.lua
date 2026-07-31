@@ -95,7 +95,6 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	Helpers.Stroke(loadingFrame, library.Theme.Border, 1)
 	Helpers.Padding(loadingFrame, 20)
 
-	-- Accent line
 	local loadingAccent = Helpers.CreateFrame({
 		Name = "Accent",
 		Size = UDim2.new(0, 4, 1, -40),
@@ -105,7 +104,6 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	})
 	Helpers.Corner(loadingAccent, 2)
 
-	-- Title
 	local loadingTitle = Helpers.CreateLabel({
 		Name = "LoadingTitle",
 		Size = UDim2.new(1, -44, 0, 34),
@@ -118,7 +116,6 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Parent = loadingFrame,
 	})
 
-	-- Subtitle
 	local loadingSubtitle = Helpers.CreateLabel({
 		Name = "LoadingSubtitle",
 		Size = UDim2.new(1, -44, 0, 24),
@@ -130,7 +127,6 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Parent = loadingFrame,
 	})
 
-	-- Version
 	local loadingVersion = Helpers.CreateLabel({
 		Name = "LoadingVersion",
 		Size = UDim2.new(1, -44, 0, 20),
@@ -142,7 +138,6 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Parent = loadingFrame,
 	})
 
-	-- Status
 	local loadingStatus = Helpers.CreateLabel({
 		Name = "LoadingStatus",
 		Size = UDim2.new(1, -44, 0, 20),
@@ -154,7 +149,6 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Parent = loadingFrame,
 	})
 
-	-- Progress bar
 	local progressTrack = Helpers.CreateFrame({
 		Name = "ProgressTrack",
 		Size = UDim2.new(1, -44, 0, 6),
@@ -189,7 +183,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Position = if data.Center ~= false then UDim2.fromScale(0.5, 0.5) else UDim2.fromOffset(40, 40),
 		AnchorPoint = if data.Center ~= false then Vector2.new(0.5, 0.5) else Vector2.new(0, 0),
 		BackgroundColor3 = library.Theme.Background,
-		BackgroundTransparency = 0.15,
+		BackgroundTransparency = 0.1,
 		Visible = false,
 		Parent = screenGui,
 	})
@@ -205,7 +199,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	backgroundImage.Size = UDim2.fromScale(1, 1)
 	backgroundImage.BackgroundTransparency = 1
 	backgroundImage.Image = data.BackgroundImage or ""
-	backgroundImage.ImageTransparency = 0.25
+	backgroundImage.ImageTransparency = 0.2
 	backgroundImage.ScaleType = Enum.ScaleType.Crop
 	backgroundImage.ZIndex = 0
 	backgroundImage.Parent = main
@@ -217,21 +211,21 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	overlay.Name = "BackgroundOverlay"
 	overlay.Size = UDim2.fromScale(1, 1)
 	overlay.BackgroundColor3 = Color3.new(0, 0, 0)
-	overlay.BackgroundTransparency = 0.7
+	overlay.BackgroundTransparency = 0.65
 	overlay.BorderSizePixel = 0
 	overlay.ZIndex = 1
 	overlay.Parent = main
 	Helpers.Corner(overlay, Theme.CornerRadius)
 
 	-- ============================================
-	-- TOP BAR
+	-- TOP BAR (Title & Subtitle side by side)
 	-- ============================================
 	local topBar = Helpers.CreateFrame({
 		Name = "TopBar",
 		Size = UDim2.new(1, 0, 0, topBarHeight),
 		Position = UDim2.new(0, 0, 0, 0),
 		BackgroundColor3 = library.Theme.Secondary,
-		BackgroundTransparency = 0.3,
+		BackgroundTransparency = 0.2,
 		Active = true,
 		Selectable = true,
 		Parent = main,
@@ -264,41 +258,55 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	logoImage.Parent = topBar
 	Helpers.Corner(logoImage, 8)
 
-	-- Title
+	-- Title and Subtitle container (horizontal layout)
+	local titleContainer = Helpers.CreateFrame({
+		Name = "TitleContainer",
+		Size = UDim2.new(0, 300, 1, 0),
+		Position = UDim2.new(0, 14 + logoSize + 10, 0, 0),
+		BackgroundTransparency = 1,
+		Parent = topBar,
+	})
+
 	local title = Helpers.CreateLabel({
 		Name = "Title",
-		Size = UDim2.new(0, 240, 0, 24),
-		Position = UDim2.new(0, 14 + logoSize + 10, 0, 8),
+		Size = UDim2.new(0, 0, 1, 0),
+		AutomaticSize = Enum.AutomaticSize.X,
+		Position = UDim2.new(0, 0, 0, 0),
 		Text = windowName,
 		Font = Theme.FontBold,
 		TextSize = 18,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = library.Theme.Text,
-		Parent = topBar,
+		Parent = titleContainer,
 	})
 	title.ZIndex = 21
 
-	-- Subtitle
-	local subtitle
-	if windowSubtitle then
-		subtitle = Helpers.CreateLabel({
-			Name = "Subtitle",
-			Size = UDim2.new(0, 240, 0, 18),
-			Position = UDim2.new(0, 14 + logoSize + 10, 0, 32),
-			Text = windowSubtitle,
-			TextColor3 = library.Theme.TextMuted,
-			TextSize = 12,
-			TextXAlignment = Enum.TextXAlignment.Left,
-			Parent = topBar,
-		})
-		subtitle.ZIndex = 21
-	end
+	-- Subtitle placed to the right of title with some spacing
+	local subtitle = Helpers.CreateLabel({
+		Name = "Subtitle",
+		Size = UDim2.new(0, 0, 1, 0),
+		AutomaticSize = Enum.AutomaticSize.X,
+		Position = UDim2.new(0, title.TextBounds.X + 10, 0, 0),
+		Text = "• " .. windowSubtitle,
+		TextColor3 = library.Theme.TextMuted,
+		TextSize = 14,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = titleContainer,
+	})
+	subtitle.ZIndex = 21
 
-	-- Status indicator (like in the reference)
+	-- Adjust title container width after labels are rendered
+	task.defer(function()
+		local totalWidth = title.TextBounds.X + 10 + subtitle.TextBounds.X + 20
+		titleContainer.Size = UDim2.new(0, math.max(totalWidth, 200), 1, 0)
+		subtitle.Position = UDim2.new(0, title.TextBounds.X + 10, 0, 0)
+	end)
+
+	-- Status indicator
 	local statusContainer = Helpers.CreateFrame({
 		Name = "StatusContainer",
-		Size = UDim2.new(0, 120, 1, 0),
-		Position = UDim2.new(1, -280, 0, 0),
+		Size = UDim2.new(0, 150, 1, 0),
+		Position = UDim2.new(1, -320, 0, 0),
 		BackgroundTransparency = 1,
 		Parent = topBar,
 	})
@@ -317,14 +325,14 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Name = "StatusLabel",
 		Size = UDim2.new(1, -16, 1, 0),
 		Position = UDim2.new(0, 14, 0, 0),
-		Text = "● Everything is running smoothly",
+		Text = "● System Online",
 		TextColor3 = library.Theme.TextMuted,
 		TextSize = 11,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Parent = statusContainer,
 	})
 
-	-- Badges
+	-- Badges (optional)
 	local badgeHolder = Helpers.CreateFrame({
 		Name = "Badges",
 		Size = UDim2.new(0, 160, 0, 26),
@@ -407,7 +415,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	end
 
 	-- ============================================
-	-- FLOATING BUTTON
+	-- FLOATING BUTTON (unchanged)
 	-- ============================================
 	local floatingButton = Instance.new("ImageButton")
 	floatingButton.Name = "FloatingToggle"
@@ -437,7 +445,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		self:SetVisible(true)
 	end)
 
-	-- Floating button drag
+	-- Drag logic for floating button (unchanged)
 	self._FloatDragging = false
 	self._FloatDragStart = Vector2.new()
 	self._FloatStart = UDim2.new()
@@ -474,7 +482,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	self._FloatingButton = floatingButton
 
 	-- ============================================
-	-- WINDOW DRAGGING
+	-- WINDOW DRAGGING (unchanged)
 	-- ============================================
 	local dragging = false
 	local dragStart = Vector2.new()
@@ -530,7 +538,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Name = "Sidebar",
 		Size = UDim2.new(0, Theme.SidebarWidth, 1, 0),
 		BackgroundColor3 = library.Theme.Secondary,
-		BackgroundTransparency = 0.2,
+		BackgroundTransparency = 0.15,
 		Parent = contentArea,
 	})
 	Helpers.Corner(sidebar, Theme.CornerRadius)
@@ -580,7 +588,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	})
 	Helpers.ListLayout(tabList, Theme.Gap)
 
-	-- Footer
+	-- Footer (removed "Premium User" label)
 	local footer = Helpers.CreateFrame({
 		Name = "Footer",
 		Size = UDim2.new(1, 0, 0, 44),
@@ -615,24 +623,14 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 
 	local footerLabel = Helpers.CreateLabel({
 		Name = "WelcomeLabel",
-		Size = UDim2.new(1, if avatarImage then -40 else 0, 1, -8),
-		Position = UDim2.new(0, if avatarImage then 40 else 0, 0, 4),
+		Size = UDim2.new(1, if avatarImage then -40 else 0, 1, 0),
+		Position = UDim2.new(0, if avatarImage then 40 else 0, 0.5, 0),
+		AnchorPoint = Vector2.new(0, 0.5),
 		Text = "Welcome, " .. footerUsername,
 		TextColor3 = library.Theme.Text,
 		TextSize = 13,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Font = Theme.FontBold,
-		Parent = footer,
-	})
-
-	local footerSub = Helpers.CreateLabel({
-		Name = "FooterSub",
-		Size = UDim2.new(1, if avatarImage then -40 else 0, 1, -8),
-		Position = UDim2.new(0, if avatarImage then 40 else 0, 0, 22),
-		Text = "Premium User",
-		TextColor3 = library.Theme.Accent,
-		TextSize = 11,
-		TextXAlignment = Enum.TextXAlignment.Left,
 		Parent = footer,
 	})
 
@@ -649,14 +647,14 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	pages.Parent = contentArea
 
 	-- ============================================
-	-- INFO BAR (like in reference)
+	-- INFO BAR (Dynamic)
 	-- ============================================
 	local infoBar = Helpers.CreateFrame({
 		Name = "InfoBar",
 		Size = UDim2.new(1, -16, 0, 28),
 		Position = UDim2.new(0, 8, 1, -36),
 		BackgroundColor3 = library.Theme.Secondary,
-		BackgroundTransparency = 0.4,
+		BackgroundTransparency = 0.3,
 		Parent = pages,
 	})
 	Helpers.Corner(infoBar, Theme.CornerRadiusSmall)
@@ -670,15 +668,11 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	infoLayout.Padding = UDim.new(0, 16)
 	infoLayout.Parent = infoBar
 
-	local infoItems = {
-		{ Label = "Executor: ", Value = "Synapse X" },
-		{ Label = "v", Value = VERSION },
-		{ Label = "Uptime: ", Value = "00:23:47" },
-		{ Label = "Players: ", Value = "12 / 30" },
-		{ Label = "Time: ", Value = os.date("%I:%M %p") },
-	}
+	-- We'll store references to the value labels for updates
+	local infoItems = {}
+	local infoRefs = {}
 
-	for _, item in infoItems do
+	local function createInfoItem(labelText: string, initialValue: string)
 		local container = Instance.new("Frame")
 		container.Name = "InfoItem"
 		container.Size = UDim2.new(0, 0, 1, 0)
@@ -690,7 +684,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 			Name = "Label",
 			Size = UDim2.new(0, 0, 1, 0),
 			AutomaticSize = Enum.AutomaticSize.X,
-			Text = item.Label,
+			Text = labelText,
 			TextColor3 = library.Theme.TextMuted,
 			TextSize = 11,
 			TextXAlignment = Enum.TextXAlignment.Left,
@@ -702,7 +696,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 			Size = UDim2.new(0, 0, 1, 0),
 			AutomaticSize = Enum.AutomaticSize.X,
 			Position = UDim2.new(0, label.TextBounds.X + 2, 0, 0),
-			Text = item.Value,
+			Text = initialValue,
 			TextColor3 = library.Theme.Text,
 			TextSize = 11,
 			TextXAlignment = Enum.TextXAlignment.Left,
@@ -711,10 +705,76 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		})
 
 		container.Size = UDim2.new(0, label.TextBounds.X + value.TextBounds.X + 4, 1, 0)
+		return { Container = container, Label = label, Value = value }
 	end
 
+	-- Dynamically get executor name if available
+	local executorName = "Synapse X" -- fallback
+	if syn and syn.getexecutorname then
+		executorName = syn.getexecutorname()
+	elseif getexecutorname then
+		executorName = getexecutorname()
+	end
+
+	-- Build info items
+	local items = {
+		{ Label = "Executor: ", Value = executorName },
+		{ Label = "v", Value = VERSION },
+		{ Label = "Uptime: ", Value = "00:00:00" },
+		{ Label = "Players: ", Value = tostring(#Players:GetPlayers()) .. " / " .. tostring(Players.MaxPlayers) },
+		{ Label = "Time: ", Value = os.date("%I:%M %p") },
+	}
+
+	for _, item in items do
+		local ref = createInfoItem(item.Label, item.Value)
+		table.insert(infoRefs, ref)
+	end
+
+	-- Update info bar periodically
+	local function updateInfoBar()
+		local uptime = os.clock() - self._StartupTime
+		local hours = math.floor(uptime / 3600)
+		local minutes = math.floor((uptime % 3600) / 60)
+		local seconds = math.floor(uptime % 60)
+		local uptimeStr = string.format("%02d:%02d:%02d", hours, minutes, seconds)
+
+		local playerCount = #Players:GetPlayers()
+		local maxPlayers = Players.MaxPlayers
+
+		local values = {
+			uptimeStr,
+			tostring(playerCount) .. " / " .. tostring(maxPlayers),
+			os.date("%I:%M %p"),
+		}
+
+		-- Update only the value labels (skip static ones like Executor and Version)
+		local index = 1
+		for i, ref in ipairs(infoRefs) do
+			-- Skip index 1 (Executor) and 2 (Version) – they're static
+			if i > 2 then
+				if ref.Value then
+					ref.Value.Text = values[index]
+					index = index + 1
+				end
+			end
+		end
+	end
+
+	-- Update every second
+	local updateConnection = RunService.Heartbeat:Connect(function()
+		updateInfoBar()
+	end)
+	self._Maid:GiveTask(updateConnection)
+
+	-- Also update on player join/leave
+	local function onPlayerChanged()
+		updateInfoBar()
+	end
+	self._Maid:GiveTask(Players.PlayerAdded:Connect(onPlayerChanged))
+	self._Maid:GiveTask(Players.PlayerRemoving:Connect(onPlayerChanged))
+
 	-- ============================================
-	-- SEARCH FUNCTIONALITY
+	-- SEARCH FUNCTIONALITY (unchanged)
 	-- ============================================
 	if searchBox then
 		local previouslyMatched = {} :: { [Instance]: boolean }
@@ -759,14 +819,10 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		if closeButton then closeButton.TextColor3 = library.Theme.TextMuted end
 		mainStroke.Color = library.Theme.Border
 
-		-- Update info bar
-		for _, item in infoBar:GetChildren() do
-			if item:IsA("Frame") then
-				local label = item:FindFirstChild("Label")
-				local value = item:FindFirstChild("Value")
-				if label then label.TextColor3 = library.Theme.TextMuted end
-				if value then value.TextColor3 = library.Theme.Text end
-			end
+		-- Update info bar colors
+		for _, ref in infoRefs do
+			if ref.Label then ref.Label.TextColor3 = library.Theme.TextMuted end
+			if ref.Value then ref.Value.TextColor3 = library.Theme.Text end
 		end
 
 		for _, tab in self._Tabs do
@@ -782,7 +838,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	self._Maid:GiveTask(themeConnection)
 
 	-- ============================================
-	-- MINIMIZE / CLOSE
+	-- MINIMIZE / CLOSE (unchanged)
 	-- ============================================
 	if minimizeButton then
 		minimizeButton.MouseButton1Click:Connect(function()
@@ -824,12 +880,14 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	self.TitleLabel = title
 	self.SearchBox = searchBox
 	self._ThemeConnection = themeConnection
-	self._LoadingFrame = loadingFrame	self._Visible = true
+	self._LoadingFrame = loadingFrame
+	self._Visible = true
 	self._Minimized = false
 	self._StartupComplete = false
 	self._OptionsTab = nil
 	self.RefreshTheme = refreshWindowTheme
 	self._InfoBar = infoBar
+	self._InfoRefs = infoRefs
 
 	-- ============================================
 	-- STARTUP COMPLETE
@@ -863,7 +921,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 end
 
 -- ============================================
--- METHODS
+-- METHODS (unchanged except minor tweaks)
 -- ============================================
 
 function Window:SetBackgroundImage(value: string)
@@ -959,7 +1017,6 @@ function Window:_createOptionsTab()
 	self.Library.Theme.Text = self.Library:_getSavedFlag("VoidHub.Theme.Text", self.Library.Theme.Text, true)
 	self.Library.Theme.Border = self.Library:_getSavedFlag("VoidHub.Theme.Border", self.Library.Theme.Border, true)
 
-	-- Visual section
 	local visualSection = optionsTab:CreateSection("🎨 Visual")
 	visualSection:CreateParagraph({
 		Title = "Customize your experience",
@@ -1031,7 +1088,7 @@ function Window:_createOptionsTab()
 		Name = "Overlay Transparency",
 		Min = 0,
 		Max = 1,
-		CurrentValue = 0.7,
+		CurrentValue = 0.65,
 		Rounding = 0.01,
 		Callback = function(value: number)
 			self:SetBackgroundOverlayTransparency(value)
@@ -1039,7 +1096,6 @@ function Window:_createOptionsTab()
 		Flag = "VoidHub.Background.OverlayTransparency",
 	})
 
-	-- Configuration section
 	local configSection = optionsTab:CreateSection("⚙️ Configuration")
 	configSection:CreateParagraph({
 		Title = "Save & Restore",
@@ -1088,7 +1144,6 @@ function Window:_createOptionsTab()
 		end,
 	})
 
-	-- Keybind section
 	local keybindSection = optionsTab:CreateSection("⌨️ Keybinds")
 	keybindSection:CreateParagraph({
 		Title = "Toggle UI",
@@ -1108,7 +1163,6 @@ function Window:_createOptionsTab()
 		self._ToggleKeybind = key
 	end))
 
-	-- Discord section
 	local discordSection = optionsTab:CreateSection("💬 Discord")
 	discordSection:CreateButton({
 		Name = "📋 Copy Discord Invite",
@@ -1260,7 +1314,6 @@ function Window:Notify(options: any)
 		return self.Library.Notifications:Notify(options)
 	end
 
-	-- Fallback notification
 	game:GetService("StarterGui"):SetCore("SendNotification", {
 		Title = options.Title or "Void Hub",
 		Text = options.Content or options.Text or "",
