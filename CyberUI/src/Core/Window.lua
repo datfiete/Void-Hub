@@ -73,7 +73,6 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	local playerGui = player:WaitForChild("PlayerGui", 5)
 	if not playerGui then return self :: any end
 
-	-- Use _G directly for compatibility
 	local sharedState = _G
 
 	-- Cleanup existing UI
@@ -83,13 +82,6 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		end
 	end
 
-	-- Build UI components
-	local screenGui = self:_buildScreenGui(playerGui)
-	local loadingFrame = self:_buildLoadingFrame(screenGui, library, windowName, windowSubtitle)
-	
-	self._Maid:Give(screenGui)
-	self._Maid:Give(loadingFrame)
-
 	-- Get window dimensions
 	local windowName = data.Name or data.Title or "CyberUI"
 	local windowSubtitle = data.Subtitle or data.Description
@@ -98,6 +90,15 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	local showSearch = data.ShowSearch ~= false
 	local showWindowControls = data.ShowWindowControls ~= false
 	local topBarHeight = Theme.TopBarHeight or 54
+
+	-- Build screen gui
+	local screenGui = self:_buildScreenGui(playerGui)
+	self.Gui = screenGui
+
+	-- Build loading frame (store references separately)
+	local loadingFrame, loadingElements = self:_buildLoadingFrame(screenGui, library, windowName, windowSubtitle)
+	self._Maid:Give(screenGui)
+	self._Maid:Give(loadingFrame)
 
 	-- Build main frame
 	local main = self:_buildMainFrame(screenGui, library, windowSize, data, topBarHeight)
@@ -144,7 +145,6 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	self:_setupKeybind(UserInputService)
 
 	-- Initialize state
-	self.Gui = screenGui
 	self._Visible = true
 	self._Minimized = false
 	self._StartupComplete = false
@@ -152,8 +152,8 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	self._OptionsTab = nil
 	self.RefreshTheme = function() self:_refreshTheme(library, main, topBar, sidebar) end
 
-	-- Loading sequence
-	self:_startupSequence(loadingFrame)
+	-- Startup sequence with proper loading elements
+	self:_startupSequence(loadingFrame, loadingElements)
 
 	return self :: any
 end
@@ -165,7 +165,6 @@ function Window:_buildScreenGui(parent)
 	screenGui.ResetOnSpawn = false
 	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	screenGui.Parent = parent
-	self._Maid:Give(screenGui)
 	return screenGui
 end
 
@@ -181,7 +180,7 @@ function Window:_getWindowSize(size)
 	return Vector2.new(800, 560)
 end
 
--- Helper: Build Loading Frame
+-- Helper: Build Loading Frame (returns frame and elements table)
 function Window:_buildLoadingFrame(parent, library, title, subtitle)
 	local loadingFrame = Helpers.CreateFrame({
 		Name = "Loading",
@@ -256,15 +255,17 @@ function Window:_buildLoadingFrame(parent, library, title, subtitle)
 	Helpers.Corner(progressFill, 3)
 	Tween.Play(progressFill, { Size = UDim2.fromScale(1, 1) }, { Time = 0.85 })
 
-	-- Store references for later
-	loadingFrame._Accent = loadingAccent
-	loadingFrame._Title = loadingTitle
-	loadingFrame._Subtitle = loadingSubtitle
-	loadingFrame._Status = loadingStatus
-	loadingFrame._ProgressTrack = progressTrack
-	loadingFrame._ProgressFill = progressFill
+	-- Return frame and all elements for later cleanup
+	local elements = {
+		Accent = loadingAccent,
+		Title = loadingTitle,
+		Subtitle = loadingSubtitle,
+		Status = loadingStatus,
+		ProgressTrack = progressTrack,
+		ProgressFill = progressFill,
+	}
 
-	return loadingFrame
+	return loadingFrame, elements
 end
 
 -- Helper: Build Main Frame
@@ -808,7 +809,7 @@ function Window:_buildResizeHandle(main)
 		line.Size = UDim2.fromOffset(2, 2 + i * 3)
 		line.Position = UDim2.new(1, -4 - (i * 5), 1, -4)
 		line.AnchorPoint = Vector2.new(1, 1)
-		line.BackgroundColor3 = main:FindFirstChild("BackgroundOverlay") and main.BackgroundOverlay.BackgroundColor3 or Color3.new(0.5, 0.5, 0.5)
+		line.BackgroundColor3 = Color3.new(0.5, 0.5, 0.5)
 		line.BorderSizePixel = 0
 		line.Rotation = 45
 		line.ZIndex = 26
@@ -876,7 +877,7 @@ function Window:_setupSearch(searchBox, tabList, library)
 
 	self._Maid:GiveTask(searchBox:GetPropertyChangedSignal("Text"):Connect(function()
 		local query = searchBox.Text:lower()
-		previouslyMatched = setmetatable({}, { __mode = "v" }) -- Clear cache on each search
+		previouslyMatched = setmetatable({}, { __mode = "v" })
 
 		for _, child in tabList:GetChildren() do
 			if child:IsA("GuiObject") then
@@ -900,7 +901,6 @@ function Window:_setupSearch(searchBox, tabList, library)
 		end
 	end))
 
-	-- Auto-focus search
 	task.defer(function()
 		if searchBox and searchBox.Parent then
 			searchBox:CaptureFocus()
@@ -918,29 +918,32 @@ function Window:_setupKeybind(UserInputService)
 	end))
 end
 
--- Helper: Startup Sequence
-function Window:_startupSequence(loadingFrame)
+-- Helper: Startup Sequence (fixed - uses elements table)
+function Window:_startupSequence(loadingFrame, loadingElements)
 	self._Maid:Give(task.delay(0.8, function()
 		if not self.Gui then return end
 
 		if loadingFrame and loadingFrame.Parent then
-			local status = loadingFrame:FindFirstChild("Status")
-			if status then status.Text = "Ready" end
+			-- Update status text
+			if loadingElements.Status then
+				loadingElements.Status.Text = "Ready"
+			end
+			
 			task.wait(0.25)
 			
-			-- Fade out all loading elements
-			local elements = {
+			-- Fade out all loading elements using the stored references
+			local elementsToFade = {
 				loadingFrame,
-				loadingFrame:FindFirstChild("Accent"),
-				loadingFrame:FindFirstChild("LoadingTitle"),
-				loadingFrame:FindFirstChild("LoadingSubtitle"),
-				loadingFrame:FindFirstChild("Status"),
-				loadingFrame:FindFirstChild("ProgressTrack"),
-				loadingFrame:FindFirstChild("ProgressFill"),
+				loadingElements.Accent,
+				loadingElements.Title,
+				loadingElements.Subtitle,
+				loadingElements.Status,
+				loadingElements.ProgressTrack,
+				loadingElements.ProgressFill,
 			}
 			
-			for _, elem in elements do
-				if elem then
+			for _, elem in elementsToFade do
+				if elem and elem.Parent then
 					local prop = elem:IsA("Frame") and "BackgroundTransparency" or "TextTransparency"
 					local value = elem:IsA("Frame") and 1 or 1
 					Tween.Play(elem, { [prop] = value }, { Time = 0.2 })
@@ -971,7 +974,6 @@ function Window:SetBackgroundImage(value: string)
 	if assetId then
 		bg.Image = assetId
 	else
-		-- Assume direct rbxassetid or full URL
 		if not value:match("^rbxassetid://") and not value:match("^http") then
 			bg.Image = "rbxassetid://" .. value
 		else
