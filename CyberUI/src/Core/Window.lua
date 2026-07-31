@@ -308,7 +308,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Name = "Badges",
 		Size = UDim2.new(0, 0, 1, 0),
 		AutomaticSize = Enum.AutomaticSize.X,
-		Position = UDim2.new(1, -16, 0.5, 0),
+		Position = UDim2.new(1, -85, 0.5, 0),   -- move left by 85px from the right edge
 		AnchorPoint = Vector2.new(1, 0.5),
 		BackgroundTransparency = 1,
 		Parent = topBar,
