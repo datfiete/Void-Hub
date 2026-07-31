@@ -8,6 +8,7 @@ local Tween = require(script.Parent.Parent.Utils.Tween)
 
 local GUI_NAME = "Vaxorin"
 local VERSION = "v2.24.0"
+local Vaxorin_Logo = "rbxassetid://135320038058277"
 
 local Window = {}
 Window.__index = Window
@@ -245,7 +246,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 
 	-- Logo
 	local logoSize = 36
-	local logoAsset = data.Logo or "rbxassetid://6031097228"
+	local logoAsset = data.Logo or "rbxassetid://135320038058277"
 
 	local logoImage = Instance.new("ImageLabel")
 	logoImage.Name = "Logo"
