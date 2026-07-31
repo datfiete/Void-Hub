@@ -5,32 +5,9 @@ local Tab = require(script.Parent.Tab)
 local Maid = require(script.Parent.Parent.Utils.Maid)
 local Helpers = require(script.Parent.Parent.Utils.Helpers)
 local Tween = require(script.Parent.Parent.Utils.Tween)
-local GUI_Name = "Void Hub"
 
--- Constants
-local PADDING = {
-	Logo = 14,
-	TitleLeft = 16,
-	ControlSpacing = 12,
-	Sidebar = 8,
-	SearchTop = 40,
-}
-
-local SIZES = {
-	MinWindow = Vector2.new(420, 320),
-	MaxWindow = Vector2.new(1200, 900),
-	FloatingButton = 50,
-	Logo = 36,
-}
-
-local ASSETS = {
-	Backgrounds = {
-		["Solo Leveling"] = "rbxassetid://139001765478120",
-		["Gojo"] = "rbxassetid://111578938106815",
-		["Sukuna"] = "rbxassetid://106318186489675",
-		["Cid Kagenou"] = "rbxassetid://113248988511733",
-	}
-}
+local GUI_NAME = "Void Hub"
+local VERSION = "v2.24.0"
 
 local Window = {}
 Window.__index = Window
@@ -62,174 +39,114 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		_Maid = Maid.new(),
 		_Tabs = {} :: { any },
 		_ActiveTab = nil :: any,
+		_StartupTime = os.clock(),
+		_PlayerCount = 0,
 	}, Window)
 
 	local Players = game:GetService("Players")
 	local UserInputService = game:GetService("UserInputService")
-	
-	local player = Players.LocalPlayer
-	if not player then return self :: any end
-	
-	local playerGui = player:WaitForChild("PlayerGui", 5)
-	if not playerGui then return self :: any end
+	local RunService = game:GetService("RunService")
+	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
+	local sharedState = (getgenv and getgenv()) or _G
 
-	local sharedState = _G
-
-	-- Cleanup existing UI
+	-- Clean up old GUI
 	for _, child in playerGui:GetChildren() do
-		if child:IsA("ScreenGui") and child.Name == "CyberUI" then
+		if child:IsA("ScreenGui") and child.Name == "VoidHub" then
 			child:Destroy()
 		end
 	end
 
-	-- Get window dimensions
-	local windowName = data.Name or data.Title or "CyberUI"
-	local windowSubtitle = data.Subtitle or data.Description
-	local windowSize = self:_getWindowSize(data.Size or data.WindowSize)
+	-- Create main ScreenGui
+	local screenGui = Instance.new("ScreenGui")
+	screenGui.Name = "VoidHub"
+	screenGui.ResetOnSpawn = false
+	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	screenGui.Parent = playerGui
+	self._Maid:Give(screenGui)
+
+	local windowName = data.Name or data.Title or GUI_NAME
+	local windowSubtitle = data.Subtitle or data.Description or "Welcome to the Void"
+	local windowSize = data.Size or data.WindowSize or Theme.WindowSize
+
+	if typeof(windowSize) == "UDim2" then
+		windowSize = Vector2.new(windowSize.X.Offset, windowSize.Y.Offset)
+	elseif typeof(windowSize) == "number" then
+		windowSize = Vector2.new(windowSize, windowSize)
+	elseif typeof(windowSize) ~= "Vector2" then
+		windowSize = Vector2.new(900, 620)
+	end
 
 	local showSearch = data.ShowSearch ~= false
 	local showWindowControls = data.ShowWindowControls ~= false
-	local topBarHeight = Theme.TopBarHeight or 54
+	local topBarHeight = Theme.TopBarHeight or 60
 
-	-- Build screen gui
-	local screenGui = self:_buildScreenGui(playerGui)
-	self.Gui = screenGui
-
-	-- Build loading frame (store references separately)
-	local loadingFrame, loadingElements = self:_buildLoadingFrame(screenGui, library, windowName, windowSubtitle)
-	self._Maid:Give(screenGui)
-	self._Maid:Give(loadingFrame)
-
-	-- Build main frame
-	local main = self:_buildMainFrame(screenGui, library, windowSize, data, topBarHeight)
-	self.Main = main
-	self._BackgroundImage = main:FindFirstChild("BackgroundImage")
-
-	-- Build top bar
-	local topBar = self:_buildTopBar(main, library, windowName, windowSubtitle, data, topBarHeight, showWindowControls)
-	self.TopBar = topBar
-
-	-- Build sidebar
-	local sidebar, searchBox, tabList = self:_buildSidebar(main, library, showSearch, topBarHeight)
-	self.Sidebar = sidebar
-	self.SearchBox = searchBox
-	self.TabList = tabList
-
-	-- Build pages
-	local pages = self:_buildPages(main, sidebar, topBarHeight)
-	self.Pages = pages
-
-	-- Build floating button
-	local floatingButton = self:_buildFloatingButton(screenGui, library, windowName, data)
-	self._FloatingButton = floatingButton
-	self._FloatingStroke = floatingButton:FindFirstChild("Stroke")
-
-	-- Setup window controls
-	self:_setupWindowControls(main, topBar, windowSize, topBarHeight)
-
-	-- Setup drag functionality
-	self:_setupDragging(main, topBar, UserInputService)
-
-	-- Setup resize functionality
-	self:_setupResizing(main, UserInputService, SIZES.MinWindow, SIZES.MaxWindow)
-
-	-- Setup theme
-	self:_setupTheme(library, main, topBar, sidebar)
-
-	-- Setup search
-	if searchBox then
-		self:_setupSearch(searchBox, tabList, library)
-	end
-
-	-- Setup keybind
-	self:_setupKeybind(UserInputService)
-
-	-- Initialize state
-	self._Visible = true
-	self._Minimized = false
-	self._StartupComplete = false
-	self._ToggleKeybind = data.ToggleKey or Enum.KeyCode.RightControl
-	self._OptionsTab = nil
-	self.RefreshTheme = function() self:_refreshTheme(library, main, topBar, sidebar) end
-
-	-- Startup sequence with proper loading elements
-	self:_startupSequence(loadingFrame, loadingElements)
-
-	return self :: any
-end
-
--- Helper: Build ScreenGui
-function Window:_buildScreenGui(parent)
-	local screenGui = Instance.new("ScreenGui")
-	screenGui.Name = "CyberUI"
-	screenGui.ResetOnSpawn = false
-	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	screenGui.Parent = parent
-	return screenGui
-end
-
--- Helper: Get Window Size
-function Window:_getWindowSize(size)
-	if typeof(size) == "UDim2" then
-		return Vector2.new(size.X.Offset, size.Y.Offset)
-	elseif typeof(size) == "number" then
-		return Vector2.new(size, size)
-	elseif typeof(size) == "Vector2" then
-		return size
-	end
-	return Vector2.new(800, 560)
-end
-
--- Helper: Build Loading Frame (returns frame and elements table)
-function Window:_buildLoadingFrame(parent, library, title, subtitle)
+	-- ============================================
+	-- LOADING SCREEN
+	-- ============================================
 	local loadingFrame = Helpers.CreateFrame({
 		Name = "Loading",
-		Size = UDim2.fromOffset(380, 168),
+		Size = UDim2.fromOffset(420, 180),
 		Position = UDim2.fromScale(0.5, 0.5),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundColor3 = library.Theme.Secondary,
-		Parent = parent,
+		Parent = screenGui,
 	})
 	Helpers.Corner(loadingFrame, Theme.CornerRadius)
 	Helpers.Stroke(loadingFrame, library.Theme.Border, 1)
-	Helpers.Padding(loadingFrame, 18)
+	Helpers.Padding(loadingFrame, 20)
 
+	-- Accent line
 	local loadingAccent = Helpers.CreateFrame({
 		Name = "Accent",
-		Size = UDim2.new(0, 4, 1, -36),
-		Position = UDim2.new(0, 18, 0, 18),
+		Size = UDim2.new(0, 4, 1, -40),
+		Position = UDim2.new(0, 20, 0, 20),
 		BackgroundColor3 = library.Theme.Accent,
 		Parent = loadingFrame,
 	})
 	Helpers.Corner(loadingAccent, 2)
 
+	-- Title
 	local loadingTitle = Helpers.CreateLabel({
 		Name = "LoadingTitle",
-		Size = UDim2.new(1, -34, 0, 30),
-		Position = UDim2.fromOffset(18, 0),
-		Text = title,
+		Size = UDim2.new(1, -44, 0, 34),
+		Position = UDim2.fromOffset(20, 0),
+		Text = windowName,
 		Font = Theme.FontBold,
 		TextColor3 = library.Theme.Text,
-		TextSize = 20,
+		TextSize = 22,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Parent = loadingFrame,
 	})
 
+	-- Subtitle
 	local loadingSubtitle = Helpers.CreateLabel({
 		Name = "LoadingSubtitle",
-		Size = UDim2.new(1, -34, 0, 22),
-		Position = UDim2.fromOffset(18, 34),
-		Text = subtitle or "Preparing interface",
+		Size = UDim2.new(1, -44, 0, 24),
+		Position = UDim2.fromOffset(20, 38),
+		Text = windowSubtitle,
 		TextColor3 = library.Theme.TextMuted,
 		TextSize = 13,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Parent = loadingFrame,
 	})
 
+	-- Version
+	local loadingVersion = Helpers.CreateLabel({
+		Name = "LoadingVersion",
+		Size = UDim2.new(1, -44, 0, 20),
+		Position = UDim2.fromOffset(20, 62),
+		Text = VERSION,
+		TextColor3 = library.Theme.TextMuted,
+		TextSize = 11,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = loadingFrame,
+	})
+
+	-- Status
 	local loadingStatus = Helpers.CreateLabel({
 		Name = "LoadingStatus",
-		Size = UDim2.new(1, -34, 0, 20),
-		Position = UDim2.fromOffset(18, 78),
+		Size = UDim2.new(1, -44, 0, 20),
+		Position = UDim2.fromOffset(20, 90),
 		Text = "Loading components...",
 		TextColor3 = library.Theme.TextMuted,
 		TextSize = 12,
@@ -237,10 +154,11 @@ function Window:_buildLoadingFrame(parent, library, title, subtitle)
 		Parent = loadingFrame,
 	})
 
+	-- Progress bar
 	local progressTrack = Helpers.CreateFrame({
 		Name = "ProgressTrack",
-		Size = UDim2.new(1, -34, 0, 6),
-		Position = UDim2.fromOffset(18, 112),
+		Size = UDim2.new(1, -44, 0, 6),
+		Position = UDim2.fromOffset(20, 130),
 		BackgroundColor3 = library.Theme.Background,
 		Parent = loadingFrame,
 	})
@@ -255,37 +173,31 @@ function Window:_buildLoadingFrame(parent, library, title, subtitle)
 	Helpers.Corner(progressFill, 3)
 	Tween.Play(progressFill, { Size = UDim2.fromScale(1, 1) }, { Time = 0.85 })
 
-	-- Return frame and all elements for later cleanup
-	local elements = {
-		Accent = loadingAccent,
-		Title = loadingTitle,
-		Subtitle = loadingSubtitle,
-		Status = loadingStatus,
-		ProgressTrack = progressTrack,
-		ProgressFill = progressFill,
-	}
+	-- Remove old bootstrap loader
+	local bootstrapLoader = sharedState.CyberUI_BootstrapLoader
+	sharedState.CyberUI_BootstrapLoader = nil
+	if bootstrapLoader and bootstrapLoader.Parent then
+		bootstrapLoader:Destroy()
+	end
 
-	return loadingFrame, elements
-end
-
--- Helper: Build Main Frame
-function Window:_buildMainFrame(parent, library, windowSize, data, topBarHeight)
+	-- ============================================
+	-- MAIN WINDOW
+	-- ============================================
 	local main = Helpers.CreateFrame({
 		Name = "Main",
 		Size = UDim2.fromOffset(windowSize.X, windowSize.Y),
 		Position = if data.Center ~= false then UDim2.fromScale(0.5, 0.5) else UDim2.fromOffset(40, 40),
 		AnchorPoint = if data.Center ~= false then Vector2.new(0.5, 0.5) else Vector2.new(0, 0),
 		BackgroundColor3 = library.Theme.Background,
-		BackgroundTransparency = 0.2,
+		BackgroundTransparency = 0.15,
 		Visible = false,
-		Parent = parent,
+		Parent = screenGui,
 	})
 	Helpers.Corner(main, Theme.CornerRadius)
-	main.ClipsDescendants = true
 	local mainStroke = Helpers.Stroke(main, library.Theme.Border, 1)
-	main._Stroke = mainStroke
+	main.ClipsDescendants = true
 
-	-- Background image
+	-- Background Image
 	local backgroundImage = Instance.new("ImageLabel")
 	backgroundImage.AnchorPoint = Vector2.new(0, 0)
 	backgroundImage.Position = UDim2.new(0, 0, 0, 0)
@@ -293,37 +205,33 @@ function Window:_buildMainFrame(parent, library, windowSize, data, topBarHeight)
 	backgroundImage.Size = UDim2.fromScale(1, 1)
 	backgroundImage.BackgroundTransparency = 1
 	backgroundImage.Image = data.BackgroundImage or ""
-	backgroundImage.ImageTransparency = 0.3
+	backgroundImage.ImageTransparency = 0.25
 	backgroundImage.ScaleType = Enum.ScaleType.Crop
 	backgroundImage.ZIndex = 0
 	backgroundImage.Parent = main
 	Helpers.Corner(backgroundImage, Theme.CornerRadius)
+	self._BackgroundImage = backgroundImage
 
 	-- Overlay
 	local overlay = Instance.new("Frame")
 	overlay.Name = "BackgroundOverlay"
 	overlay.Size = UDim2.fromScale(1, 1)
 	overlay.BackgroundColor3 = Color3.new(0, 0, 0)
-	overlay.BackgroundTransparency = 0.75
+	overlay.BackgroundTransparency = 0.7
 	overlay.BorderSizePixel = 0
 	overlay.ZIndex = 1
 	overlay.Parent = main
-	main.Active = true
-	main.Selectable = true
-	main.ClipsDescendants = true
 	Helpers.Corner(overlay, Theme.CornerRadius)
 
-	return main
-end
-
--- Helper: Build Top Bar
-function Window:_buildTopBar(main, library, title, subtitle, data, topBarHeight, showWindowControls)
+	-- ============================================
+	-- TOP BAR
+	-- ============================================
 	local topBar = Helpers.CreateFrame({
 		Name = "TopBar",
 		Size = UDim2.new(1, 0, 0, topBarHeight),
 		Position = UDim2.new(0, 0, 0, 0),
 		BackgroundColor3 = library.Theme.Secondary,
-		BackgroundTransparency = 0.2,
+		BackgroundTransparency = 0.3,
 		Active = true,
 		Selectable = true,
 		Parent = main,
@@ -341,111 +249,114 @@ function Window:_buildTopBar(main, library, title, subtitle, data, topBarHeight,
 	topBarMask.ZIndex = 19
 
 	-- Logo
-	local logoImage = nil
-	if data.Logo and data.Logo ~= "" then
-		logoImage = Instance.new("ImageLabel")
-		logoImage.Name = "Logo"
-		logoImage.BackgroundTransparency = 1
-		logoImage.Size = UDim2.fromOffset(SIZES.Logo, SIZES.Logo)
-		logoImage.Position = UDim2.new(0, PADDING.Logo, 0.5, 0)
-		logoImage.AnchorPoint = Vector2.new(0, 0.5)
-		logoImage.Image = data.Logo
-		logoImage.ScaleType = Enum.ScaleType.Fit
-		logoImage.ZIndex = 30
-		logoImage.Parent = topBar
-		Helpers.Corner(logoImage, 8)
-	end
+	local logoSize = 36
+	local logoAsset = data.Logo or "rbxassetid://6031097228"
 
-	local titleStartX = if logoImage then PADDING.Logo + SIZES.Logo + 10 else PADDING.TitleLeft
+	local logoImage = Instance.new("ImageLabel")
+	logoImage.Name = "Logo"
+	logoImage.BackgroundTransparency = 1
+	logoImage.Size = UDim2.fromOffset(logoSize, logoSize)
+	logoImage.Position = UDim2.new(0, 14, 0.5, 0)
+	logoImage.AnchorPoint = Vector2.new(0, 0.5)
+	logoImage.Image = logoAsset
+	logoImage.ScaleType = Enum.ScaleType.Fit
+	logoImage.ZIndex = 30
+	logoImage.Parent = topBar
+	Helpers.Corner(logoImage, 8)
 
-	local titleLabel = Helpers.CreateLabel({
+	-- Title
+	local title = Helpers.CreateLabel({
 		Name = "Title",
-		Size = UDim2.new(0, 220, 0, 22),
-		Position = UDim2.new(0, titleStartX, 0, 10),
-		Text = title,
+		Size = UDim2.new(0, 240, 0, 24),
+		Position = UDim2.new(0, 14 + logoSize + 10, 0, 8),
+		Text = windowName,
 		Font = Theme.FontBold,
-		TextSize = 17,
+		TextSize = 18,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = library.Theme.Text,
 		Parent = topBar,
 	})
-	titleLabel.ZIndex = 21
+	title.ZIndex = 21
 
-	local subtitleLabel = nil
-	if subtitle then
-		subtitleLabel = Helpers.CreateLabel({
+	-- Subtitle
+	local subtitle
+	if windowSubtitle then
+		subtitle = Helpers.CreateLabel({
 			Name = "Subtitle",
-			Size = UDim2.new(0, 220, 0, 16),
-			Position = UDim2.new(0, titleStartX, 0, 30),
-			Text = subtitle,
+			Size = UDim2.new(0, 240, 0, 18),
+			Position = UDim2.new(0, 14 + logoSize + 10, 0, 32),
+			Text = windowSubtitle,
 			TextColor3 = library.Theme.TextMuted,
-			TextSize = 11,
+			TextSize = 12,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			Parent = topBar,
 		})
-		subtitleLabel.ZIndex = 21
+		subtitle.ZIndex = 21
 	end
+
+	-- Status indicator (like in the reference)
+	local statusContainer = Helpers.CreateFrame({
+		Name = "StatusContainer",
+		Size = UDim2.new(0, 120, 1, 0),
+		Position = UDim2.new(1, -280, 0, 0),
+		BackgroundTransparency = 1,
+		Parent = topBar,
+	})
+
+	local statusDot = Helpers.CreateFrame({
+		Name = "StatusDot",
+		Size = UDim2.fromOffset(8, 8),
+		Position = UDim2.new(0, 0, 0.5, 0),
+		AnchorPoint = Vector2.new(0, 0.5),
+		BackgroundColor3 = Color3.fromRGB(0, 255, 100),
+		Parent = statusContainer,
+	})
+	Helpers.Corner(statusDot, 4)
+
+	local statusLabel = Helpers.CreateLabel({
+		Name = "StatusLabel",
+		Size = UDim2.new(1, -16, 1, 0),
+		Position = UDim2.new(0, 14, 0, 0),
+		Text = "● Everything is running smoothly",
+		TextColor3 = library.Theme.TextMuted,
+		TextSize = 11,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = statusContainer,
+	})
 
 	-- Badges
-	local badgeHolder = self:_buildBadges(topBar, library, data)
-
-	-- Window controls
-	local minimizeButton, closeButton = nil, nil
-	if showWindowControls then
-		minimizeButton, closeButton = self:_buildWindowControls(topBar, library)
-	end
-
-	topBar._Title = titleLabel
-	topBar._Subtitle = subtitleLabel
-	topBar._BadgeHolder = badgeHolder
-	topBar._MinimizeButton = minimizeButton
-	topBar._CloseButton = closeButton
-
-	return topBar
-end
-
--- Helper: Build Badges
-function Window:_buildBadges(topBar, library, data)
 	local badgeHolder = Helpers.CreateFrame({
 		Name = "Badges",
-		Size = UDim2.new(0, 260, 0, 26),
-		Position = UDim2.new(0, 180, 0.5, 0),
-		AnchorPoint = Vector2.new(0, 0.5),
+		Size = UDim2.new(0, 160, 0, 26),
+		Position = UDim2.new(1, -160, 0.5, 0),
+		AnchorPoint = Vector2.new(1, 0.5),
 		BackgroundTransparency = 1,
 		Parent = topBar,
 	})
 	badgeHolder.ZIndex = 21
 	Helpers.ListLayout(badgeHolder, 6)
-	local badgeList = badgeHolder:FindFirstChildOfClass("UIListLayout")
-	if badgeList then
-		badgeList.FillDirection = Enum.FillDirection.Horizontal
-		badgeList.VerticalAlignment = Enum.VerticalAlignment.Center
-		badgeList.SortOrder = Enum.SortOrder.LayoutOrder
-	end
 
 	if data.Badges then
-		local altColors = { library.Theme.Accent, Theme.AccentAlt or library.Theme.Accent }
 		for i, badge in data.Badges do
-			local color = badge.Color or altColors[((i - 1) % #altColors) + 1]
+			local color = badge.Color or library.Theme.Accent
 			local pill = Helpers.CreateFrame({
 				Name = "Badge" .. i,
 				Size = UDim2.new(0, 0, 1, 0),
 				AutomaticSize = Enum.AutomaticSize.X,
 				BackgroundColor3 = color,
 				Parent = badgeHolder,
-				LayoutOrder = i,
 			})
 			pill.ZIndex = 22
 			Helpers.Corner(pill, 13)
 			Helpers.Padding(pill, 10, 4)
+
 			local pillLabel = Helpers.CreateLabel({
 				Name = "Label",
 				Size = UDim2.new(0, 0, 1, 0),
 				AutomaticSize = Enum.AutomaticSize.X,
-				Position = UDim2.new(0, 0, 0, 0),
 				Text = badge.Text,
 				Font = Theme.FontBold,
-				TextSize = 12,
+				TextSize = 11,
 				TextColor3 = Color3.fromRGB(255, 255, 255),
 				TextXAlignment = Enum.TextXAlignment.Center,
 				Parent = pill,
@@ -453,147 +364,58 @@ function Window:_buildBadges(topBar, library, data)
 		end
 	end
 
-	return badgeHolder
-end
+	-- Window controls
+	local minimizeButton, closeButton
+	if showWindowControls then
+		closeButton = Instance.new("TextButton")
+		closeButton.Name = "Close"
+		closeButton.Size = UDim2.fromOffset(32, 32)
+		closeButton.Position = UDim2.new(1, -12, 0.5, 0)
+		closeButton.AnchorPoint = Vector2.new(1, 0.5)
+		closeButton.BackgroundColor3 = library.Theme.Background
+		closeButton.BackgroundTransparency = 0.25
+		closeButton.Text = "✕"
+		closeButton.Font = Theme.FontBold
+		closeButton.TextSize = 16
+		closeButton.TextColor3 = library.Theme.TextMuted
+		closeButton.AutoButtonColor = false
+		closeButton.ZIndex = 21
+		closeButton.Parent = topBar
+		Helpers.Corner(closeButton, 8)
+		Helpers.Stroke(closeButton, library.Theme.Border, 1)
 
--- Helper: Build Window Controls
-function Window:_buildWindowControls(topBar, library)
-	local closeButton = Instance.new("TextButton")
-	closeButton.Name = "Close"
-	closeButton.Size = UDim2.fromOffset(32, 32)
-	closeButton.Position = UDim2.new(1, -12, 0.5, 0)
-	closeButton.AnchorPoint = Vector2.new(1, 0.5)
-	closeButton.BackgroundColor3 = library.Theme.Background
-	closeButton.BackgroundTransparency = 0.25
-	closeButton.Text = "✕"
-	closeButton.Font = Theme.FontBold
-	closeButton.TextSize = 15
-	closeButton.TextColor3 = library.Theme.TextMuted
-	closeButton.AutoButtonColor = false
-	closeButton.ZIndex = 21
-	closeButton.Parent = topBar
-	Helpers.Corner(closeButton, 8)
-	Helpers.Stroke(closeButton, library.Theme.Border, 1)
+		closeButton.MouseEnter:Connect(function()
+			Tween.Play(closeButton, { BackgroundTransparency = 0, TextColor3 = Color3.fromRGB(255, 50, 50) }, { Time = 0.15 })
+		end)
+		closeButton.MouseLeave:Connect(function()
+			Tween.Play(closeButton, { BackgroundTransparency = 0.25, TextColor3 = library.Theme.TextMuted }, { Time = 0.15 })
+		end)
 
-	local minimizeButton = Instance.new("TextButton")
-	minimizeButton.Name = "Minimize"
-	minimizeButton.Size = UDim2.fromOffset(28, 28)
-	minimizeButton.Position = UDim2.new(1, -50, 0.5, 0)
-	minimizeButton.AnchorPoint = Vector2.new(1, 0.5)
-	minimizeButton.BackgroundTransparency = 1
-	minimizeButton.Text = "—"
-	minimizeButton.Font = Theme.FontBold
-	minimizeButton.TextSize = 16
-	minimizeButton.TextColor3 = library.Theme.TextMuted
-	minimizeButton.AutoButtonColor = false
-	minimizeButton.ZIndex = 21
-	minimizeButton.Parent = topBar
-
-	-- Hover animations (cached)
-	local hoverTween = Tween.new(closeButton, { BackgroundTransparency = 0 }, { Time = 0.15 })
-	local leaveTween = Tween.new(closeButton, { BackgroundTransparency = 0.25 }, { Time = 0.15 })
-	
-	closeButton.MouseEnter:Connect(function() hoverTween:Play() end)
-	closeButton.MouseLeave:Connect(function() leaveTween:Play() end)
-
-	return minimizeButton, closeButton
-end
-
--- Helper: Build Sidebar
-function Window:_buildSidebar(main, library, showSearch, topBarHeight)
-	local contentArea = Helpers.CreateFrame({
-		Name = "ContentArea",
-		Size = UDim2.new(1, 0, 1, -topBarHeight),
-		Position = UDim2.new(0, 0, 0, topBarHeight),
-		BackgroundTransparency = 1,
-		Parent = main,
-	})
-
-	local sidebar = Helpers.CreateFrame({
-		Name = "Sidebar",
-		Size = UDim2.new(0, Theme.SidebarWidth, 1, 0),
-		BackgroundColor3 = library.Theme.Secondary,
-		BackgroundTransparency = 0.3,
-		Parent = contentArea,
-	})
-	Helpers.Corner(sidebar, Theme.CornerRadius)
-	sidebar.ClipsDescendants = true
-	Helpers.Padding(sidebar, Theme.Padding)
-
-	local searchBox = nil
-	local searchTop = 0
-	if showSearch then
-		local searchHolder = Helpers.CreateFrame({
-			Name = "SearchHolder",
-			Size = UDim2.new(1, 0, 0, 32),
-			Position = UDim2.new(0, 0, 0, 0),
-			BackgroundColor3 = library.Theme.Background,
-			Parent = sidebar,
-		})
-		Helpers.Corner(searchHolder, Theme.CornerRadiusSmall)
-		Helpers.Stroke(searchHolder, library.Theme.Border, 1)
-
-		searchBox = Instance.new("TextBox")
-		searchBox.Name = "SearchBox"
-		searchBox.Size = UDim2.new(1, -20, 1, 0)
-		searchBox.Position = UDim2.new(0, 10, 0, 0)
-		searchBox.BackgroundTransparency = 1
-		searchBox.PlaceholderText = "Search..."
-		searchBox.Text = ""
-		searchBox.Font = Theme.Font
-		searchBox.TextSize = 13
-		searchBox.TextColor3 = library.Theme.Text
-		searchBox.PlaceholderColor3 = library.Theme.TextMuted
-		searchBox.TextXAlignment = Enum.TextXAlignment.Left
-		searchBox.ClearTextOnFocus = false
-		searchBox.Parent = searchHolder
-
-		searchTop = PADDING.SearchTop
+		minimizeButton = Instance.new("TextButton")
+		minimizeButton.Name = "Minimize"
+		minimizeButton.Size = UDim2.fromOffset(28, 28)
+		minimizeButton.Position = UDim2.new(1, -50, 0.5, 0)
+		minimizeButton.AnchorPoint = Vector2.new(1, 0.5)
+		minimizeButton.BackgroundTransparency = 1
+		minimizeButton.Text = "—"
+		minimizeButton.Font = Theme.FontBold
+		minimizeButton.TextSize = 18
+		minimizeButton.TextColor3 = library.Theme.TextMuted
+		minimizeButton.AutoButtonColor = false
+		minimizeButton.ZIndex = 21
+		minimizeButton.Parent = topBar
 	end
 
-	local tabList = Helpers.CreateFrame({
-		Name = "TabList",
-		Size = UDim2.new(1, 0, 1, -(searchTop + 52)),
-		Position = UDim2.new(0, 0, 0, searchTop),
-		BackgroundTransparency = 1,
-		AutomaticSize = Enum.AutomaticSize.None,
-		Parent = sidebar,
-	})
-	Helpers.ListLayout(tabList, Theme.Gap)
-	local layout = tabList:FindFirstChildOfClass("UIListLayout")
-	if layout then
-		layout.SortOrder = Enum.SortOrder.LayoutOrder
-	end
-
-	return sidebar, searchBox, tabList
-end
-
--- Helper: Build Pages
-function Window:_buildPages(main, sidebar, topBarHeight)
-	local contentArea = main:FindFirstChild("ContentArea")
-	if not contentArea then return nil end
-
-	local pages = Instance.new("Frame")
-	pages.Name = "Pages"
-	pages.Position = UDim2.new(0, Theme.SidebarWidth + PADDING.Sidebar, 0, 0)
-	pages.Size = UDim2.new(1, -(Theme.SidebarWidth + PADDING.Sidebar), 1, 0)
-	pages.BackgroundTransparency = 1
-	pages.BorderSizePixel = 0
-	pages.ClipsDescendants = true
-	pages.Parent = contentArea
-
-	return pages
-end
-
--- Helper: Build Floating Button
-function Window:_buildFloatingButton(parent, library, title, data)
+	-- ============================================
+	-- FLOATING BUTTON
+	-- ============================================
 	local floatingButton = Instance.new("ImageButton")
 	floatingButton.Name = "FloatingToggle"
-	floatingButton.Size = UDim2.fromOffset(SIZES.FloatingButton, SIZES.FloatingButton)
+	floatingButton.Size = UDim2.fromOffset(50, 50)
 	floatingButton.Position = UDim2.new(0.5, 0, 0, 20)
 	floatingButton.BackgroundColor3 = library.Theme.Secondary
 	floatingButton.BackgroundTransparency = 0.1
-	floatingButton.Image = data.Logo or ""
+	floatingButton.Image = logoAsset
 	floatingButton.ScaleType = Enum.ScaleType.Fit
 	floatingButton.ImageTransparency = 0
 	floatingButton.Visible = false
@@ -601,66 +423,40 @@ function Window:_buildFloatingButton(parent, library, title, data)
 	floatingButton.ZIndex = 50
 	floatingButton.Active = true
 	floatingButton.Selectable = true
-	floatingButton.Parent = parent
+	floatingButton.Parent = screenGui
 	Helpers.Corner(floatingButton, 25)
 	local floatingStroke = Helpers.Stroke(floatingButton, library.Theme.Accent, 1.5)
 
-	if not data.Logo or data.Logo == "" then
-		local fallbackLabel = Helpers.CreateLabel({
-			Name = "FallbackIcon",
-			Size = UDim2.fromScale(1, 1),
-			Text = string.sub(title, 1, 1),
-			Font = Theme.FontBold,
-			TextSize = 20,
-			TextColor3 = library.Theme.Text,
-			TextXAlignment = Enum.TextXAlignment.Center,
-			Parent = floatingButton,
-		})
-		fallbackLabel.ZIndex = 51
-	end
-
-	-- Hover animations (cached)
-	local hoverTween = Tween.new(floatingButton, { BackgroundTransparency = 0 }, { Time = 0.15 })
-	local leaveTween = Tween.new(floatingButton, { BackgroundTransparency = 0.1 }, { Time = 0.15 })
-	
-	floatingButton.MouseEnter:Connect(function() hoverTween:Play() end)
-	floatingButton.MouseLeave:Connect(function() leaveTween:Play() end)
-
+	floatingButton.MouseEnter:Connect(function()
+		Tween.Play(floatingButton, { BackgroundTransparency = 0 }, { Time = 0.15 })
+	end)
+	floatingButton.MouseLeave:Connect(function()
+		Tween.Play(floatingButton, { BackgroundTransparency = 0.1 }, { Time = 0.15 })
+	end)
 	floatingButton.MouseButton1Click:Connect(function()
 		self:SetVisible(true)
 	end)
 
-	-- Floating button dragging
-	self:_setupFloatingDragging(floatingButton)
-
-	return floatingButton
-end
-
--- Helper: Setup Floating Dragging
-function Window:_setupFloatingDragging(button)
-	local UserInputService = game:GetService("UserInputService")
-	
+	-- Floating button drag
 	self._FloatDragging = false
 	self._FloatDragStart = Vector2.new()
 	self._FloatStart = UDim2.new()
 	self._FloatDragInputType = nil :: Enum.UserInputType?
 
-	self._Maid:GiveTask(button.InputBegan:Connect(function(input)
+	self._Maid:GiveTask(floatingButton.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			self._FloatDragging = true
 			self._FloatDragStart = input.Position
-			self._FloatStart = button.Position
+			self._FloatStart = floatingButton.Position
 			self._FloatDragInputType = input.UserInputType
 		end
 	end))
 
 	self._Maid:GiveTask(UserInputService.InputChanged:Connect(function(input)
-		if not self._FloatDragging or self._FloatDragInputType == nil then
-			return
-		end
+		if not self._FloatDragging or self._FloatDragInputType == nil then return end
 		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 			local delta = input.Position - self._FloatDragStart
-			button.Position = UDim2.new(
+			floatingButton.Position = UDim2.new(
 				self._FloatStart.X.Scale, self._FloatStart.X.Offset + delta.X,
 				self._FloatStart.Y.Scale, self._FloatStart.Y.Offset + delta.Y
 			)
@@ -673,41 +469,13 @@ function Window:_setupFloatingDragging(button)
 			self._FloatDragInputType = nil
 		end
 	end))
-end
 
--- Helper: Setup Window Controls (minimize/close)
-function Window:_setupWindowControls(main, topBar, windowSize, topBarHeight)
-	local minimizeButton = topBar:FindFirstChild("Minimize")
-	local closeButton = topBar:FindFirstChild("Close")
+	self._Maid:Give(floatingButton)
+	self._FloatingButton = floatingButton
 
-	if minimizeButton then
-		minimizeButton.MouseButton1Click:Connect(function()
-			self._Minimized = not self._Minimized
-			if self._Minimized then
-				Tween.Play(main, { Size = UDim2.fromOffset(windowSize.X, topBarHeight) }, { Time = 0.18 })
-				local contentArea = main:FindFirstChild("ContentArea")
-				if contentArea then contentArea.Visible = false end
-			else
-				Tween.Play(main, { Size = UDim2.fromOffset(windowSize.X, windowSize.Y) }, { Time = 0.18 })
-				local contentArea = main:FindFirstChild("ContentArea")
-				if contentArea then 
-					task.delay(0.18, function()
-						if contentArea then contentArea.Visible = true end
-					end)
-				end
-			end
-		end)
-	end
-
-	if closeButton then
-		closeButton.MouseButton1Click:Connect(function()
-			self:SetVisible(false)
-		end)
-	end
-end
-
--- Helper: Setup Dragging
-function Window:_setupDragging(main, topBar, UserInputService)
+	-- ============================================
+	-- WINDOW DRAGGING
+	-- ============================================
 	local dragging = false
 	local dragStart = Vector2.new()
 	local windowStart = UDim2.new()
@@ -729,16 +497,12 @@ function Window:_setupDragging(main, topBar, UserInputService)
 	end))
 
 	self._Maid:GiveTask(UserInputService.InputChanged:Connect(function(input)
-		if not dragging or dragInputType == nil then
-			return
-		end
+		if not dragging or dragInputType == nil then return end
 		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 			local delta = input.Position - dragStart
 			main.Position = UDim2.new(
-				windowStart.X.Scale,
-				windowStart.X.Offset + delta.X,
-				windowStart.Y.Scale,
-				windowStart.Y.Offset + delta.Y
+				windowStart.X.Scale, windowStart.X.Offset + delta.X,
+				windowStart.Y.Scale, windowStart.Y.Offset + delta.Y
 			)
 		end
 	end))
@@ -749,207 +513,342 @@ function Window:_setupDragging(main, topBar, UserInputService)
 			dragInputType = nil
 		end
 	end))
-end
 
--- Helper: Setup Resizing
-function Window:_setupResizing(main, UserInputService, minSize, maxSize)
-	local resizeHandle = self:_buildResizeHandle(main)
-	if not resizeHandle then return end
+	-- ============================================
+	-- CONTENT AREA
+	-- ============================================
+	local contentArea = Helpers.CreateFrame({
+		Name = "ContentArea",
+		Size = UDim2.new(1, 0, 1, -topBarHeight),
+		Position = UDim2.new(0, 0, 0, topBarHeight),
+		BackgroundTransparency = 1,
+		Parent = main,
+	})
 
-	local resizing = false
-	local resizeStart = Vector2.new()
-	local sizeStart = UDim2.new()
-	local resizeInputType = nil :: Enum.UserInputType?
+	-- Sidebar
+	local sidebar = Helpers.CreateFrame({
+		Name = "Sidebar",
+		Size = UDim2.new(0, Theme.SidebarWidth, 1, 0),
+		BackgroundColor3 = library.Theme.Secondary,
+		BackgroundTransparency = 0.2,
+		Parent = contentArea,
+	})
+	Helpers.Corner(sidebar, Theme.CornerRadius)
+	sidebar.ClipsDescendants = true
+	Helpers.Padding(sidebar, Theme.Padding)
 
-	self._Maid:GiveTask(resizeHandle.InputBegan:Connect(function(input)
-		if self._Minimized then return end
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			resizing = true
-			resizeStart = input.Position
-			sizeStart = main.Size
-			resizeInputType = input.UserInputType
-		end
-	end))
+	-- Search Box
+	local searchBox
+	local searchTop = 0
+	if showSearch then
+		local searchHolder = Helpers.CreateFrame({
+			Name = "SearchHolder",
+			Size = UDim2.new(1, 0, 0, 34),
+			Position = UDim2.new(0, 0, 0, 0),
+			BackgroundColor3 = library.Theme.Background,
+			Parent = sidebar,
+		})
+		Helpers.Corner(searchHolder, Theme.CornerRadiusSmall)
+		Helpers.Stroke(searchHolder, library.Theme.Border, 1)
 
-	self._Maid:GiveTask(UserInputService.InputChanged:Connect(function(input)
-		if not resizing or resizeInputType == nil then return end
-		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-			local delta = input.Position - resizeStart
-			local newX = math.clamp(sizeStart.X.Offset + delta.X, minSize.X, maxSize.X)
-			local newY = math.clamp(sizeStart.Y.Offset + delta.Y, minSize.Y, maxSize.Y)
-			main.Size = UDim2.fromOffset(newX, newY)
-		end
-	end))
+		searchBox = Instance.new("TextBox")
+		searchBox.Name = "SearchBox"
+		searchBox.Size = UDim2.new(1, -24, 1, 0)
+		searchBox.Position = UDim2.new(0, 12, 0, 0)
+		searchBox.BackgroundTransparency = 1
+		searchBox.PlaceholderText = "Search..."
+		searchBox.Text = ""
+		searchBox.Font = Theme.Font
+		searchBox.TextSize = 13
+		searchBox.TextColor3 = library.Theme.Text
+		searchBox.PlaceholderColor3 = library.Theme.TextMuted
+		searchBox.TextXAlignment = Enum.TextXAlignment.Left
+		searchBox.ClearTextOnFocus = false
+		searchBox.Parent = searchHolder
 
-	self._Maid:GiveTask(UserInputService.InputEnded:Connect(function(input)
-		if resizeInputType ~= nil and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
-			resizing = false
-			resizeInputType = nil
-		end
-	end))
-end
-
--- Helper: Build Resize Handle
-function Window:_buildResizeHandle(main)
-	local resizeHandle = Instance.new("Frame")
-	resizeHandle.Name = "ResizeHandle"
-	resizeHandle.Size = UDim2.fromOffset(18, 18)
-	resizeHandle.Position = UDim2.new(1, -4, 1, -4)
-	resizeHandle.AnchorPoint = Vector2.new(1, 1)
-	resizeHandle.BackgroundTransparency = 1
-	resizeHandle.Active = true
-	resizeHandle.Selectable = true
-	resizeHandle.ZIndex = 25
-	resizeHandle.Parent = main
-
-	local lines = {}
-	for i = 1, 3 do
-		local line = Instance.new("Frame")
-		line.Name = "Line" .. i
-		line.Size = UDim2.fromOffset(2, 2 + i * 3)
-		line.Position = UDim2.new(1, -4 - (i * 5), 1, -4)
-		line.AnchorPoint = Vector2.new(1, 1)
-		line.BackgroundColor3 = Color3.new(0.5, 0.5, 0.5)
-		line.BorderSizePixel = 0
-		line.Rotation = 45
-		line.ZIndex = 26
-		line.Parent = resizeHandle
-		table.insert(lines, line)
+		searchTop = 44
 	end
 
-	-- Cached hover tweens
-	local accentColor = Color3.fromRGB(0, 150, 255)
-	resizeHandle.MouseEnter:Connect(function()
-		for _, line in lines do
-			Tween.Play(line, { BackgroundColor3 = accentColor }, { Time = 0.12 })
-		end
-	end)
-	resizeHandle.MouseLeave:Connect(function()
-		for _, line in lines do
-			Tween.Play(line, { BackgroundColor3 = Color3.new(0.5, 0.5, 0.5) }, { Time = 0.12 })
-		end
-	end)
+	-- Tab List
+	local tabList = Helpers.CreateFrame({
+		Name = "TabList",
+		Size = UDim2.new(1, 0, 1, -(searchTop + 52)),
+		Position = UDim2.new(0, 0, 0, searchTop),
+		BackgroundTransparency = 1,
+		AutomaticSize = Enum.AutomaticSize.None,
+		Parent = sidebar,
+	})
+	Helpers.ListLayout(tabList, Theme.Gap)
 
-	self._ResizeHandle = resizeHandle
-	return resizeHandle
-end
+	-- Footer
+	local footer = Helpers.CreateFrame({
+		Name = "Footer",
+		Size = UDim2.new(1, 0, 0, 44),
+		Position = UDim2.new(0, 0, 1, -44),
+		BackgroundTransparency = 1,
+		Parent = sidebar,
+	})
 
--- Helper: Setup Theme
-function Window:_setupTheme(library, main, topBar, sidebar)
-	local function refreshTheme()
+	local footerDivider = Helpers.CreateFrame({
+		Name = "Divider",
+		Size = UDim2.new(1, -20, 0, 1),
+		Position = UDim2.new(0, 10, 0, 0),
+		BackgroundColor3 = library.Theme.Border,
+		Parent = footer,
+	})
+
+	local avatarImage
+	local footerUsername = data.Footer and data.Footer.Username or Players.LocalPlayer.DisplayName
+	local footerAvatar = data.Footer and data.Footer.Avatar
+
+	if footerAvatar and footerAvatar ~= "" then
+		avatarImage = Instance.new("ImageLabel")
+		avatarImage.Name = "Avatar"
+		avatarImage.Size = UDim2.fromOffset(30, 30)
+		avatarImage.Position = UDim2.new(0, 0, 0.5, 0)
+		avatarImage.AnchorPoint = Vector2.new(0, 0.5)
+		avatarImage.BackgroundColor3 = library.Theme.Background
+		avatarImage.Image = footerAvatar
+		avatarImage.Parent = footer
+		Helpers.Corner(avatarImage, 15)
+	end
+
+	local footerLabel = Helpers.CreateLabel({
+		Name = "WelcomeLabel",
+		Size = UDim2.new(1, if avatarImage then -40 else 0, 1, -8),
+		Position = UDim2.new(0, if avatarImage then 40 else 0, 0, 4),
+		Text = "Welcome, " .. footerUsername,
+		TextColor3 = library.Theme.Text,
+		TextSize = 13,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Font = Theme.FontBold,
+		Parent = footer,
+	})
+
+	local footerSub = Helpers.CreateLabel({
+		Name = "FooterSub",
+		Size = UDim2.new(1, if avatarImage then -40 else 0, 1, -8),
+		Position = UDim2.new(0, if avatarImage then 40 else 0, 0, 22),
+		Text = "Premium User",
+		TextColor3 = library.Theme.Accent,
+		TextSize = 11,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = footer,
+	})
+
+	-- ============================================
+	-- PAGES
+	-- ============================================
+	local pages = Instance.new("Frame")
+	pages.Name = "Pages"
+	pages.Position = UDim2.new(0, Theme.SidebarWidth + 8, 0, 0)
+	pages.Size = UDim2.new(1, -(Theme.SidebarWidth + 8), 1, 0)
+	pages.BackgroundTransparency = 1
+	pages.BorderSizePixel = 0
+	pages.ClipsDescendants = true
+	pages.Parent = contentArea
+
+	-- ============================================
+	-- INFO BAR (like in reference)
+	-- ============================================
+	local infoBar = Helpers.CreateFrame({
+		Name = "InfoBar",
+		Size = UDim2.new(1, -16, 0, 28),
+		Position = UDim2.new(0, 8, 1, -36),
+		BackgroundColor3 = library.Theme.Secondary,
+		BackgroundTransparency = 0.4,
+		Parent = pages,
+	})
+	Helpers.Corner(infoBar, Theme.CornerRadiusSmall)
+	Helpers.Stroke(infoBar, library.Theme.Border, 0.5)
+
+	local infoLayout = Instance.new("UIListLayout")
+	infoLayout.Name = "InfoLayout"
+	infoLayout.FillDirection = Enum.FillDirection.Horizontal
+	infoLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+	infoLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+	infoLayout.Padding = UDim.new(0, 16)
+	infoLayout.Parent = infoBar
+
+	local infoItems = {
+		{ Label = "Executor: ", Value = "Synapse X" },
+		{ Label = "v", Value = VERSION },
+		{ Label = "Uptime: ", Value = "00:23:47" },
+		{ Label = "Players: ", Value = "12 / 30" },
+		{ Label = "Time: ", Value = os.date("%I:%M %p") },
+	}
+
+	for _, item in infoItems do
+		local container = Instance.new("Frame")
+		container.Name = "InfoItem"
+		container.Size = UDim2.new(0, 0, 1, 0)
+		container.AutomaticSize = Enum.AutomaticSize.X
+		container.BackgroundTransparency = 1
+		container.Parent = infoBar
+
+		local label = Helpers.CreateLabel({
+			Name = "Label",
+			Size = UDim2.new(0, 0, 1, 0),
+			AutomaticSize = Enum.AutomaticSize.X,
+			Text = item.Label,
+			TextColor3 = library.Theme.TextMuted,
+			TextSize = 11,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Parent = container,
+		})
+
+		local value = Helpers.CreateLabel({
+			Name = "Value",
+			Size = UDim2.new(0, 0, 1, 0),
+			AutomaticSize = Enum.AutomaticSize.X,
+			Position = UDim2.new(0, label.TextBounds.X + 2, 0, 0),
+			Text = item.Value,
+			TextColor3 = library.Theme.Text,
+			TextSize = 11,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Font = Theme.FontBold,
+			Parent = container,
+		})
+
+		container.Size = UDim2.new(0, label.TextBounds.X + value.TextBounds.X + 4, 1, 0)
+	end
+
+	-- ============================================
+	-- SEARCH FUNCTIONALITY
+	-- ============================================
+	if searchBox then
+		local previouslyMatched = {} :: { [Instance]: boolean }
+
+		self._Maid:GiveTask(searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+			local query = searchBox.Text:lower()
+
+			for _, child in tabList:GetChildren() do
+				if child:IsA("GuiObject") then
+					local matches = query == "" or child.Name:lower():find(query, 1, true) ~= nil
+					child.Visible = matches
+
+					if matches and query ~= "" and not previouslyMatched[child] then
+						local isActiveTab = self._ActiveTab and self._ActiveTab.Button == child
+						local restColor = if isActiveTab then library.Theme.Secondary else library.Theme.Background
+
+						Tween.Play(child, { BackgroundColor3 = library.Theme.Accent }, { Time = 0.12 })
+						task.delay(0.12, function()
+							if child and child.Parent then
+								Tween.Play(child, { BackgroundColor3 = restColor }, { Time = 0.35 })
+							end
+						end)
+					end
+
+					previouslyMatched[child] = matches
+				end
+			end
+		end))
+	end
+
+	-- ============================================
+	-- THEME REFRESH
+	-- ============================================
+	local function refreshWindowTheme()
 		main.BackgroundColor3 = library.Theme.Background
 		topBar.BackgroundColor3 = library.Theme.Secondary
-		local topBarMask = topBar:FindFirstChild("TopBarMask")
-		if topBarMask then topBarMask.BackgroundColor3 = library.Theme.Secondary end
+		topBarMask.BackgroundColor3 = library.Theme.Secondary
 		sidebar.BackgroundColor3 = library.Theme.Secondary
-
-		local title = topBar:FindFirstChild("Title")
-		if title then title.TextColor3 = library.Theme.Text end
-		local subtitle = topBar:FindFirstChild("Subtitle")
+		title.TextColor3 = library.Theme.Text
 		if subtitle then subtitle.TextColor3 = library.Theme.TextMuted end
-
-		local minimizeButton = topBar:FindFirstChild("Minimize")
 		if minimizeButton then minimizeButton.TextColor3 = library.Theme.TextMuted end
-		local closeButton = topBar:FindFirstChild("Close")
-		if closeButton then 
-			closeButton.TextColor3 = library.Theme.TextMuted
-			local stroke = closeButton:FindFirstChild("Stroke")
-			if stroke then stroke.Color = library.Theme.Border end
+		if closeButton then closeButton.TextColor3 = library.Theme.TextMuted end
+		mainStroke.Color = library.Theme.Border
+
+		-- Update info bar
+		for _, item in infoBar:GetChildren() do
+			if item:IsA("Frame") then
+				local label = item:FindFirstChild("Label")
+				local value = item:FindFirstChild("Value")
+				if label then label.TextColor3 = library.Theme.TextMuted end
+				if value then value.TextColor3 = library.Theme.Text end
+			end
 		end
 
-		local mainStroke = main:FindFirstChild("Stroke")
-		if mainStroke then mainStroke.Color = library.Theme.Border end
-
 		for _, tab in self._Tabs do
-			if tab.RefreshTheme then tab:RefreshTheme() end
+			if tab and tab.RefreshTheme then
+				tab:RefreshTheme()
+			end
 		end
 	end
 
 	local themeConnection = library.Theme.Changed:Connect(function()
-		refreshTheme()
+		refreshWindowTheme()
 	end)
 	self._Maid:GiveTask(themeConnection)
-end
 
--- Helper: Setup Search
-function Window:_setupSearch(searchBox, tabList, library)
-	local previouslyMatched = setmetatable({}, { __mode = "v" })
-
-	self._Maid:GiveTask(searchBox:GetPropertyChangedSignal("Text"):Connect(function()
-		local query = searchBox.Text:lower()
-		previouslyMatched = setmetatable({}, { __mode = "v" })
-
-		for _, child in tabList:GetChildren() do
-			if child:IsA("GuiObject") then
-				local matches = query == "" or child.Name:lower():find(query, 1, true) ~= nil
-				child.Visible = matches
-
-				if matches and query ~= "" then
-					local isActiveTab = self._ActiveTab and self._ActiveTab.Button == child
-					local restColor = if isActiveTab then library.Theme.Secondary else library.Theme.Background
-
-					Tween.Play(child, { BackgroundColor3 = library.Theme.Accent }, { Time = 0.12 })
-					task.delay(0.12, function()
-						if child and child.Parent then
-							Tween.Play(child, { BackgroundColor3 = restColor }, { Time = 0.35 })
-						end
-					end)
-				end
-
-				previouslyMatched[child] = matches
+	-- ============================================
+	-- MINIMIZE / CLOSE
+	-- ============================================
+	if minimizeButton then
+		minimizeButton.MouseButton1Click:Connect(function()
+			self._Minimized = not self._Minimized
+			if self._Minimized then
+				Tween.Play(main, { Size = UDim2.fromOffset(windowSize.X, topBarHeight) }, { Time = 0.18 })
+			else
+				Tween.Play(main, { Size = UDim2.fromOffset(windowSize.X, windowSize.Y) }, { Time = 0.18 })
 			end
-		end
-	end))
+		end)
+	end
 
-	task.defer(function()
-		if searchBox and searchBox.Parent then
-			searchBox:CaptureFocus()
-		end
-	end)
-end
+	if closeButton then
+		closeButton.MouseButton1Click:Connect(function()
+			self:SetVisible(false)
+		end)
+	end
 
--- Helper: Setup Keybind
-function Window:_setupKeybind(UserInputService)
+	-- ============================================
+	-- KEYBIND
+	-- ============================================
+	self._ToggleKeybind = data.ToggleKey or Enum.KeyCode.RightControl
 	self._Maid:GiveTask(UserInputService.InputBegan:Connect(function(input, processed)
 		if processed then return end
 		if self._ToggleKeybind ~= nil and self._ToggleKeybind ~= Enum.KeyCode.Unknown and input.KeyCode == self._ToggleKeybind then
 			self:Toggle()
 		end
 	end))
-end
 
--- Helper: Startup Sequence (fixed - uses elements table)
-function Window:_startupSequence(loadingFrame, loadingElements)
+	-- ============================================
+	-- SELF REFS
+	-- ============================================
+	self.Gui = screenGui
+	self.Main = main
+	self.TopBar = topBar
+	self.Sidebar = sidebar
+	self.TabList = tabList
+	self.Pages = pages
+	self.TitleLabel = title
+	self.SearchBox = searchBox
+	self._ThemeConnection = themeConnection
+	self._LoadingFrame = loadingFrame	self._Visible = true
+	self._Minimized = false
+	self._StartupComplete = false
+	self._OptionsTab = nil
+	self.RefreshTheme = refreshWindowTheme
+	self._InfoBar = infoBar
+
+	-- ============================================
+	-- STARTUP COMPLETE
+	-- ============================================
 	self._Maid:Give(task.delay(0.8, function()
 		if not self.Gui then return end
 
 		if loadingFrame and loadingFrame.Parent then
-			-- Update status text
-			if loadingElements.Status then
-				loadingElements.Status.Text = "Ready"
-			end
-			
-			task.wait(0.25)
-			
-			-- Fade out all loading elements using the stored references
-			local elementsToFade = {
-				loadingFrame,
-				loadingElements.Accent,
-				loadingElements.Title,
-				loadingElements.Subtitle,
-				loadingElements.Status,
-				loadingElements.ProgressTrack,
-				loadingElements.ProgressFill,
-			}
-			
-			for _, elem in elementsToFade do
-				if elem and elem.Parent then
-					local prop = elem:IsA("Frame") and "BackgroundTransparency" or "TextTransparency"
-					local value = elem:IsA("Frame") and 1 or 1
-					Tween.Play(elem, { [prop] = value }, { Time = 0.2 })
-				end
-			end
-			
+			loadingStatus.Text = "Ready"
+
+			Tween.Play(loadingFrame, { BackgroundTransparency = 1 }, { Time = 0.2 })
+			Tween.Play(loadingAccent, { BackgroundTransparency = 1 }, { Time = 0.2 })
+			Tween.Play(loadingTitle, { TextTransparency = 1 }, { Time = 0.2 })
+			Tween.Play(loadingSubtitle, { TextTransparency = 1 }, { Time = 0.2 })
+			Tween.Play(loadingVersion, { TextTransparency = 1 }, { Time = 0.2 })
+			Tween.Play(loadingStatus, { TextTransparency = 1 }, { Time = 0.2 })
+			Tween.Play(progressTrack, { BackgroundTransparency = 1 }, { Time = 0.2 })
+			Tween.Play(progressFill, { BackgroundTransparency = 1 }, { Time = 0.2 })
+
 			task.wait(0.2)
 			if loadingFrame and loadingFrame.Parent then
 				loadingFrame:Destroy()
@@ -959,27 +858,26 @@ function Window:_startupSequence(loadingFrame, loadingElements)
 		self._StartupComplete = true
 		self:SetVisible(self._Visible)
 	end))
+
+	return self :: any
 end
+
+-- ============================================
+-- METHODS
+-- ============================================
 
 function Window:SetBackgroundImage(value: string)
 	local bg = self._BackgroundImage
 	if not bg then return end
-	
-	if value == "None" or value == "" then
-		bg.Image = ""
-		return
-	end
-	
-	local assetId = ASSETS.Backgrounds[value]
-	if assetId then
-		bg.Image = assetId
-	else
-		if not value:match("^rbxassetid://") and not value:match("^http") then
-			bg.Image = "rbxassetid://" .. value
-		else
-			bg.Image = value
-		end
-	end
+
+	local images = {
+		["Solo Leveling"] = "rbxassetid://139001765478120",
+		["Gojo"] = "rbxassetid://111578938106815",
+		["Sukuna"] = "rbxassetid://106318186489675",
+		["Cid Kagenou"] = "rbxassetid://113248988511733",
+	}
+
+	bg.Image = images[value] or ""
 end
 
 function Window:SetBackgroundOverlayTransparency(value: number)
@@ -995,7 +893,9 @@ function Window:_selectTab(tab: any)
 	local previousTab = self._ActiveTab
 
 	for _, existingTab in self._Tabs do
-		existingTab:SetActive(existingTab == tab)
+		if existingTab and existingTab.SetActive then
+			existingTab:SetActive(existingTab == tab)
+		end
 	end
 
 	self._ActiveTab = tab
@@ -1021,6 +921,7 @@ function Window:_selectTab(tab: any)
 	end
 
 	local slideDistance = self.Pages.AbsoluteSize.X * 0.25
+
 	newPage.Visible = true
 	newPage.Position = UDim2.fromOffset(slideDistance * direction, 0)
 	Tween.Play(newPage, { Position = UDim2.fromOffset(0, 0) }, { Time = 0.2 })
@@ -1046,75 +947,54 @@ function Window:_createOptionsTab()
 		return self._OptionsTab
 	end
 
-	local optionsTab = Tab.new(self, "Options")
+	local optionsTab = Tab.new(self, "⚙️ Options")
 	self._OptionsTab = optionsTab
 	table.insert(self._Tabs, optionsTab)
 
-	self.Library.Theme.Style = self.Library:_getSavedFlag("CyberUI.Theme.Style", self.Library.Theme.Style, true)
-	self.Library.Theme.Background = self.Library:_getSavedFlag("CyberUI.Theme.Background", self.Library.Theme.Background, true)
-	self.Library.Theme.Secondary = self.Library:_getSavedFlag("CyberUI.Theme.Secondary", self.Library.Theme.Secondary, true)
-	self.Library.Theme.Accent = self.Library:_getSavedFlag("CyberUI.Theme.Accent", self.Library.Theme.Accent, true)
-	self.Library.Theme.Text = self.Library:_getSavedFlag("CyberUI.Theme.Text", self.Library.Theme.Text, true)
-	self.Library.Theme.Border = self.Library:_getSavedFlag("CyberUI.Theme.Border", self.Library.Theme.Border, true)
+	-- Load saved theme values
+	self.Library.Theme.Style = self.Library:_getSavedFlag("VoidHub.Theme.Style", self.Library.Theme.Style, true)
+	self.Library.Theme.Background = self.Library:_getSavedFlag("VoidHub.Theme.Background", self.Library.Theme.Background, true)
+	self.Library.Theme.Secondary = self.Library:_getSavedFlag("VoidHub.Theme.Secondary", self.Library.Theme.Secondary, true)
+	self.Library.Theme.Accent = self.Library:_getSavedFlag("VoidHub.Theme.Accent", self.Library.Theme.Accent, true)
+	self.Library.Theme.Text = self.Library:_getSavedFlag("VoidHub.Theme.Text", self.Library.Theme.Text, true)
+	self.Library.Theme.Border = self.Library:_getSavedFlag("VoidHub.Theme.Border", self.Library.Theme.Border, true)
 
-	local visualSection = optionsTab:CreateSection("Visual")
+	-- Visual section
+	local visualSection = optionsTab:CreateSection("🎨 Visual")
 	visualSection:CreateParagraph({
-		Title = "Visual",
-		Content = "Choose the look and feel of the UI.",
+		Title = "Customize your experience",
+		Content = "Choose the look and feel of Void Hub.",
 	})
 
-	local themeColorPickers = {}
-
 	visualSection:CreateDropdown({
-		Name = "Theme",
+		Name = "Theme Preset",
 		Options = {"Dark", "Light", "Cyber", "Meng"},
 		CurrentOption = self.Library.Theme.Style,
-		Flag = "CyberUI.Theme.Style",
+		Flag = "VoidHub.Theme.Style",
 		Callback = function(value)
 			self.Library.Theme.Style = value
 		end,
 	})
 
-	themeColorPickers.Accent = visualSection:CreateColorPicker({
-		Name = "Accent Color",
-		CurrentValue = self.Library.Theme.Accent,
-		Flag = "CyberUI.Theme.Accent",
-		Callback = function(color)
-			self.Library.Theme.Accent = color
-		end,
-	})
-	themeColorPickers.Background = visualSection:CreateColorPicker({
-		Name = "Background Color",
-		CurrentValue = self.Library.Theme.Background,
-		Flag = "CyberUI.Theme.Background",
-		Callback = function(color)
-			self.Library.Theme.Background = color
-		end,
-	})
-	themeColorPickers.Secondary = visualSection:CreateColorPicker({
-		Name = "Secondary Color",
-		CurrentValue = self.Library.Theme.Secondary,
-		Flag = "CyberUI.Theme.Secondary",
-		Callback = function(color)
-			self.Library.Theme.Secondary = color
-		end,
-	})
-	themeColorPickers.Text = visualSection:CreateColorPicker({
-		Name = "Text Color",
-		CurrentValue = self.Library.Theme.Text,
-		Flag = "CyberUI.Theme.Text",
-		Callback = function(color)
-			self.Library.Theme.Text = color
-		end,
-	})
-	themeColorPickers.Border = visualSection:CreateColorPicker({
-		Name = "Border Color",
-		CurrentValue = self.Library.Theme.Border,
-		Flag = "CyberUI.Theme.Border",
-		Callback = function(color)
-			self.Library.Theme.Border = color
-		end,
-	})
+	local themeColorPickers = {}
+	local colorConfigs = {
+		Accent = { Name = "Accent Color", Flag = "VoidHub.Theme.Accent" },
+		Background = { Name = "Background Color", Flag = "VoidHub.Theme.Background" },
+		Secondary = { Name = "Secondary Color", Flag = "VoidHub.Theme.Secondary" },
+		Text = { Name = "Text Color", Flag = "VoidHub.Theme.Text" },
+		Border = { Name = "Border Color", Flag = "VoidHub.Theme.Border" },
+	}
+
+	for key, config in colorConfigs do
+		themeColorPickers[key] = visualSection:CreateColorPicker({
+			Name = config.Name,
+			CurrentValue = self.Library.Theme[key],
+			Flag = config.Flag,
+			Callback = function(color)
+				self.Library.Theme[key] = color
+			end,
+		})
+	end
 
 	self._Maid:GiveTask(self.Library.Theme.Changed:Connect(function(key)
 		if key ~= "Style" then return end
@@ -1127,20 +1007,20 @@ function Window:_createOptionsTab()
 
 	visualSection:CreateInput({
 		Name = "Custom Background",
-		PlaceholderText = "rbxassetid://123456789 or 123456789",
+		PlaceholderText = "rbxassetid://123456789",
 		Callback = function(value)
 			if value == "" then return end
-			local bg = self._BackgroundImage
-			if not bg then return end
-			if not value:match("^rbxassetid://") and not value:match("^http") then
+			if not value:match("^rbxassetid://") then
 				value = "rbxassetid://" .. value
 			end
-			bg.Image = value
+			if self._BackgroundImage then
+				self._BackgroundImage.Image = value
+			end
 		end,
 	})
 
 	visualSection:CreateDropdown({
-		Name = "Background Image",
+		Name = "Background Presets",
 		Options = {"Solo Leveling", "Gojo", "Sukuna", "Cid Kagenou", "None"},
 		Callback = function(value: string)
 			self:SetBackgroundImage(value)
@@ -1151,19 +1031,21 @@ function Window:_createOptionsTab()
 		Name = "Overlay Transparency",
 		Min = 0,
 		Max = 1,
-		CurrentValue = 0.75,
+		CurrentValue = 0.7,
 		Rounding = 0.01,
 		Callback = function(value: number)
 			self:SetBackgroundOverlayTransparency(value)
 		end,
-		Flag = "CyberUI.Background.OverlayTransparency",
+		Flag = "VoidHub.Background.OverlayTransparency",
 	})
 
-	local configSection = optionsTab:CreateSection("Configuration")
+	-- Configuration section
+	local configSection = optionsTab:CreateSection("⚙️ Configuration")
 	configSection:CreateParagraph({
-		Title = "Configuration",
-		Content = "Save and restore flagged UI values.",
+		Title = "Save & Restore",
+		Content = "Your settings are automatically saved.",
 	})
+
 	configSection:CreateToggle({
 		Name = "Configuration Saving",
 		CurrentValue = self.Library._ConfigEnabled,
@@ -1172,6 +1054,7 @@ function Window:_createOptionsTab()
 			self.Library._ConfigEnabled = value
 		end,
 	})
+
 	configSection:CreateToggle({
 		Name = "Auto Save",
 		CurrentValue = self.Library._AutoSave,
@@ -1180,60 +1063,68 @@ function Window:_createOptionsTab()
 			self.Library._AutoSave = value
 		end,
 	})
+
 	configSection:CreateButton({
-		Name = "Save Configuration",
+		Name = "💾 Save Configuration",
 		Callback = function()
 			self.Library:SaveConfiguration()
-		end,
-	})
-	configSection:CreateButton({
-		Name = "Load Configuration",
-		Callback = function()
-			self.Library:LoadConfiguration()
+			self:Notify({
+				Title = "Saved",
+				Content = "Configuration saved successfully!",
+				Type = "Success",
+			})
 		end,
 	})
 
-	local keybindSection = optionsTab:CreateSection("Keybind")
-	keybindSection:CreateParagraph({
-		Title = "Keybind",
-		Content = "Use this key to toggle the UI.",
+	configSection:CreateButton({
+		Name = "📂 Load Configuration",
+		Callback = function()
+			self.Library:LoadConfiguration()
+			self:Notify({
+				Title = "Loaded",
+				Content = "Configuration loaded successfully!",
+				Type = "Success",
+			})
+		end,
 	})
+
+	-- Keybind section
+	local keybindSection = optionsTab:CreateSection("⌨️ Keybinds")
+	keybindSection:CreateParagraph({
+		Title = "Toggle UI",
+		Content = "Press this key to show/hide the interface.",
+	})
+
 	local toggleKeybind = keybindSection:CreateKeybind({
 		Name = "Toggle UI",
 		Default = self._ToggleKeybind,
-		Flag = "CyberUI.ToggleKey",
+		Flag = "VoidHub.ToggleKey",
 		Callback = function(key)
 			self._ToggleKeybind = key
 		end,
 	})
+
 	self._Maid:GiveTask(toggleKeybind:OnChanged(function(key)
 		self._ToggleKeybind = key
 	end))
 
-	local DiscordSection = optionsTab:CreateSection("Discord")
-	DiscordSection:CreateButton({
-		Name = "Copy Discord Invite",
+	-- Discord section
+	local discordSection = optionsTab:CreateSection("💬 Discord")
+	discordSection:CreateButton({
+		Name = "📋 Copy Discord Invite",
 		Callback = function()
-			if setclipboard then
-				setclipboard("https://discord.gg/D6AvbntAZf")
-			end
-			if self.Library and self.Library.Notifications and self.Library.Notifications.Notify then
-				self.Library.Notifications:Notify({
-					Title = "Success",
-					Content = "Discord invite has been copied to your clipboard!",
-					Type = "Success",
-					Duration = 4,
-				})
-			else
-				game:GetService("StarterGui"):SetCore("SendNotification", {
-					Title = "Discord",
-					Text = "Invite copied to clipboard!",
-					Duration = 5,
-					Icon = "rbxassetid://6031097228"
-				})
-			end
+			local invite = "https://discord.gg/D6AvbntAZf"
+			if setclipboard then setclipboard(invite) end
+
+			self:Notify({
+				Title = "Discord",
+				Content = "Invite copied to clipboard!",
+				Type = "Success",
+				Duration = 4,
+			})
 		end,
 	})
+
 	return optionsTab
 end
 
@@ -1306,6 +1197,7 @@ function Window:SetVisible(visible: boolean)
 	self._FloatDragging = false
 	self._FloatDragInputType = nil
 	self._Visible = visible
+
 	if self.Gui then
 		self.Gui.Enabled = true
 	end
@@ -1350,7 +1242,7 @@ function Window:SetVisible(visible: boolean)
 			task.delay(0.18, function()
 				if btn and btn.Parent then
 					Tween.Play(btn, {
-						Size = UDim2.fromOffset(SIZES.FloatingButton, SIZES.FloatingButton),
+						Size = UDim2.fromOffset(50, 50),
 						Rotation = 0,
 					}, { Time = 0.12 })
 				end
@@ -1364,7 +1256,17 @@ function Window:Toggle()
 end
 
 function Window:Notify(options: any)
-	return self.Library.Notifications:Notify(options)
+	if self.Library and self.Library.Notifications and self.Library.Notifications.Notify then
+		return self.Library.Notifications:Notify(options)
+	end
+
+	-- Fallback notification
+	game:GetService("StarterGui"):SetCore("SendNotification", {
+		Title = options.Title or "Void Hub",
+		Text = options.Content or options.Text or "",
+		Duration = options.Duration or 5,
+		Icon = "rbxassetid://6031097228"
+	})
 end
 
 function Window:Destroy()
@@ -1381,4 +1283,5 @@ function Window:Destroy()
 	end
 end
 
+print("🌌 Void Hub loaded successfully!")
 return Window
