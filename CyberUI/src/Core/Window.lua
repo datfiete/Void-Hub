@@ -6,7 +6,7 @@ local Maid = require(script.Parent.Parent.Utils.Maid)
 local Helpers = require(script.Parent.Parent.Utils.Helpers)
 local Tween = require(script.Parent.Parent.Utils.Tween)
 
-local GUI_NAME = "Void Hub"
+local GUI_NAME = "Vaxorin"
 local VERSION = "v2.24.0"
 
 local Window = {}
@@ -51,21 +51,21 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 
 	-- Clean up old GUI
 	for _, child in playerGui:GetChildren() do
-		if child:IsA("ScreenGui") and child.Name == "VoidHub" then
+		if child:IsA("ScreenGui") and child.Name == "Vaxorin" then
 			child:Destroy()
 		end
 	end
 
 	-- Create main ScreenGui
 	local screenGui = Instance.new("ScreenGui")
-	screenGui.Name = "VoidHub"
+	screenGui.Name = "Vaxorin"
 	screenGui.ResetOnSpawn = false
 	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	screenGui.Parent = playerGui
 	self._Maid:Give(screenGui)
 
 	local windowName = data.Name or data.Title or GUI_NAME
-	local windowSubtitle = data.Subtitle or data.Description or "Welcome to the Void"
+	local windowSubtitle = data.Subtitle or data.Description or "Welcome to the Vaxorin"
 	local windowSize = data.Size or data.WindowSize or Theme.WindowSize
 
 	if typeof(windowSize) == "UDim2" then
@@ -1297,7 +1297,7 @@ function Window:Notify(options: any)
 	end
 
 	game:GetService("StarterGui"):SetCore("SendNotification", {
-		Title = options.Title or "Void Hub",
+		Title = options.Title or "Vaxorin",
 		Text = options.Content or options.Text or "",
 		Duration = options.Duration or 5,
 		Icon = "rbxassetid://6031097228"
@@ -1318,5 +1318,5 @@ function Window:Destroy()
 	end
 end
 
-print("🌌 Void Hub loaded successfully!")
+print("🌌 Vaxorin loaded successfully!")
 return Window
