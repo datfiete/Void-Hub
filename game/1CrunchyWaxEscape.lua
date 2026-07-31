@@ -19,7 +19,7 @@ local window = CyberUI:CreateWindow({
     Subtitle = "by fietewoozle",
     BackgroundImage = "rbxassetid://106318186489675",
 
-    Logo = "rbxassetid://128228297210141",
+    Logo = "rbxassetid://135320038058277",
     Badges = {
         { Text = "Void Hub | v1.0" },
         { Text = "Executor: " .. Executor },
