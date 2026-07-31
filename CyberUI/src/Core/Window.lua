@@ -690,7 +690,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		return { Container = container, Label = label, Value = value }
 	end
 
-	local executorName = "Synapse X"
+	local executorName = "Unknown"
 	if syn and syn.getexecutorname then
 		executorName = syn.getexecutorname()
 	elseif getexecutorname then
