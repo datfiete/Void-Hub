@@ -992,24 +992,24 @@ function Window:_createOptionsTab()
 	self._OptionsTab = optionsTab
 	table.insert(self._Tabs, optionsTab)
 
-	self.Library.Theme.Style = self.Library:_getSavedFlag("VoidHub.Theme.Style", self.Library.Theme.Style, true)
-	self.Library.Theme.Background = self.Library:_getSavedFlag("VoidHub.Theme.Background", self.Library.Theme.Background, true)
-	self.Library.Theme.Secondary = self.Library:_getSavedFlag("VoidHub.Theme.Secondary", self.Library.Theme.Secondary, true)
-	self.Library.Theme.Accent = self.Library:_getSavedFlag("VoidHub.Theme.Accent", self.Library.Theme.Accent, true)
-	self.Library.Theme.Text = self.Library:_getSavedFlag("VoidHub.Theme.Text", self.Library.Theme.Text, true)
-	self.Library.Theme.Border = self.Library:_getSavedFlag("VoidHub.Theme.Border", self.Library.Theme.Border, true)
+	self.Library.Theme.Style = self.Library:_getSavedFlag("Vaxorin.Theme.Style", self.Library.Theme.Style, true)
+	self.Library.Theme.Background = self.Library:_getSavedFlag("Vaxorin.Theme.Background", self.Library.Theme.Background, true)
+	self.Library.Theme.Secondary = self.Library:_getSavedFlag("Vaxorin.Theme.Secondary", self.Library.Theme.Secondary, true)
+	self.Library.Theme.Accent = self.Library:_getSavedFlag("Vaxorin.Theme.Accent", self.Library.Theme.Accent, true)
+	self.Library.Theme.Text = self.Library:_getSavedFlag("Vaxorin.Theme.Text", self.Library.Theme.Text, true)
+	self.Library.Theme.Border = self.Library:_getSavedFlag("Vaxorin.Theme.Border", self.Library.Theme.Border, true)
 
 	local visualSection = optionsTab:CreateSection("🎨 Visual")
 	visualSection:CreateParagraph({
 		Title = "Customize your experience",
-		Content = "Choose the look and feel of Void Hub.",
+		Content = "Choose the look and feel of Vaxorin.",
 	})
 
 	visualSection:CreateDropdown({
 		Name = "Theme Preset",
 		Options = {"Dark", "Light", "Cyber", "Meng"},
 		CurrentOption = self.Library.Theme.Style,
-		Flag = "VoidHub.Theme.Style",
+		Flag = "Vaxorin.Theme.Style",
 		Callback = function(value)
 			self.Library.Theme.Style = value
 		end,
@@ -1017,11 +1017,11 @@ function Window:_createOptionsTab()
 
 	local themeColorPickers = {}
 	local colorConfigs = {
-		Accent = { Name = "Accent Color", Flag = "VoidHub.Theme.Accent" },
-		Background = { Name = "Background Color", Flag = "VoidHub.Theme.Background" },
-		Secondary = { Name = "Secondary Color", Flag = "VoidHub.Theme.Secondary" },
-		Text = { Name = "Text Color", Flag = "VoidHub.Theme.Text" },
-		Border = { Name = "Border Color", Flag = "VoidHub.Theme.Border" },
+		Accent = { Name = "Accent Color", Flag = "Vaxorin.Theme.Accent" },
+		Background = { Name = "Background Color", Flag = "Vaxorin.Theme.Background" },
+		Secondary = { Name = "Secondary Color", Flag = "Vaxorin.Theme.Secondary" },
+		Text = { Name = "Text Color", Flag = "Vaxorin.Theme.Text" },
+		Border = { Name = "Border Color", Flag = "Vaxorin.Theme.Border" },
 	}
 
 	for key, config in colorConfigs do
@@ -1075,7 +1075,7 @@ function Window:_createOptionsTab()
 		Callback = function(value: number)
 			self:SetBackgroundOverlayTransparency(value)
 		end,
-		Flag = "VoidHub.Background.OverlayTransparency",
+		Flag = "Vaxorin.Background.OverlayTransparency",
 	})
 
 	local configSection = optionsTab:CreateSection("⚙️ Configuration")
@@ -1135,7 +1135,7 @@ function Window:_createOptionsTab()
 	local toggleKeybind = keybindSection:CreateKeybind({
 		Name = "Toggle UI",
 		Default = self._ToggleKeybind,
-		Flag = "VoidHub.ToggleKey",
+		Flag = "Vaxorin.ToggleKey",
 		Callback = function(key)
 			self._ToggleKeybind = key
 		end,
