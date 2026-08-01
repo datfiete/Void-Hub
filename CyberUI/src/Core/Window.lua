@@ -9,6 +9,7 @@ local Tween = require(script.Parent.Parent.Utils.Tween)
 local GUI_NAME = "Vaxorin"
 local VERSION = "v2.24.0"
 local Vaxorin_Logo = "rbxassetid://135320038058277"
+local LocalPlayer = game:GetService("Players").LocalPlayer.Name
 
 local Window = {}
 Window.__index = Window
@@ -309,7 +310,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Name = "Badges",
 		Size = UDim2.new(0, 0, 1, 0),
 		AutomaticSize = Enum.AutomaticSize.X,
-		Position = UDim2.new(1, -85, 0.5, 0),   -- move left by 85px from the right edge
+		Position = UDim2.new(1, -130, 0.5, 0),   -- move left by 85px from the right edge
 		AnchorPoint = Vector2.new(1, 0.5),
 		BackgroundTransparency = 1,
 		Parent = topBar,
@@ -367,7 +368,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		closeButton.AnchorPoint = Vector2.new(1, 0.5)
 		closeButton.BackgroundColor3 = library.Theme.Background
 		closeButton.BackgroundTransparency = 0.25
-		closeButton.Text = "✕"
+		closeButton.Text = "X"
 		closeButton.Font = Theme.FontBold
 		closeButton.TextSize = 16
 		closeButton.TextColor3 = library.Theme.TextMuted
@@ -610,7 +611,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Size = UDim2.new(1, if avatarImage then -40 else 0, 1, 0),
 		Position = UDim2.new(0, if avatarImage then 40 else 0, 0.5, 0),
 		AnchorPoint = Vector2.new(0, 0.5),
-		Text = "Welcome, " .. footerUsername,
+		Text = "Welcome, " .. LocalPlayer,
 		TextColor3 = library.Theme.Text,
 		TextSize = 12,   -- smaller
 		TextXAlignment = Enum.TextXAlignment.Left,
