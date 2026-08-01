@@ -22,9 +22,9 @@ local Window = Library:CreateWindow({
     Subtitle = "Universal Script Hub",
     BackgroundImage = "rbxassetid://106318186489675",
 
-    Logo = "rbxassetid://128228297210141",
+    Logo = Vaxorin_Logo,
     Badges = {
-        { Text = "Void Hub | v1.0" },
+        { Text = "Vaxorin | v1.0" },
         { Text = "Executor: " .. Executor },
     },
 
