@@ -1,14 +1,15 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
 
 local AimbotEnabled = true
-local AimKey = "RMB"  -- Right mouse button, change to "LMB", "Q", etc.
-local AimFOV = 150    -- Max distance in pixels from crosshair to target
-local Smoothness = 0.3 -- 0 = instant, 1 = very smooth
-local AimPart = "Head" -- "Head", "HumanoidRootPart", "UpperTorso"
+local AimKey = Enum.UserInputType.MouseButton2  -- Right mouse button
+local AimFOV = 150
+local Smoothness = 0.3
+local AimPart = "Head"
 
 local target = nil
 local isAiming = false
@@ -22,7 +23,9 @@ local function getTarget()
     for _, player in ipairs(Players:GetPlayers()) do
         if player == LocalPlayer then continue end
         if not player.Character then continue end
-        if player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health <= 0 then continue end
+        
+        local humanoid = player.Character:FindFirstChild("Humanoid")
+        if not humanoid or humanoid.Health <= 0 then continue end
 
         local part = player.Character:FindFirstChild(AimPart)
         if not part then
@@ -46,6 +49,7 @@ end
 -- Smoothly move mouse to target
 local function aimAt(targetPlayer)
     if not targetPlayer or not targetPlayer.Character then return end
+    
     local part = targetPlayer.Character:FindFirstChild(AimPart)
     if not part then
         part = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
@@ -60,7 +64,7 @@ local function aimAt(targetPlayer)
     local delta = targetPos - currentPos
 
     if Smoothness > 0 then
-        Mouse.Move(delta.X * Smoothness, delta.Y * Smoothness)
+        Mouse.Move(delta.X * (1 - Smoothness), delta.Y * (1 - Smoothness))
     else
         Mouse.Move(delta.X, delta.Y)
     end
@@ -71,10 +75,7 @@ task.spawn(function()
     while true do
         if AimbotEnabled then
             -- Check if aim key is held
-            if UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) and AimKey == "LMB" or
-               UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) and AimKey == "RMB" or
-               UserInputService:IsKeyDown(Enum.KeyCode[aimKey]) and AimKey ~= "LMB" and AimKey ~= "RMB" then
-                
+            if UserInputService:IsMouseButtonPressed(AimKey) then
                 isAiming = true
                 target = getTarget()
                 if target then
@@ -85,28 +86,19 @@ task.spawn(function()
                 target = nil
             end
         end
-        task.wait(0.01) -- Fast loop for responsive aiming
+        task.wait(0.01)
     end
 end)
 
--- Optional: silent aim (no mouse movement, just shoot at target)
--- Uncomment below for silent aim
--- local function silentAim()
---     target = getTarget()
---     if target and target.Character then
---         local part = target.Character:FindFirstChild(AimPart) or target.Character:FindFirstChild("HumanoidRootPart")
---         if part then
---             -- Fire your weapon at part.Position (requires custom weapon handler)
---             -- Example: game:GetService("ReplicatedStorage").RemoteEvent:FireServer(part.Position)
---         end
---     end
--- end
+-- Change key via console (use Enum values)
+-- Example: AimKey = Enum.UserInputType.MouseButton1 (left click)
+-- Example: AimKey = Enum.KeyCode.Q (keyboard Q)
 
--- Config controls (change these in console)
 print("Aimbot loaded. Settings:")
 print("  AimbotEnabled = " .. tostring(AimbotEnabled))
-print("  AimKey = '" .. AimKey .. "' (RMB, LMB, Q, E, etc.)")
+print("  AimKey = " .. tostring(AimKey))
 print("  AimFOV = " .. tostring(AimFOV))
 print("  Smoothness = " .. tostring(Smoothness))
 print("  AimPart = '" .. AimPart .. "'")
 print("Toggle with: AimbotEnabled = false/true")
+print("Change key with: AimKey = Enum.UserInputType.MouseButton1 (or Enum.KeyCode.Q)")
