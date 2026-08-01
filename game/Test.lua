@@ -18,7 +18,7 @@ local Avatar = Players:GetUserThumbnailAsync(
 Library.Theme.Style = "Meng"
 
 local Window = Library:CreateWindow({
-    Title = "Void Hub",
+    Title = "Vaxorin",
     Subtitle = "Universal Script Hub",
     BackgroundImage = "rbxassetid://106318186489675",
 
@@ -263,7 +263,7 @@ MovementSection:CreateToggle({
 
 InfoSection:CreateParagraph({
 	Title = "About Void Hub",
-	Content = "Void Hub is actively being developed. Please report bugs or detections in our Discord.",
+	Content = "Vaxorin is actively being developed. Please report bugs or detections in our Discord.",
 })
 
 InfoSection:CreateButton({
@@ -283,7 +283,7 @@ InfoSection:CreateButton({
 
 Window:Notify({
 	Title = "Welcome!",
-	Content = "Void Hub successfully loaded.",
+	Content = "Vaxorin successfully loaded.",
 	Type = "Success",
 	Duration = 4,
 })
