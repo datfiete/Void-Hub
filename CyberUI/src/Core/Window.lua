@@ -7,7 +7,7 @@ local Helpers = require(script.Parent.Parent.Utils.Helpers)
 local Tween = require(script.Parent.Parent.Utils.Tween)
 
 local GUI_NAME = "Vaxorin"
-local VERSION = "v2.24.0"
+local VERSION = "1.0"
 local Vaxorin_Logo = "rbxassetid://135320038058277"
 
 local Window = {}
