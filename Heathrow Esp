@@ -1,125 +1,112 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
 
-local HealthEsp = true -- toggle this to enable/disable
-local espObjects = {}
+local AimbotEnabled = true
+local AimKey = "RMB"  -- Right mouse button, change to "LMB", "Q", etc.
+local AimFOV = 150    -- Max distance in pixels from crosshair to target
+local Smoothness = 0.3 -- 0 = instant, 1 = very smooth
+local AimPart = "Head" -- "Head", "HumanoidRootPart", "UpperTorso"
 
--- Function to create or update health bar for a player
-local function updateESP(player)
-    if not player or not player.Character or not player.Character:FindFirstChild("Humanoid") then
-        return
+local target = nil
+local isAiming = false
+
+-- Get valid target (closest to crosshair within FOV)
+local function getTarget()
+    local closest = nil
+    local closestDist = AimFOV
+    local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player == LocalPlayer then continue end
+        if not player.Character then continue end
+        if player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health <= 0 then continue end
+
+        local part = player.Character:FindFirstChild(AimPart)
+        if not part then
+            part = player.Character:FindFirstChild("HumanoidRootPart")
+            if not part then continue end
+        end
+
+        local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
+        if not onScreen then continue end
+
+        local dist = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
+        if dist < closestDist then
+            closestDist = dist
+            closest = player
+        end
     end
-    
-    local humanoid = player.Character.Humanoid
-    local rootPart = player.Character:FindFirstChild("HumanoidRootPart")
-    if not rootPart then return end
-    
-    local health = humanoid.Health
-    local maxHealth = humanoid.MaxHealth
-    local healthPercent = health / maxHealth
-    
-    -- Get or create ESP object for this player
-    local esp = espObjects[player]
-    if not esp then
-        esp = {
-            Background = Drawing.new("Square"),
-            Fill = Drawing.new("Square"),
-            Text = Drawing.new("Text")
-        }
-        esp.Background.Thickness = 1
-        esp.Background.Color = Color3.fromRGB(0, 0, 0)
-        esp.Background.Filled = false
-        esp.Background.Transparency = 0.5
-        
-        esp.Fill.Filled = true
-        esp.Fill.Transparency = 0.6
-        
-        esp.Text.Size = 14
-        esp.Text.Center = true
-        esp.Text.Outline = true
-        esp.Text.OutlineColor = Color3.fromRGB(0, 0, 0)
-        esp.Text.Color = Color3.fromRGB(255, 255, 255)
-        
-        espObjects[player] = esp
-    end
-    
-    -- Get screen position
-    local pos, onScreen = workspace.CurrentCamera:WorldToViewportPoint(rootPart.Position + Vector3.new(0, 3, 0))
-    if not onScreen then
-        esp.Background.Visible = false
-        esp.Fill.Visible = false
-        esp.Text.Visible = false
-        return
-    end
-    
-    local width = 100
-    local height = 8
-    local x = pos.X - width/2
-    local y = pos.Y
-    
-    -- Update background
-    esp.Background.Position = Vector2.new(x, y)
-    esp.Background.Size = Vector2.new(width, height)
-    esp.Background.Visible = true
-    
-    -- Update fill (health bar)
-    local fillWidth = width * healthPercent
-    esp.Fill.Position = Vector2.new(x, y)
-    esp.Fill.Size = Vector2.new(fillWidth, height)
-    esp.Fill.Color = Color3.fromRGB(255 * (1 - healthPercent), 255 * healthPercent, 0)
-    esp.Fill.Visible = true
-    
-    -- Update text
-    esp.Text.Position = Vector2.new(pos.X, y - 20)
-    esp.Text.Text = string.format("%s - %d/%d", player.Name, math.floor(health), math.floor(maxHealth))
-    esp.Text.Visible = true
+
+    return closest
 end
 
--- Cleanup function
-local function clearESP()
-    for _, esp in pairs(espObjects) do
-        esp.Background:Remove()
-        esp.Fill:Remove()
-        esp.Text:Remove()
+-- Smoothly move mouse to target
+local function aimAt(targetPlayer)
+    if not targetPlayer or not targetPlayer.Character then return end
+    local part = targetPlayer.Character:FindFirstChild(AimPart)
+    if not part then
+        part = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if not part then return end
     end
-    espObjects = {}
+
+    local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
+    if not onScreen then return end
+
+    local currentPos = Vector2.new(Mouse.X, Mouse.Y)
+    local targetPos = Vector2.new(screenPos.X, screenPos.Y)
+    local delta = targetPos - currentPos
+
+    if Smoothness > 0 then
+        Mouse.Move(delta.X * Smoothness, delta.Y * Smoothness)
+    else
+        Mouse.Move(delta.X, delta.Y)
+    end
 end
 
 -- Main loop
 task.spawn(function()
-    while task.wait(0.1) do
-        if HealthEsp then
-            for _, player in ipairs(Players:GetPlayers()) do
-                if player ~= LocalPlayer then
-                    updateESP(player)
+    while true do
+        if AimbotEnabled then
+            -- Check if aim key is held
+            if UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) and AimKey == "LMB" or
+               UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) and AimKey == "RMB" or
+               UserInputService:IsKeyDown(Enum.KeyCode[aimKey]) and AimKey ~= "LMB" and AimKey ~= "RMB" then
+                
+                isAiming = true
+                target = getTarget()
+                if target then
+                    aimAt(target)
                 end
-            end
-        else
-            -- Turn off: hide all ESP objects
-            for _, esp in pairs(espObjects) do
-                esp.Background.Visible = false
-                esp.Fill.Visible = false
-                esp.Text.Visible = false
+            else
+                isAiming = false
+                target = nil
             end
         end
+        task.wait(0.01) -- Fast loop for responsive aiming
     end
 end)
 
--- Cleanup when script stops
-game:GetService("RunService").Heartbeat:Connect(function()
-    if not HealthEsp then
-        -- optionally keep hidden
-    end
-end)
+-- Optional: silent aim (no mouse movement, just shoot at target)
+-- Uncomment below for silent aim
+-- local function silentAim()
+--     target = getTarget()
+--     if target and target.Character then
+--         local part = target.Character:FindFirstChild(AimPart) or target.Character:FindFirstChild("HumanoidRootPart")
+--         if part then
+--             -- Fire your weapon at part.Position (requires custom weapon handler)
+--             -- Example: game:GetService("ReplicatedStorage").RemoteEvent:FireServer(part.Position)
+--         end
+--     end
+-- end
 
--- Optional: remove ESP when player leaves
-Players.PlayerRemoving:Connect(function(player)
-    local esp = espObjects[player]
-    if esp then
-        esp.Background:Remove()
-        esp.Fill:Remove()
-        esp.Text:Remove()
-        espObjects[player] = nil
-    end
-end)
+-- Config controls (change these in console)
+print("Aimbot loaded. Settings:")
+print("  AimbotEnabled = " .. tostring(AimbotEnabled))
+print("  AimKey = '" .. AimKey .. "' (RMB, LMB, Q, E, etc.)")
+print("  AimFOV = " .. tostring(AimFOV))
+print("  Smoothness = " .. tostring(Smoothness))
+print("  AimPart = '" .. AimPart .. "'")
+print("Toggle with: AimbotEnabled = false/true")
