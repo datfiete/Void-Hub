@@ -1,99 +1,137 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 
-local HealthEsp = true -- toggle this to enable/disable
+local HealthEsp = true  -- toggle this variable
 local espObjects = {}
+local lastData = {}
 
--- Function to create or update health bar for a player
-local function updateESP(player)
-    if not player or not player.Character or not player.Character:FindFirstChild("Humanoid") then
-        return
-    end
-    
-    local humanoid = player.Character.Humanoid
-    local rootPart = player.Character:FindFirstChild("HumanoidRootPart")
-    if not rootPart then return end
-    
-    local health = humanoid.Health
-    local maxHealth = humanoid.MaxHealth
-    local healthPercent = health / maxHealth
-    
-    -- Get or create ESP object for this player
-    local esp = espObjects[player]
-    if not esp then
-        esp = {
-            Background = Drawing.new("Square"),
-            Fill = Drawing.new("Square"),
-            Text = Drawing.new("Text")
-        }
-        esp.Background.Thickness = 1
-        esp.Background.Color = Color3.fromRGB(0, 0, 0)
-        esp.Background.Filled = false
-        esp.Background.Transparency = 0.5
-        
-        esp.Fill.Filled = true
-        esp.Fill.Transparency = 0.6
-        
-        esp.Text.Size = 14
-        esp.Text.Center = true
-        esp.Text.Outline = true
-        esp.Text.OutlineColor = Color3.fromRGB(0, 0, 0)
-        esp.Text.Color = Color3.fromRGB(255, 255, 255)
-        
-        espObjects[player] = esp
-    end
-    
-    -- Get screen position
-    local pos, onScreen = workspace.CurrentCamera:WorldToViewportPoint(rootPart.Position + Vector3.new(0, 3, 0))
-    if not onScreen then
-        esp.Background.Visible = false
-        esp.Fill.Visible = false
-        esp.Text.Visible = false
-        return
-    end
-    
-    local width = 100
-    local height = 8
-    local x = pos.X - width/2
-    local y = pos.Y
-    
-    -- Update background
-    esp.Background.Position = Vector2.new(x, y)
-    esp.Background.Size = Vector2.new(width, height)
-    esp.Background.Visible = true
-    
-    -- Update fill (health bar)
-    local fillWidth = width * healthPercent
-    esp.Fill.Position = Vector2.new(x, y)
-    esp.Fill.Size = Vector2.new(fillWidth, height)
-    esp.Fill.Color = Color3.fromRGB(255 * (1 - healthPercent), 255 * healthPercent, 0)
-    esp.Fill.Visible = true
-    
-    -- Update text
-    esp.Text.Position = Vector2.new(pos.X, y - 20)
-    esp.Text.Text = string.format("%s - %d/%d", player.Name, math.floor(health), math.floor(maxHealth))
-    esp.Text.Visible = true
+-- Pre-create drawing objects for a player
+local function setupESP(player)
+    if espObjects[player] then return end
+    local esp = {
+        Background = Drawing.new("Square"),
+        Fill = Drawing.new("Square"),
+        Text = Drawing.new("Text")
+    }
+    esp.Background.Thickness = 1
+    esp.Background.Color = Color3.fromRGB(0, 0, 0)
+    esp.Background.Filled = false
+    esp.Background.Transparency = 0.5
+
+    esp.Fill.Filled = true
+    esp.Fill.Transparency = 0.6
+
+    esp.Text.Size = 14
+    esp.Text.Center = true
+    esp.Text.Outline = true
+    esp.Text.OutlineColor = Color3.fromRGB(0, 0, 0)
+    esp.Text.Color = Color3.fromRGB(255, 255, 255)
+
+    espObjects[player] = esp
+    lastData[player] = { health = -1, pos = Vector3.new() }
 end
 
--- Cleanup function
-local function clearESP()
-    for _, esp in pairs(espObjects) do
+local function removeESP(player)
+    local esp = espObjects[player]
+    if esp then
         esp.Background:Remove()
         esp.Fill:Remove()
         esp.Text:Remove()
+        espObjects[player] = nil
+        lastData[player] = nil
     end
-    espObjects = {}
 end
 
--- Main loop
+-- Setup existing players
+for _, plr in ipairs(Players:GetPlayers()) do
+    if plr ~= LocalPlayer then
+        setupESP(plr)
+    end
+end
+
+Players.PlayerAdded:Connect(setupESP)
+Players.PlayerRemoving:Connect(removeESP)
+
+-- Main loop with task.spawn and if/else
 task.spawn(function()
-    while task.wait(0.1) do
+    while task.wait(0.03) do  -- 0.03 is smooth but lightweight
         if HealthEsp then
-            for _, player in ipairs(Players:GetPlayers()) do
-                if player ~= LocalPlayer then
-                    updateESP(player)
+            -- Update each player
+            for player, esp in pairs(espObjects) do
+                if player == LocalPlayer then continue end
+                local character = player.Character
+                if not character then
+                    esp.Background.Visible = false
+                    esp.Fill.Visible = false
+                    esp.Text.Visible = false
+                    continue
                 end
+
+                local humanoid = character:FindFirstChild("Humanoid")
+                local rootPart = character:FindFirstChild("HumanoidRootPart")
+                if not humanoid or not rootPart then
+                    esp.Background.Visible = false
+                    esp.Fill.Visible = false
+                    esp.Text.Visible = false
+                    continue
+                end
+
+                local health = humanoid.Health
+                local maxHealth = humanoid.MaxHealth
+                local healthPercent = math.clamp(health / maxHealth, 0, 1)
+                local rootPos = rootPart.Position
+                local last = lastData[player]
+
+                -- Skip redraw if nothing changed (reduces CPU)
+                local posChanged = (rootPos - last.pos).Magnitude > 0.5
+                local healthChanged = math.abs(health - last.health) > 0.1
+
+                if not posChanged and not healthChanged then
+                    -- Keep visible, but no updates
+                    esp.Background.Visible = true
+                    esp.Fill.Visible = true
+                    esp.Text.Visible = true
+                    continue
+                end
+
+                -- Update stored data
+                last.pos = rootPos
+                last.health = health
+
+                -- World to screen
+                local screenPos, onScreen = Camera:WorldToViewportPoint(rootPos + Vector3.new(0, 3, 0))
+                if not onScreen then
+                    esp.Background.Visible = false
+                    esp.Fill.Visible = false
+                    esp.Text.Visible = false
+                    continue
+                end
+
+                local width = 100
+                local height = 8
+                local x = screenPos.X - width/2
+                local y = screenPos.Y
+
+                -- Background
+                esp.Background.Position = Vector2.new(x, y)
+                esp.Background.Size = Vector2.new(width, height)
+                esp.Background.Visible = true
+
+                -- Fill bar
+                local fillWidth = width * healthPercent
+                esp.Fill.Position = Vector2.new(x, y)
+                esp.Fill.Size = Vector2.new(fillWidth, height)
+                esp.Fill.Color = Color3.fromRGB(255 * (1 - healthPercent), 255 * healthPercent, 0)
+                esp.Fill.Visible = true
+
+                -- Text (only update string if health changed)
+                if healthChanged then
+                    esp.Text.Text = string.format("%s - %d/%d", player.Name, math.floor(health), math.floor(maxHealth))
+                end
+                esp.Text.Position = Vector2.new(screenPos.X, y - 20)
+                esp.Text.Visible = true
             end
         else
             -- Turn off: hide all ESP objects
@@ -106,20 +144,4 @@ task.spawn(function()
     end
 end)
 
--- Cleanup when script stops
-game:GetService("RunService").Heartbeat:Connect(function()
-    if not HealthEsp then
-        -- optionally keep hidden
-    end
-end)
-
--- Optional: remove ESP when player leaves
-Players.PlayerRemoving:Connect(function(player)
-    local esp = espObjects[player]
-    if esp then
-        esp.Background:Remove()
-        esp.Fill:Remove()
-        esp.Text:Remove()
-        espObjects[player] = nil
-    end
-end)
+print("Health ESP loaded. Toggle with: HealthEsp = false/true")
