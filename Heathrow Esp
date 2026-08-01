@@ -1,5 +1,4 @@
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
 local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 
@@ -7,7 +6,7 @@ local HealthEsp = true  -- toggle this variable
 local espObjects = {}
 local lastData = {}
 
--- Pre-create drawing objects for a player
+-- Pre-create drawing objects for each player
 local function setupESP(player)
     if espObjects[player] then return end
     local esp = {
@@ -46,19 +45,17 @@ end
 
 -- Setup existing players
 for _, plr in ipairs(Players:GetPlayers()) do
-    if plr ~= LocalPlayer then
-        setupESP(plr)
-    end
+    if plr ~= LocalPlayer then setupESP(plr) end
 end
 
 Players.PlayerAdded:Connect(setupESP)
 Players.PlayerRemoving:Connect(removeESP)
 
--- Main loop with task.spawn and if/else
+-- Main loop: runs fast only when active, sleeps when disabled
 task.spawn(function()
-    while task.wait(0.03) do  -- 0.03 is smooth but lightweight
+    while true do
         if HealthEsp then
-            -- Update each player
+            -- Active: update every 0.03s (smooth but lightweight)
             for player, esp in pairs(espObjects) do
                 if player == LocalPlayer then continue end
                 local character = player.Character
@@ -84,12 +81,12 @@ task.spawn(function()
                 local rootPos = rootPart.Position
                 local last = lastData[player]
 
-                -- Skip redraw if nothing changed (reduces CPU)
-                local posChanged = (rootPos - last.pos).Magnitude > 0.5
-                local healthChanged = math.abs(health - last.health) > 0.1
+                -- Skip update if nothing changed (tiny thresholds for smoothness)
+                local posChanged = (rootPos - last.pos).Magnitude > 0.1
+                local healthChanged = math.abs(health - last.health) > 0.01
 
                 if not posChanged and not healthChanged then
-                    -- Keep visible, but no updates
+                    -- Keep visible, but no redraw
                     esp.Background.Visible = true
                     esp.Fill.Visible = true
                     esp.Text.Visible = true
@@ -133,13 +130,16 @@ task.spawn(function()
                 esp.Text.Position = Vector2.new(screenPos.X, y - 20)
                 esp.Text.Visible = true
             end
+
+            task.wait(0.03)  -- smooth refresh rate
         else
-            -- Turn off: hide all ESP objects
+            -- Disabled: hide everything and sleep longer (save CPU)
             for _, esp in pairs(espObjects) do
                 esp.Background.Visible = false
                 esp.Fill.Visible = false
                 esp.Text.Visible = false
             end
+            task.wait(0.5)  -- check again after half a second
         end
     end
 end)
