@@ -611,7 +611,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Size = UDim2.new(1, if avatarImage then -40 else 0, 1, 0),
 		Position = UDim2.new(0, if avatarImage then 40 else 0, 0.5, 0),
 		AnchorPoint = Vector2.new(0, 0.5),
-		Text = "Welcome, " .. LocalPlayer,
+		Text = "Welcome, ", LocalPlayer,
 		TextColor3 = library.Theme.Text,
 		TextSize = 12,   -- smaller
 		TextXAlignment = Enum.TextXAlignment.Left,
