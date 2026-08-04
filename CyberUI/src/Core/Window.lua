@@ -83,6 +83,10 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	local topBarHeight = Theme.TopBarHeight or 60
 	local infoBarHeight = 32   -- height of the bottom info bar
 
+	-- Resize limits
+	local minWindowSize = Vector2.new(420, 320)
+	local maxWindowSize = Vector2.new(1200, 900)
+
 	-- ============================================
 	-- LOADING SCREEN (unchanged)
 	-- ============================================
@@ -310,7 +314,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Name = "Badges",
 		Size = UDim2.new(0, 0, 1, 0),
 		AutomaticSize = Enum.AutomaticSize.X,
-		Position = UDim2.new(1, -130, 0.5, 0),   -- move left by 85px from the right edge
+		Position = UDim2.new(1, -130, 0.5, 0),   -- moved left to avoid buttons
 		AnchorPoint = Vector2.new(1, 0.5),
 		BackgroundTransparency = 1,
 		Parent = topBar,
@@ -508,6 +512,80 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	end))
 
 	-- ============================================
+	-- RESIZE HANDLE (re‑added)
+	-- ============================================
+	local resizeHandle = Instance.new("Frame")
+	resizeHandle.Name = "ResizeHandle"
+	resizeHandle.Size = UDim2.fromOffset(18, 18)
+	resizeHandle.Position = UDim2.new(1, -4, 1, -4)
+	resizeHandle.AnchorPoint = Vector2.new(1, 1)
+	resizeHandle.BackgroundTransparency = 1
+	resizeHandle.Active = true
+	resizeHandle.Selectable = true
+	resizeHandle.ZIndex = 25
+	resizeHandle.Parent = main
+
+	-- Small lines in the corner
+	for i = 1, 3 do
+		local line = Instance.new("Frame")
+		line.Name = "Line" .. i
+		line.Size = UDim2.fromOffset(2, 2 + i * 3)
+		line.Position = UDim2.new(1, -4 - (i * 5), 1, -4)
+		line.AnchorPoint = Vector2.new(1, 1)
+		line.BackgroundColor3 = library.Theme.TextMuted
+		line.BorderSizePixel = 0
+		line.Rotation = 45
+		line.ZIndex = 26
+		line.Parent = resizeHandle
+	end
+
+	local resizing = false
+	local resizeStart = Vector2.new()
+	local sizeStart = UDim2.new()
+	local resizeInputType = nil :: Enum.UserInputType?
+
+	self._Maid:GiveTask(resizeHandle.InputBegan:Connect(function(input)
+		if self._Minimized then return end
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			resizing = true
+			resizeStart = input.Position
+			sizeStart = main.Size
+			resizeInputType = input.UserInputType
+		end
+	end))
+
+	self._Maid:GiveTask(UserInputService.InputChanged:Connect(function(input)
+		if not resizing or resizeInputType == nil then return end
+		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+			local delta = input.Position - resizeStart
+			local newX = math.clamp(sizeStart.X.Offset + delta.X, minWindowSize.X, maxWindowSize.X)
+			local newY = math.clamp(sizeStart.Y.Offset + delta.Y, minWindowSize.Y, maxWindowSize.Y)
+			main.Size = UDim2.fromOffset(newX, newY)
+		end
+	end))
+
+	self._Maid:GiveTask(UserInputService.InputEnded:Connect(function(input)
+		if resizeInputType ~= nil and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+			resizing = false
+			resizeInputType = nil
+		end
+	end))
+
+	-- Hover effect on resize handle
+	resizeHandle.MouseEnter:Connect(function()
+		for _, line in resizeHandle:GetChildren() do
+			Tween.Play(line, { BackgroundColor3 = library.Theme.Accent }, { Time = 0.12 })
+		end
+	end)
+	resizeHandle.MouseLeave:Connect(function()
+		for _, line in resizeHandle:GetChildren() do
+			Tween.Play(line, { BackgroundColor3 = library.Theme.TextMuted }, { Time = 0.12 })
+		end
+	end)
+
+	self._ResizeHandle = resizeHandle
+
+	-- ============================================
 	-- CONTENT AREA (now leaves space for infoBar)
 	-- ============================================
 	local contentArea = Helpers.CreateFrame({
@@ -613,10 +691,10 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		AnchorPoint = Vector2.new(0, 0.5),
 		Text = "Welcome, " .. localPlayer,
 		TextColor3 = library.Theme.Text,
-		TextSize = 12,   -- smaller
+		TextSize = 12,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Font = Theme.FontBold,
-		TextTruncate = Enum.TextTruncate.AtEnd,  -- handle long names
+		TextTruncate = Enum.TextTruncate.AtEnd,
 		Parent = footer,
 	})
 
@@ -633,7 +711,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	pages.Parent = contentArea
 
 	-- ============================================
-	-- INFO BAR (now placed at bottom of main, outside contentArea)
+	-- INFO BAR (bottom of main)
 	-- ============================================
 	local infoBar = Helpers.CreateFrame({
 		Name = "InfoBar",
@@ -650,7 +728,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	infoLayout.Name = "InfoLayout"
 	infoLayout.FillDirection = Enum.FillDirection.Horizontal
 	infoLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-	infoLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center  -- centered
+	infoLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 	infoLayout.Padding = UDim.new(0, 20)
 	infoLayout.Parent = infoBar
 
@@ -810,6 +888,15 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 			end
 		end
 
+		-- Update resize handle lines
+		if resizeHandle then
+			for _, line in resizeHandle:GetChildren() do
+				if line:IsA("Frame") and line.Name:match("^Line") then
+					line.BackgroundColor3 = library.Theme.TextMuted
+				end
+			end
+		end
+
 		for _, tab in self._Tabs do
 			if tab and tab.RefreshTheme then
 				tab:RefreshTheme()
@@ -873,6 +960,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	self.RefreshTheme = refreshWindowTheme
 	self._InfoBar = infoBar
 	self._InfoRefs = infoRefs
+	self._ResizeHandle = resizeHandle
 
 	-- ============================================
 	-- STARTUP COMPLETE
