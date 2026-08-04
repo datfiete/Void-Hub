@@ -1390,7 +1390,7 @@ function Window:Notify(options: any)
 		Title = options.Title or "Vaxorin",
 		Text = options.Content or options.Text or "",
 		Duration = options.Duration or 5,
-		Icon = "rbxassetid://6031097228"
+		Icon = Vaxorin_Logo,
 	})
 end
 
