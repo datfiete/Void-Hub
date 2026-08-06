@@ -1239,7 +1239,7 @@ function Window:_createOptionsTab()
 	discordSection:CreateButton({
 		Name = "📋 Copy Discord Invite",
 		Callback = function()
-			local invite = "https://discord.gg/D6AvbntAZf"
+			local invite = "https://discord.gg/9jZTsy7Wtb"
 			if setclipboard then setclipboard(invite) end
 
 			self:Notify({
