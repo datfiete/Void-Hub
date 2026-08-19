@@ -10,6 +10,10 @@ local GUI_NAME = "Vaxorin"
 local VERSION = "1.0"
 local Vaxorin_Logo = "rbxassetid://135320038058277"
 
+-- How often (seconds) the bottom info bar refreshes.
+-- Was previously recalculated every single Heartbeat frame (~60x/sec) for no reason.
+local INFO_BAR_REFRESH_INTERVAL = 1
+
 local Window = {}
 Window.__index = Window
 
@@ -33,6 +37,25 @@ export type WindowHandle = {
 	Destroy: (self: WindowHandle) -> (),
 }
 
+-- Safely resolve the executor name without ever throwing.
+local function getExecutorName(): string
+	local ok, result = pcall(function()
+		if syn and syn.getexecutorname then
+			return syn.getexecutorname()
+		elseif getexecutorname then
+			return getexecutorname()
+		elseif identifyexecutor then
+			local name = identifyexecutor()
+			return name
+		end
+		return "Unknown"
+	end)
+	if ok and typeof(result) == "string" and result ~= "" then
+		return result
+	end
+	return "Unknown"
+end
+
 function Window.new(library: any, options: WindowOptions?): WindowHandle
 	local data = (typeof(options) == "table") and options or {}
 	local self = setmetatable({
@@ -41,7 +64,6 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		_Tabs = {} :: { any },
 		_ActiveTab = nil :: any,
 		_StartupTime = os.clock(),
-		_PlayerCount = 0,
 	}, Window)
 
 	local Players = game:GetService("Players")
@@ -63,11 +85,12 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	screenGui.Name = "Vaxorin"
 	screenGui.ResetOnSpawn = false
 	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	screenGui.IgnoreGuiInset = false
 	screenGui.Parent = playerGui
 	self._Maid:Give(screenGui)
 
 	local windowName = data.Name or data.Title or GUI_NAME
-	local windowSubtitle = data.Subtitle or data.Description or "Welcome to the Vaxorin"
+	local windowSubtitle = data.Subtitle or data.Description or nil -- nil = don't render a subtitle at all
 	local windowSize = data.Size or data.WindowSize or Theme.WindowSize
 
 	if typeof(windowSize) == "UDim2" then
@@ -81,14 +104,14 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	local showSearch = data.ShowSearch ~= false
 	local showWindowControls = data.ShowWindowControls ~= false
 	local topBarHeight = Theme.TopBarHeight or 60
-	local infoBarHeight = 32   -- height of the bottom info bar
+	local infoBarHeight = 32 -- height of the bottom info bar
 
 	-- Resize limits
 	local minWindowSize = Vector2.new(420, 320)
 	local maxWindowSize = Vector2.new(1200, 900)
 
 	-- ============================================
-	-- LOADING SCREEN (unchanged)
+	-- LOADING SCREEN
 	-- ============================================
 	local loadingFrame = Helpers.CreateFrame({
 		Name = "Loading",
@@ -127,7 +150,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Name = "LoadingSubtitle",
 		Size = UDim2.new(1, -44, 0, 24),
 		Position = UDim2.fromOffset(20, 38),
-		Text = windowSubtitle,
+		Text = windowSubtitle or "Welcome to " .. windowName,
 		TextColor3 = library.Theme.TextMuted,
 		TextSize = 13,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -251,7 +274,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 
 	-- Logo
 	local logoSize = 36
-	local logoAsset = data.Logo or "rbxassetid://135320038058277"
+	local logoAsset = data.Logo or Vaxorin_Logo
 
 	local logoImage = Instance.new("ImageLabel")
 	logoImage.Name = "Logo"
@@ -265,20 +288,27 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	logoImage.Parent = topBar
 	Helpers.Corner(logoImage, 8)
 
-	-- Title and Subtitle container (horizontal layout)
+	-- Title and Subtitle container (horizontal layout, auto-sized via UIListLayout
+	-- instead of manual TextBounds math that could get stale after theme/font changes)
 	local titleContainer = Helpers.CreateFrame({
 		Name = "TitleContainer",
-		Size = UDim2.new(0, 300, 1, 0),
+		Size = UDim2.new(0, 0, 1, 0),
+		AutomaticSize = Enum.AutomaticSize.X,
 		Position = UDim2.new(0, 14 + logoSize + 10, 0, 0),
 		BackgroundTransparency = 1,
 		Parent = topBar,
 	})
 
+	local titleLayout = Instance.new("UIListLayout")
+	titleLayout.FillDirection = Enum.FillDirection.Horizontal
+	titleLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+	titleLayout.Padding = UDim.new(0, 10)
+	titleLayout.Parent = titleContainer
+
 	local title = Helpers.CreateLabel({
 		Name = "Title",
 		Size = UDim2.new(0, 0, 1, 0),
 		AutomaticSize = Enum.AutomaticSize.X,
-		Position = UDim2.new(0, 0, 0, 0),
 		Text = windowName,
 		Font = Theme.FontBold,
 		TextSize = 18,
@@ -287,34 +317,34 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Parent = titleContainer,
 	})
 	title.ZIndex = 21
+	title.LayoutOrder = 1
 
-	-- Subtitle placed to the right of title with some spacing
-	local subtitle = Helpers.CreateLabel({
-		Name = "Subtitle",
-		Size = UDim2.new(0, 0, 1, 0),
-		AutomaticSize = Enum.AutomaticSize.X,
-		Position = UDim2.new(0, title.TextBounds.X + 10, 0, 0),
-		Text = "• " .. windowSubtitle,
-		TextColor3 = library.Theme.TextMuted,
-		TextSize = 14,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		Parent = titleContainer,
-	})
-	subtitle.ZIndex = 21
+	-- Subtitle is now optional: only created (and only takes layout space) if provided.
+	local subtitle: TextLabel? = nil
+	if windowSubtitle and windowSubtitle ~= "" then
+		subtitle = Helpers.CreateLabel({
+			Name = "Subtitle",
+			Size = UDim2.new(0, 0, 1, 0),
+			AutomaticSize = Enum.AutomaticSize.X,
+			Text = "• " .. windowSubtitle,
+			TextColor3 = library.Theme.TextMuted,
+			TextSize = 14,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Parent = titleContainer,
+		})
+		subtitle.ZIndex = 21
+		subtitle.LayoutOrder = 2
+	end
 
-	-- Adjust title container width after labels are rendered
-	task.defer(function()
-		local totalWidth = title.TextBounds.X + 10 + subtitle.TextBounds.X + 20
-		titleContainer.Size = UDim2.new(0, math.max(totalWidth, 200), 1, 0)
-		subtitle.Position = UDim2.new(0, title.TextBounds.X + 10, 0, 0)
-	end)
+	-- ========== BADGES ==========
+	-- Reserve space dynamically for window controls so badges never collide with them.
+	local controlsReserved = showWindowControls and 90 or 16
 
-	-- ========== BADGES (improved layout) ==========
 	local badgeHolder = Helpers.CreateFrame({
 		Name = "Badges",
 		Size = UDim2.new(0, 0, 1, 0),
 		AutomaticSize = Enum.AutomaticSize.X,
-		Position = UDim2.new(1, -130, 0.5, 0),   -- moved left to avoid buttons
+		Position = UDim2.new(1, -controlsReserved, 0.5, 0),
 		AnchorPoint = Vector2.new(1, 0.5),
 		BackgroundTransparency = 1,
 		Parent = topBar,
@@ -349,7 +379,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Helpers.Stroke(pill, color, 1)
 		Helpers.Padding(pill, 12, 4)
 
-		local pillLabel = Helpers.CreateLabel({
+		Helpers.CreateLabel({
 			Name = "Label",
 			Size = UDim2.new(0, 0, 1, 0),
 			AutomaticSize = Enum.AutomaticSize.X,
@@ -382,12 +412,12 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Helpers.Corner(closeButton, 8)
 		Helpers.Stroke(closeButton, library.Theme.Border, 1)
 
-		closeButton.MouseEnter:Connect(function()
+		self._Maid:GiveTask(closeButton.MouseEnter:Connect(function()
 			Tween.Play(closeButton, { BackgroundTransparency = 0, TextColor3 = Color3.fromRGB(255, 50, 50) }, { Time = 0.15 })
-		end)
-		closeButton.MouseLeave:Connect(function()
+		end))
+		self._Maid:GiveTask(closeButton.MouseLeave:Connect(function()
 			Tween.Play(closeButton, { BackgroundTransparency = 0.25, TextColor3 = library.Theme.TextMuted }, { Time = 0.15 })
-		end)
+		end))
 
 		minimizeButton = Instance.new("TextButton")
 		minimizeButton.Name = "Minimize"
@@ -405,7 +435,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	end
 
 	-- ============================================
-	-- FLOATING BUTTON (unchanged)
+	-- FLOATING BUTTON
 	-- ============================================
 	local floatingButton = Instance.new("ImageButton")
 	floatingButton.Name = "FloatingToggle"
@@ -423,17 +453,19 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	floatingButton.Selectable = true
 	floatingButton.Parent = screenGui
 	Helpers.Corner(floatingButton, 25)
-	local floatingStroke = Helpers.Stroke(floatingButton, library.Theme.Accent, 1.5)
+	Helpers.Stroke(floatingButton, library.Theme.Accent, 1.5)
 
-	floatingButton.MouseEnter:Connect(function()
+	self._Maid:GiveTask(floatingButton.MouseEnter:Connect(function()
 		Tween.Play(floatingButton, { BackgroundTransparency = 0 }, { Time = 0.15 })
-	end)
-	floatingButton.MouseLeave:Connect(function()
+	end))
+	self._Maid:GiveTask(floatingButton.MouseLeave:Connect(function()
 		Tween.Play(floatingButton, { BackgroundTransparency = 0.1 }, { Time = 0.15 })
-	end)
-	floatingButton.MouseButton1Click:Connect(function()
-		self:SetVisible(true)
-	end)
+	end))
+
+	-- Drag-vs-click distinction: only treat it as a "toggle" click if the pointer
+	-- barely moved. Previously any drag would also fire SetVisible(true) on release.
+	local FLOAT_CLICK_THRESHOLD = 4
+	local floatMovedDistance = 0
 
 	self._FloatDragging = false
 	self._FloatDragStart = Vector2.new()
@@ -446,16 +478,22 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 			self._FloatDragStart = input.Position
 			self._FloatStart = floatingButton.Position
 			self._FloatDragInputType = input.UserInputType
+			floatMovedDistance = 0
 		end
 	end))
 
 	self._Maid:GiveTask(UserInputService.InputChanged:Connect(function(input)
-		if not self._FloatDragging or self._FloatDragInputType == nil then return end
+		if not self._FloatDragging or self._FloatDragInputType == nil then
+			return
+		end
 		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 			local delta = input.Position - self._FloatDragStart
+			floatMovedDistance = delta.Magnitude
 			floatingButton.Position = UDim2.new(
-				self._FloatStart.X.Scale, self._FloatStart.X.Offset + delta.X,
-				self._FloatStart.Y.Scale, self._FloatStart.Y.Offset + delta.Y
+				self._FloatStart.X.Scale,
+				self._FloatStart.X.Offset + delta.X,
+				self._FloatStart.Y.Scale,
+				self._FloatStart.Y.Offset + delta.Y
 			)
 		end
 	end))
@@ -464,6 +502,9 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		if self._FloatDragInputType ~= nil and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
 			self._FloatDragging = false
 			self._FloatDragInputType = nil
+			if floatMovedDistance <= FLOAT_CLICK_THRESHOLD then
+				self:SetVisible(true)
+			end
 		end
 	end))
 
@@ -471,35 +512,33 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	self._FloatingButton = floatingButton
 
 	-- ============================================
-	-- WINDOW DRAGGING (unchanged)
+	-- WINDOW DRAGGING
 	-- ============================================
 	local dragging = false
 	local dragStart = Vector2.new()
 	local windowStart = UDim2.new()
 	local dragInputType = nil :: Enum.UserInputType?
 
-	local function startDragging(input: InputObject)
+	self._Maid:GiveTask(topBar.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			dragging = true
 			dragStart = input.Position
 			windowStart = main.Position
 			dragInputType = input.UserInputType
 		end
-	end
-
-	self._Maid:GiveTask(topBar.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			startDragging(input)
-		end
 	end))
 
 	self._Maid:GiveTask(UserInputService.InputChanged:Connect(function(input)
-		if not dragging or dragInputType == nil then return end
+		if not dragging or dragInputType == nil then
+			return
+		end
 		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 			local delta = input.Position - dragStart
 			main.Position = UDim2.new(
-				windowStart.X.Scale, windowStart.X.Offset + delta.X,
-				windowStart.Y.Scale, windowStart.Y.Offset + delta.Y
+				windowStart.X.Scale,
+				windowStart.X.Offset + delta.X,
+				windowStart.Y.Scale,
+				windowStart.Y.Offset + delta.Y
 			)
 		end
 	end))
@@ -512,7 +551,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	end))
 
 	-- ============================================
-	-- RESIZE HANDLE (re‑added)
+	-- RESIZE HANDLE
 	-- ============================================
 	local resizeHandle = Instance.new("Frame")
 	resizeHandle.Name = "ResizeHandle"
@@ -525,7 +564,6 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	resizeHandle.ZIndex = 25
 	resizeHandle.Parent = main
 
-	-- Small lines in the corner
 	for i = 1, 3 do
 		local line = Instance.new("Frame")
 		line.Name = "Line" .. i
@@ -545,7 +583,9 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	local resizeInputType = nil :: Enum.UserInputType?
 
 	self._Maid:GiveTask(resizeHandle.InputBegan:Connect(function(input)
-		if self._Minimized then return end
+		if self._Minimized then
+			return
+		end
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			resizing = true
 			resizeStart = input.Position
@@ -555,12 +595,17 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	end))
 
 	self._Maid:GiveTask(UserInputService.InputChanged:Connect(function(input)
-		if not resizing or resizeInputType == nil then return end
+		if not resizing or resizeInputType == nil then
+			return
+		end
 		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 			local delta = input.Position - resizeStart
 			local newX = math.clamp(sizeStart.X.Offset + delta.X, minWindowSize.X, maxWindowSize.X)
 			local newY = math.clamp(sizeStart.Y.Offset + delta.Y, minWindowSize.Y, maxWindowSize.Y)
 			main.Size = UDim2.fromOffset(newX, newY)
+			-- Keep windowSize in sync so un-minimizing restores the resized dimensions
+			-- instead of snapping back to the original startup size.
+			windowSize = Vector2.new(newX, newY)
 		end
 	end))
 
@@ -571,22 +616,21 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		end
 	end))
 
-	-- Hover effect on resize handle
-	resizeHandle.MouseEnter:Connect(function()
+	self._Maid:GiveTask(resizeHandle.MouseEnter:Connect(function()
 		for _, line in resizeHandle:GetChildren() do
 			Tween.Play(line, { BackgroundColor3 = library.Theme.Accent }, { Time = 0.12 })
 		end
-	end)
-	resizeHandle.MouseLeave:Connect(function()
+	end))
+	self._Maid:GiveTask(resizeHandle.MouseLeave:Connect(function()
 		for _, line in resizeHandle:GetChildren() do
 			Tween.Play(line, { BackgroundColor3 = library.Theme.TextMuted }, { Time = 0.12 })
 		end
-	end)
+	end))
 
 	self._ResizeHandle = resizeHandle
 
 	-- ============================================
-	-- CONTENT AREA (now leaves space for infoBar)
+	-- CONTENT AREA
 	-- ============================================
 	local contentArea = Helpers.CreateFrame({
 		Name = "ContentArea",
@@ -651,7 +695,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	})
 	Helpers.ListLayout(tabList, Theme.Gap)
 
-	-- Footer (welcome text smaller, with truncation)
+	-- Footer
 	local footer = Helpers.CreateFrame({
 		Name = "Footer",
 		Size = UDim2.new(1, 0, 0, 44),
@@ -660,7 +704,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Parent = sidebar,
 	})
 
-	local footerDivider = Helpers.CreateFrame({
+	Helpers.CreateFrame({
 		Name = "Divider",
 		Size = UDim2.new(1, -20, 0, 1),
 		Position = UDim2.new(0, 10, 0, 0),
@@ -669,7 +713,6 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	})
 
 	local avatarImage
-	local footerUsername = data.Footer and data.Footer.Username or Players.LocalPlayer.DisplayName
 	local footerAvatar = data.Footer and data.Footer.Avatar
 
 	if footerAvatar and footerAvatar ~= "" then
@@ -684,12 +727,13 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Helpers.Corner(avatarImage, 15)
 	end
 
-	local footerLabel = Helpers.CreateLabel({
+	local footerDisplayName = (data.Footer and data.Footer.Username) or Players.LocalPlayer.DisplayName
+	Helpers.CreateLabel({
 		Name = "WelcomeLabel",
 		Size = UDim2.new(1, if avatarImage then -40 else 0, 1, 0),
 		Position = UDim2.new(0, if avatarImage then 40 else 0, 0.5, 0),
 		AnchorPoint = Vector2.new(0, 0.5),
-		Text = "Welcome, " .. localPlayer,
+		Text = "Welcome, " .. localPlayer .. (if footerDisplayName ~= localPlayer then " (" .. footerDisplayName .. ")" else ""),
 		TextColor3 = library.Theme.Text,
 		TextSize = 12,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -699,7 +743,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	})
 
 	-- ============================================
-	-- PAGES (unchanged)
+	-- PAGES
 	-- ============================================
 	local pages = Instance.new("Frame")
 	pages.Name = "Pages"
@@ -742,6 +786,11 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		container.BackgroundTransparency = 1
 		container.Parent = infoBar
 
+		local itemLayout = Instance.new("UIListLayout")
+		itemLayout.FillDirection = Enum.FillDirection.Horizontal
+		itemLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+		itemLayout.Parent = container
+
 		local label = Helpers.CreateLabel({
 			Name = "Label",
 			Size = UDim2.new(0, 0, 1, 0),
@@ -757,7 +806,6 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 			Name = "Value",
 			Size = UDim2.new(0, 0, 1, 0),
 			AutomaticSize = Enum.AutomaticSize.X,
-			Position = UDim2.new(0, label.TextBounds.X + 2, 0, 0),
 			Text = initialValue,
 			TextColor3 = library.Theme.Text,
 			TextSize = 11,
@@ -766,61 +814,43 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 			Parent = container,
 		})
 
-		container.Size = UDim2.new(0, label.TextBounds.X + value.TextBounds.X + 4, 1, 0)
 		return { Container = container, Label = label, Value = value }
 	end
 
-	local executorName = "Unknown"
-	if syn and syn.getexecutorname then
-		executorName = syn.getexecutorname()
-	elseif getexecutorname then
-		executorName = getexecutorname()
-	end
+	local executorName = getExecutorName()
 
-	local items = {
-		{ Label = "Executor: ", Value = executorName },
-		{ Label = "v", Value = VERSION },
-		{ Label = "Uptime: ", Value = "00:00:00" },
-		{ Label = "Players: ", Value = tostring(#Players:GetPlayers()) .. " / " .. tostring(Players.MaxPlayers) },
-		{ Label = "Time: ", Value = os.date("%I:%M %p") },
-	}
+	local uptimeRef = createInfoItem("Executor: ", executorName)
+	table.insert(infoRefs, uptimeRef)
+	table.insert(infoRefs, createInfoItem("v", VERSION))
+	local uptimeItem = createInfoItem("Uptime: ", "00:00:00")
+	table.insert(infoRefs, uptimeItem)
+	local playersItem = createInfoItem("Players: ", tostring(#Players:GetPlayers()) .. " / " .. tostring(Players.MaxPlayers))
+	table.insert(infoRefs, playersItem)
+	local timeItem = createInfoItem("Time: ", os.date("%I:%M %p"))
+	table.insert(infoRefs, timeItem)
 
-	for _, item in items do
-		local ref = createInfoItem(item.Label, item.Value)
-		table.insert(infoRefs, ref)
-	end
-
+	-- Only the dynamic items get updated on a timer; Executor/Version never change.
 	local function updateInfoBar()
 		local uptime = os.clock() - self._StartupTime
 		local hours = math.floor(uptime / 3600)
 		local minutes = math.floor((uptime % 3600) / 60)
 		local seconds = math.floor(uptime % 60)
-		local uptimeStr = string.format("%02d:%02d:%02d", hours, minutes, seconds)
+		uptimeItem.Value.Text = string.format("%02d:%02d:%02d", hours, minutes, seconds)
 
-		local playerCount = #Players:GetPlayers()
-		local maxPlayers = Players.MaxPlayers
-
-		local values = {
-			uptimeStr,
-			tostring(playerCount) .. " / " .. tostring(maxPlayers),
-			os.date("%I:%M %p"),
-		}
-
-		local index = 1
-		for i, ref in ipairs(infoRefs) do
-			if i > 2 then  -- skip Executor and Version
-				if ref.Value then
-					ref.Value.Text = values[index]
-					index = index + 1
-				end
-			end
-		end
+		playersItem.Value.Text = tostring(#Players:GetPlayers()) .. " / " .. tostring(Players.MaxPlayers)
+		timeItem.Value.Text = os.date("%I:%M %p")
 	end
 
-	local updateConnection = RunService.Heartbeat:Connect(function()
-		updateInfoBar()
-	end)
-	self._Maid:GiveTask(updateConnection)
+	-- Throttled updates instead of once-per-frame: massively cheaper, and a clock
+	-- doesn't need sub-second precision anyway.
+	local infoBarAccumulator = 0
+	self._Maid:GiveTask(RunService.Heartbeat:Connect(function(dt)
+		infoBarAccumulator += dt
+		if infoBarAccumulator >= INFO_BAR_REFRESH_INTERVAL then
+			infoBarAccumulator = 0
+			updateInfoBar()
+		end
+	end))
 
 	self._Maid:GiveTask(Players.PlayerAdded:Connect(updateInfoBar))
 	self._Maid:GiveTask(Players.PlayerRemoving:Connect(updateInfoBar))
@@ -866,18 +896,26 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		topBarMask.BackgroundColor3 = library.Theme.Secondary
 		sidebar.BackgroundColor3 = library.Theme.Secondary
 		title.TextColor3 = library.Theme.Text
-		if subtitle then subtitle.TextColor3 = library.Theme.TextMuted end
-		if minimizeButton then minimizeButton.TextColor3 = library.Theme.TextMuted end
-		if closeButton then closeButton.TextColor3 = library.Theme.TextMuted end
+		if subtitle then
+			subtitle.TextColor3 = library.Theme.TextMuted
+		end
+		if minimizeButton then
+			minimizeButton.TextColor3 = library.Theme.TextMuted
+		end
+		if closeButton then
+			closeButton.TextColor3 = library.Theme.TextMuted
+		end
 		mainStroke.Color = library.Theme.Border
 
-		-- Update info bar colors
 		for _, ref in infoRefs do
-			if ref.Label then ref.Label.TextColor3 = library.Theme.TextMuted end
-			if ref.Value then ref.Value.TextColor3 = library.Theme.Text end
+			if ref.Label then
+				ref.Label.TextColor3 = library.Theme.TextMuted
+			end
+			if ref.Value then
+				ref.Value.TextColor3 = library.Theme.Text
+			end
 		end
 
-		-- Update badge colors
 		for _, child in badgeHolder:GetChildren() do
 			if child:IsA("Frame") and child.Name:match("^Badge") then
 				local label = child:FindFirstChild("Label")
@@ -888,7 +926,6 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 			end
 		end
 
-		-- Update resize handle lines
 		if resizeHandle then
 			for _, line in resizeHandle:GetChildren() do
 				if line:IsA("Frame") and line.Name:match("^Line") then
@@ -904,29 +941,26 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		end
 	end
 
-	local themeConnection = library.Theme.Changed:Connect(function()
-		refreshWindowTheme()
-	end)
-	self._Maid:GiveTask(themeConnection)
+	self._Maid:GiveTask(library.Theme.Changed:Connect(refreshWindowTheme))
 
 	-- ============================================
-	-- MINIMIZE / CLOSE (unchanged)
+	-- MINIMIZE / CLOSE
 	-- ============================================
 	if minimizeButton then
-		minimizeButton.MouseButton1Click:Connect(function()
+		self._Maid:GiveTask(minimizeButton.MouseButton1Click:Connect(function()
 			self._Minimized = not self._Minimized
 			if self._Minimized then
 				Tween.Play(main, { Size = UDim2.fromOffset(windowSize.X, topBarHeight) }, { Time = 0.18 })
 			else
 				Tween.Play(main, { Size = UDim2.fromOffset(windowSize.X, windowSize.Y) }, { Time = 0.18 })
 			end
-		end)
+		end))
 	end
 
 	if closeButton then
-		closeButton.MouseButton1Click:Connect(function()
+		self._Maid:GiveTask(closeButton.MouseButton1Click:Connect(function()
 			self:SetVisible(false)
-		end)
+		end))
 	end
 
 	-- ============================================
@@ -934,7 +968,9 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	-- ============================================
 	self._ToggleKeybind = data.ToggleKey or Enum.KeyCode.RightControl
 	self._Maid:GiveTask(UserInputService.InputBegan:Connect(function(input, processed)
-		if processed then return end
+		if processed then
+			return
+		end
 		if self._ToggleKeybind ~= nil and self._ToggleKeybind ~= Enum.KeyCode.Unknown and input.KeyCode == self._ToggleKeybind then
 			self:Toggle()
 		end
@@ -951,7 +987,6 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	self.Pages = pages
 	self.TitleLabel = title
 	self.SearchBox = searchBox
-	self._ThemeConnection = themeConnection
 	self._LoadingFrame = loadingFrame
 	self._Visible = true
 	self._Minimized = false
@@ -961,12 +996,17 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	self._InfoBar = infoBar
 	self._InfoRefs = infoRefs
 	self._ResizeHandle = resizeHandle
+	self._WindowSize = function()
+		return windowSize
+	end
 
 	-- ============================================
 	-- STARTUP COMPLETE
 	-- ============================================
-	self._Maid:Give(task.delay(0.8, function()
-		if not self.Gui then return end
+	self._Maid:GiveTask(task.delay(0.8, function()
+		if not self.Gui then
+			return
+		end
 
 		if loadingFrame and loadingFrame.Parent then
 			loadingStatus.Text = "Ready"
@@ -994,12 +1034,14 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 end
 
 -- ============================================
--- METHODS (unchanged)
+-- METHODS
 -- ============================================
 
 function Window:SetBackgroundImage(value: string)
 	local bg = self._BackgroundImage
-	if not bg then return end
+	if not bg then
+		return
+	end
 
 	local images = {
 		["Solo Leveling"] = "rbxassetid://139001765478120",
@@ -1014,12 +1056,14 @@ end
 function Window:SetBackgroundOverlayTransparency(value: number)
 	local overlay = self.Main and self.Main:FindFirstChild("BackgroundOverlay")
 	if overlay then
-		overlay.BackgroundTransparency = value
+		overlay.BackgroundTransparency = math.clamp(value, 0, 1)
 	end
 end
 
 function Window:_selectTab(tab: any)
-	if self._ActiveTab == tab then return end
+	if self._ActiveTab == tab then
+		return
+	end
 
 	local previousTab = self._ActiveTab
 
@@ -1035,8 +1079,12 @@ function Window:_selectTab(tab: any)
 	if previousTab then
 		local prevIndex, newIndex
 		for i, t in self._Tabs do
-			if t == previousTab then prevIndex = i end
-			if t == tab then newIndex = i end
+			if t == previousTab then
+				prevIndex = i
+			end
+			if t == tab then
+				newIndex = i
+			end
 		end
 		if prevIndex and newIndex and newIndex < prevIndex then
 			direction = -1
@@ -1097,7 +1145,7 @@ function Window:_createOptionsTab()
 
 	visualSection:CreateDropdown({
 		Name = "Theme Preset",
-		Options = {"Dark", "Light", "Cyber", "Meng"},
+		Options = { "Dark", "Light", "Cyber", "Meng" },
 		CurrentOption = self.Library.Theme.Style,
 		Flag = "Vaxorin.Theme.Style",
 		Callback = function(value)
@@ -1126,7 +1174,9 @@ function Window:_createOptionsTab()
 	end
 
 	self._Maid:GiveTask(self.Library.Theme.Changed:Connect(function(key)
-		if key ~= "Style" then return end
+		if key ~= "Style" then
+			return
+		end
 		for propName, picker in themeColorPickers do
 			if picker and picker.Set then
 				picker:Set(self.Library.Theme[propName])
@@ -1138,7 +1188,9 @@ function Window:_createOptionsTab()
 		Name = "Custom Background",
 		PlaceholderText = "rbxassetid://123456789",
 		Callback = function(value)
-			if value == "" then return end
+			if value == "" then
+				return
+			end
 			if not value:match("^rbxassetid://") then
 				value = "rbxassetid://" .. value
 			end
@@ -1150,7 +1202,7 @@ function Window:_createOptionsTab()
 
 	visualSection:CreateDropdown({
 		Name = "Background Presets",
-		Options = {"Solo Leveling", "Gojo", "Sukuna", "Cid Kagenou", "None"},
+		Options = { "Solo Leveling", "Gojo", "Sukuna", "Cid Kagenou", "None" },
 		Callback = function(value: string)
 			self:SetBackgroundImage(value)
 		end,
@@ -1195,11 +1247,13 @@ function Window:_createOptionsTab()
 	configSection:CreateButton({
 		Name = "💾 Save Configuration",
 		Callback = function()
-			self.Library:SaveConfiguration()
+			local ok, err = pcall(function()
+				self.Library:SaveConfiguration()
+			end)
 			self:Notify({
-				Title = "Saved",
-				Content = "Configuration saved successfully!",
-				Type = "Success",
+				Title = ok and "Saved" or "Save Failed",
+				Content = ok and "Configuration saved successfully!" or tostring(err),
+				Type = ok and "Success" or "Error",
 			})
 		end,
 	})
@@ -1207,11 +1261,13 @@ function Window:_createOptionsTab()
 	configSection:CreateButton({
 		Name = "📂 Load Configuration",
 		Callback = function()
-			self.Library:LoadConfiguration()
+			local ok, err = pcall(function()
+				self.Library:LoadConfiguration()
+			end)
 			self:Notify({
-				Title = "Loaded",
-				Content = "Configuration loaded successfully!",
-				Type = "Success",
+				Title = ok and "Loaded" or "Load Failed",
+				Content = ok and "Configuration loaded successfully!" or tostring(err),
+				Type = ok and "Success" or "Error",
 			})
 		end,
 	})
@@ -1240,7 +1296,9 @@ function Window:_createOptionsTab()
 		Name = "📋 Copy Discord Invite",
 		Callback = function()
 			local invite = "https://discord.gg/9jZTsy7Wtb"
-			if setclipboard then setclipboard(invite) end
+			if setclipboard then
+				setclipboard(invite)
+			end
 
 			self:Notify({
 				Title = "Discord",
@@ -1267,55 +1325,73 @@ end
 
 function Window:CreateSection(nameOrData: any)
 	local tab = self:_getActiveTab()
-	if not tab then return nil end
+	if not tab then
+		return nil
+	end
 	return tab:CreateSection(nameOrData)
 end
 
 function Window:CreateDropdown(data: any)
 	local tab = self:_getActiveTab()
-	if not tab then return nil end
+	if not tab then
+		return nil
+	end
 	return tab:CreateDropdown(data)
 end
 
 function Window:CreateToggle(data: any)
 	local tab = self:_getActiveTab()
-	if not tab then return nil end
+	if not tab then
+		return nil
+	end
 	return tab:CreateToggle(data)
 end
 
 function Window:CreateButton(data: any)
 	local tab = self:_getActiveTab()
-	if not tab then return nil end
+	if not tab then
+		return nil
+	end
 	return tab:CreateButton(data)
 end
 
 function Window:CreateSlider(data: any)
 	local tab = self:_getActiveTab()
-	if not tab then return nil end
+	if not tab then
+		return nil
+	end
 	return tab:CreateSlider(data)
 end
 
 function Window:CreateInput(data: any)
 	local tab = self:_getActiveTab()
-	if not tab then return nil end
+	if not tab then
+		return nil
+	end
 	return tab:CreateInput(data)
 end
 
 function Window:CreateKeybind(data: any)
 	local tab = self:_getActiveTab()
-	if not tab then return nil end
+	if not tab then
+		return nil
+	end
 	return tab:CreateKeybind(data)
 end
 
 function Window:CreateColorPicker(data: any)
 	local tab = self:_getActiveTab()
-	if not tab then return nil end
+	if not tab then
+		return nil
+	end
 	return tab:CreateColorPicker(data)
 end
 
 function Window:CreateParagraph(data: any)
 	local tab = self:_getActiveTab()
-	if not tab then return nil end
+	if not tab then
+		return nil
+	end
 	return tab:CreateParagraph(data)
 end
 
@@ -1410,3 +1486,4 @@ end
 
 print("🌌 Vaxorin loaded successfully!")
 return Window
+						
