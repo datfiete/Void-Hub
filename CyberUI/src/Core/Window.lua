@@ -6,13 +6,27 @@ local Maid = require(script.Parent.Parent.Utils.Maid)
 local Helpers = require(script.Parent.Parent.Utils.Helpers)
 local Tween = require(script.Parent.Parent.Utils.Tween)
 
+local TweenService = game:GetService("TweenService")
+local Lighting = game:GetService("Lighting")
+local SoundService = game:GetService("SoundService")
+local Stats = game:GetService("Stats")
+
 local GUI_NAME = "Vaxorin"
 local VERSION = "1.0"
 local Vaxorin_Logo = "rbxassetid://135320038058277"
 
--- How often (seconds) the bottom info bar refreshes.
+-- Soft 9-slice drop shadow, used behind the main window for real depth instead
+-- of a flat card floating on nothing.
+local SHADOW_IMAGE = "rbxassetid://6014261993"
+local SHADOW_SLICE_CENTER = Rect.new(49, 49, 450, 450)
+
+-- Short, unobtrusive UI click. Toggleable via Options -> Sound Effects.
+local CLICK_SOUND_ID = "rbxassetid://876939830"
+
+-- How often (seconds) the bottom info bar / watermark refreshes.
 -- Was previously recalculated every single Heartbeat frame (~60x/sec) for no reason.
 local INFO_BAR_REFRESH_INTERVAL = 1
+local WATERMARK_REFRESH_INTERVAL = 0.5
 
 local Window = {}
 Window.__index = Window
@@ -73,12 +87,54 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
 	local sharedState = (getgenv and getgenv()) or _G
 
+	-- ============================================
+	-- CLICK SOUND
+	-- ============================================
+	self._SoundEnabled = true
+	local clickSound = Instance.new("Sound")
+	clickSound.Name = "VaxorinClick"
+	clickSound.SoundId = CLICK_SOUND_ID
+	clickSound.Volume = 0.35
+	clickSound.Parent = SoundService
+	self._Maid:Give(clickSound)
+
+	local function playClick()
+		if self._SoundEnabled then
+			clickSound:Play()
+		end
+	end
+	self._PlayClick = playClick
+
 	-- Clean up old GUI
 	for _, child in playerGui:GetChildren() do
 		if child:IsA("ScreenGui") and child.Name == "Vaxorin" then
 			child:Destroy()
 		end
 	end
+	local oldBlur = Lighting:FindFirstChild("VaxorinBlur")
+	if oldBlur then
+		oldBlur:Destroy()
+	end
+
+	-- ============================================
+	-- BACKGROUND BLUR ("acrylic" look behind the window)
+	-- Off by default until the window is actually visible/enabled by the user,
+	-- and always cleaned up on Destroy() so it never lingers in Lighting.
+	-- ============================================
+	self._BlurEnabled = false
+	local blurEffect = Instance.new("BlurEffect")
+	blurEffect.Name = "VaxorinBlur"
+	blurEffect.Size = 0
+	blurEffect.Enabled = true
+	blurEffect.Parent = Lighting
+	self._Maid:Give(blurEffect)
+	self._BlurEffect = blurEffect
+
+	local function applyBlurTarget()
+		local targetSize = (self._BlurEnabled and self._Visible and not self._Minimized) and 14 or 0
+		Tween.Play(blurEffect, { Size = targetSize }, { Time = 0.25 })
+	end
+	self._ApplyBlurTarget = applyBlurTarget
 
 	-- Create main ScreenGui
 	local screenGui = Instance.new("ScreenGui")
@@ -218,8 +274,60 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Parent = screenGui,
 	})
 	Helpers.Corner(main, Theme.CornerRadius)
+	local mainCorner = main:FindFirstChildOfClass("UICorner")
 	local mainStroke = Helpers.Stroke(main, library.Theme.Border, 1)
 	main.ClipsDescendants = true
+
+	-- ============================================
+	-- DROP SHADOW
+	-- Parented as a sibling (not a child) of `main`, since `main` clips
+	-- descendants and would cut the shadow off. Position/size stay in sync
+	-- with `main` through cheap event-driven bindings, not a per-frame loop.
+	-- ============================================
+	local shadow = Instance.new("ImageLabel")
+	shadow.Name = "MainShadow"
+	shadow.BackgroundTransparency = 1
+	shadow.Image = SHADOW_IMAGE
+	shadow.ImageColor3 = Color3.new(0, 0, 0)
+	shadow.ImageTransparency = 0.45
+	shadow.ScaleType = Enum.ScaleType.Slice
+	shadow.SliceCenter = SHADOW_SLICE_CENTER
+	shadow.ZIndex = 0
+	shadow.Parent = screenGui
+
+	local function syncShadow()
+		shadow.AnchorPoint = main.AnchorPoint
+		shadow.Position = main.Position
+		shadow.Size = UDim2.new(main.Size.X.Scale, main.Size.X.Offset + 46, main.Size.Y.Scale, main.Size.Y.Offset + 46)
+		shadow.Visible = main.Visible
+	end
+	syncShadow()
+	self._Maid:GiveTask(main:GetPropertyChangedSignal("Position"):Connect(syncShadow))
+	self._Maid:GiveTask(main:GetPropertyChangedSignal("Size"):Connect(syncShadow))
+	self._Maid:GiveTask(main:GetPropertyChangedSignal("Visible"):Connect(syncShadow))
+	self._Maid:Give(shadow)
+
+	-- ============================================
+	-- BREATHING ACCENT GLOW
+	-- A slow, subtle pulsing outline in the accent color. This is the kind of
+	-- small "alive" detail that reads as hand-crafted rather than templated.
+	-- ============================================
+	local glowStroke = Instance.new("UIStroke")
+	glowStroke.Name = "AccentGlow"
+	glowStroke.Color = library.Theme.Accent
+	glowStroke.Thickness = 1.25
+	glowStroke.Transparency = 0.55
+	glowStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	glowStroke.Parent = main
+
+	local glowTween = TweenService:Create(
+		glowStroke,
+		TweenInfo.new(2.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+		{ Transparency = 0.1 }
+	)
+	glowTween:Play()
+	self._Maid:GiveTask(glowTween)
+	self._Maid:GiveTask(glowStroke)
 
 	-- Background Image
 	local backgroundImage = Instance.new("ImageLabel")
@@ -262,6 +370,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	})
 	topBar.ZIndex = 20
 	Helpers.Corner(topBar, Theme.CornerRadius)
+	local topBarCorner = topBar:FindFirstChildOfClass("UICorner")
 
 	local topBarMask = Helpers.CreateFrame({
 		Name = "TopBarMask",
@@ -271,6 +380,23 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Parent = topBar,
 	})
 	topBarMask.ZIndex = 19
+
+	-- Subtle diagonal glass sheen instead of a flat solid bar. Two near-identical
+	-- colors with a gradient transparency read as "glass panel" without needing
+	-- any external image.
+	local topBarSheen = Instance.new("UIGradient")
+	topBarSheen.Name = "Sheen"
+	topBarSheen.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
+		ColorSequenceKeypoint.new(1, Color3.new(1, 1, 1)),
+	})
+	topBarSheen.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.94),
+		NumberSequenceKeypoint.new(0.5, 1),
+		NumberSequenceKeypoint.new(1, 0.97),
+	})
+	topBarSheen.Rotation = 90
+	topBarSheen.Parent = topBar
 
 	-- Logo
 	local logoSize = 36
@@ -397,41 +523,58 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	if showWindowControls then
 		closeButton = Instance.new("TextButton")
 		closeButton.Name = "Close"
-		closeButton.Size = UDim2.fromOffset(32, 32)
-		closeButton.Position = UDim2.new(1, -12, 0.5, 0)
+		closeButton.Size = UDim2.fromOffset(30, 30)
+		closeButton.Position = UDim2.new(1, -13, 0.5, 0)
 		closeButton.AnchorPoint = Vector2.new(1, 0.5)
 		closeButton.BackgroundColor3 = library.Theme.Background
-		closeButton.BackgroundTransparency = 0.25
-		closeButton.Text = "X"
+		closeButton.BackgroundTransparency = 0.3
+		closeButton.Text = "✕"
 		closeButton.Font = Theme.FontBold
-		closeButton.TextSize = 16
+		closeButton.TextSize = 14
 		closeButton.TextColor3 = library.Theme.TextMuted
 		closeButton.AutoButtonColor = false
 		closeButton.ZIndex = 21
 		closeButton.Parent = topBar
-		Helpers.Corner(closeButton, 8)
+		Helpers.Corner(closeButton, 15) -- fully round pill instead of a square X box
 		Helpers.Stroke(closeButton, library.Theme.Border, 1)
 
 		self._Maid:GiveTask(closeButton.MouseEnter:Connect(function()
-			Tween.Play(closeButton, { BackgroundTransparency = 0, TextColor3 = Color3.fromRGB(255, 50, 50) }, { Time = 0.15 })
+			Tween.Play(closeButton, {
+				BackgroundTransparency = 0,
+				BackgroundColor3 = Color3.fromRGB(255, 60, 60),
+				TextColor3 = Color3.new(1, 1, 1),
+			}, { Time = 0.15 })
 		end))
 		self._Maid:GiveTask(closeButton.MouseLeave:Connect(function()
-			Tween.Play(closeButton, { BackgroundTransparency = 0.25, TextColor3 = library.Theme.TextMuted }, { Time = 0.15 })
+			Tween.Play(closeButton, {
+				BackgroundTransparency = 0.3,
+				BackgroundColor3 = library.Theme.Background,
+				TextColor3 = library.Theme.TextMuted,
+			}, { Time = 0.15 })
 		end))
 
 		minimizeButton = Instance.new("TextButton")
 		minimizeButton.Name = "Minimize"
-		minimizeButton.Size = UDim2.fromOffset(28, 28)
-		minimizeButton.Position = UDim2.new(1, -50, 0.5, 0)
+		minimizeButton.Size = UDim2.fromOffset(30, 30)
+		minimizeButton.Position = UDim2.new(1, -49, 0.5, 0)
 		minimizeButton.AnchorPoint = Vector2.new(1, 0.5)
+		minimizeButton.BackgroundColor3 = library.Theme.Background
 		minimizeButton.BackgroundTransparency = 1
 		minimizeButton.Text = "—"
 		minimizeButton.Font = Theme.FontBold
-		minimizeButton.TextSize = 18
+		minimizeButton.TextSize = 16
 		minimizeButton.TextColor3 = library.Theme.TextMuted
 		minimizeButton.AutoButtonColor = false
 		minimizeButton.ZIndex = 21
 		minimizeButton.Parent = topBar
+		Helpers.Corner(minimizeButton, 15)
+
+		self._Maid:GiveTask(minimizeButton.MouseEnter:Connect(function()
+			Tween.Play(minimizeButton, { BackgroundTransparency = 0, TextColor3 = library.Theme.Accent }, { Time = 0.15 })
+		end))
+		self._Maid:GiveTask(minimizeButton.MouseLeave:Connect(function()
+			Tween.Play(minimizeButton, { BackgroundTransparency = 1, TextColor3 = library.Theme.TextMuted }, { Time = 0.15 })
+		end))
 	end
 
 	-- ============================================
@@ -503,6 +646,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 			self._FloatDragging = false
 			self._FloatDragInputType = nil
 			if floatMovedDistance <= FLOAT_CLICK_THRESHOLD then
+				playClick()
 				self:SetVisible(true)
 			end
 		end
@@ -510,6 +654,130 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 
 	self._Maid:Give(floatingButton)
 	self._FloatingButton = floatingButton
+
+	-- ============================================
+	-- WATERMARK (compact draggable FPS / Ping / Uptime pill)
+	-- Off by default, toggled from Options -> General.
+	-- ============================================
+	self._WatermarkEnabled = false
+
+	local watermark = Helpers.CreateFrame({
+		Name = "Watermark",
+		Size = UDim2.new(0, 0, 0, 26),
+		AutomaticSize = Enum.AutomaticSize.X,
+		Position = UDim2.new(0, 16, 0, 16),
+		BackgroundColor3 = library.Theme.Secondary,
+		BackgroundTransparency = 0.1,
+		Visible = false,
+		Parent = screenGui,
+	})
+	watermark.ZIndex = 40
+	Helpers.Corner(watermark, 8)
+	local watermarkStroke = Helpers.Stroke(watermark, library.Theme.Border, 1)
+	Helpers.Padding(watermark, 10, 0)
+
+	local watermarkLayout = Instance.new("UIListLayout")
+	watermarkLayout.FillDirection = Enum.FillDirection.Horizontal
+	watermarkLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+	watermarkLayout.Padding = UDim.new(0, 10)
+	watermarkLayout.Parent = watermark
+
+	local function watermarkStat(labelText: string)
+		local lbl = Helpers.CreateLabel({
+			Name = labelText:gsub("[^%w]", "") .. "Stat",
+			Size = UDim2.new(0, 0, 1, 0),
+			AutomaticSize = Enum.AutomaticSize.X,
+			Text = labelText,
+			Font = Theme.FontBold,
+			TextSize = 11,
+			TextColor3 = library.Theme.Text,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Parent = watermark,
+		})
+		return lbl
+	end
+
+	local watermarkTitle = watermarkStat(windowName)
+	watermarkTitle.TextColor3 = library.Theme.Accent
+	local watermarkFps = watermarkStat("60 FPS")
+	local watermarkPing = watermarkStat("0 ms")
+	local watermarkUptime = watermarkStat("00:00:00")
+
+	-- Simple drag support, matching the floating button's behavior.
+	local wmDragging = false
+	local wmDragStart = Vector2.new()
+	local wmStart = UDim2.new()
+	local wmDragInputType = nil :: Enum.UserInputType?
+
+	self._Maid:GiveTask(watermark.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			wmDragging = true
+			wmDragStart = input.Position
+			wmStart = watermark.Position
+			wmDragInputType = input.UserInputType
+		end
+	end))
+	self._Maid:GiveTask(UserInputService.InputChanged:Connect(function(input)
+		if not wmDragging or wmDragInputType == nil then
+			return
+		end
+		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+			local delta = input.Position - wmDragStart
+			watermark.Position = UDim2.new(
+				wmStart.X.Scale, wmStart.X.Offset + delta.X,
+				wmStart.Y.Scale, wmStart.Y.Offset + delta.Y
+			)
+		end
+	end))
+	self._Maid:GiveTask(UserInputService.InputEnded:Connect(function(input)
+		if wmDragInputType ~= nil and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+			wmDragging = false
+			wmDragInputType = nil
+		end
+	end))
+
+	local wmFrameCount = 0
+	local wmFrameAccumulator = 0
+	local wmRefreshAccumulator = 0
+
+	self._Maid:GiveTask(RunService.Heartbeat:Connect(function(dt)
+		if not self._WatermarkEnabled then
+			return
+		end
+		wmFrameCount += 1
+		wmFrameAccumulator += dt
+		wmRefreshAccumulator += dt
+
+		if wmRefreshAccumulator >= WATERMARK_REFRESH_INTERVAL then
+			local fps = wmFrameAccumulator > 0 and math.round(wmFrameCount / wmFrameAccumulator) or 0
+			wmFrameCount = 0
+			wmFrameAccumulator = 0
+			wmRefreshAccumulator = 0
+
+			watermarkFps.Text = tostring(fps) .. " FPS"
+
+			local ok, pingMs = pcall(function()
+				local network = Stats.Network
+				local ping = network:FindFirstChild("ServerStatsItem") and network.ServerStatsItem:FindFirstChild("Data Ping")
+				return ping and math.round(ping:GetValue()) or 0
+			end)
+			watermarkPing.Text = (ok and pingMs or 0) .. " ms"
+
+			local uptime = os.clock() - self._StartupTime
+			local hours = math.floor(uptime / 3600)
+			local minutes = math.floor((uptime % 3600) / 60)
+			local seconds = math.floor(uptime % 60)
+			watermarkUptime.Text = string.format("%02d:%02d:%02d", hours, minutes, seconds)
+		end
+	end))
+
+	self._Maid:Give(watermark)
+	self._Watermark = watermark
+
+	function self:SetWatermarkEnabled(enabled: boolean)
+		self._WatermarkEnabled = enabled
+		watermark.Visible = enabled
+	end
 
 	-- ============================================
 	-- WINDOW DRAGGING
@@ -649,6 +917,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Parent = contentArea,
 	})
 	Helpers.Corner(sidebar, Theme.CornerRadius)
+	local sidebarCorner = sidebar:FindFirstChildOfClass("UICorner")
 	sidebar.ClipsDescendants = true
 	Helpers.Padding(sidebar, Theme.Padding)
 
@@ -766,6 +1035,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Parent = main,
 	})
 	Helpers.Corner(infoBar, Theme.CornerRadius, { BottomLeft = true, BottomRight = true })
+	local infoBarCorner = infoBar:FindFirstChildOfClass("UICorner")
 	Helpers.Stroke(infoBar, library.Theme.Border, 0.5)
 
 	local infoLayout = Instance.new("UIListLayout")
@@ -906,6 +1176,13 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 			closeButton.TextColor3 = library.Theme.TextMuted
 		end
 		mainStroke.Color = library.Theme.Border
+		glowStroke.Color = library.Theme.Accent
+		watermarkStroke.Color = library.Theme.Border
+		watermark.BackgroundColor3 = library.Theme.Secondary
+		watermarkTitle.TextColor3 = library.Theme.Accent
+		watermarkFps.TextColor3 = library.Theme.Text
+		watermarkPing.TextColor3 = library.Theme.Text
+		watermarkUptime.TextColor3 = library.Theme.Text
 
 		for _, ref in infoRefs do
 			if ref.Label then
@@ -948,17 +1225,22 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	-- ============================================
 	if minimizeButton then
 		self._Maid:GiveTask(minimizeButton.MouseButton1Click:Connect(function()
+			playClick()
 			self._Minimized = not self._Minimized
 			if self._Minimized then
 				Tween.Play(main, { Size = UDim2.fromOffset(windowSize.X, topBarHeight) }, { Time = 0.18 })
 			else
 				Tween.Play(main, { Size = UDim2.fromOffset(windowSize.X, windowSize.Y) }, { Time = 0.18 })
 			end
+			if self._ApplyBlurTarget then
+				self._ApplyBlurTarget()
+			end
 		end))
 	end
 
 	if closeButton then
 		self._Maid:GiveTask(closeButton.MouseButton1Click:Connect(function()
+			playClick()
 			self:SetVisible(false)
 		end))
 	end
@@ -998,6 +1280,16 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	self._ResizeHandle = resizeHandle
 	self._WindowSize = function()
 		return windowSize
+	end
+	self._CornerInstances = { mainCorner, topBarCorner, sidebarCorner, infoBarCorner }
+
+	function self:SetCornerRadius(radius: number)
+		radius = math.clamp(radius, 0, 24)
+		for _, corner in self._CornerInstances do
+			if corner then
+				corner.CornerRadius = UDim.new(0, radius)
+			end
+		end
 	end
 
 	-- ============================================
@@ -1220,6 +1512,54 @@ function Window:_createOptionsTab()
 		Flag = "Vaxorin.Background.OverlayTransparency",
 	})
 
+	visualSection:CreateSlider({
+		Name = "Corner Roundness",
+		Min = 0,
+		Max = 20,
+		CurrentValue = Theme.CornerRadius,
+		Rounding = 0,
+		Callback = function(value: number)
+			self:SetCornerRadius(value)
+		end,
+		Flag = "Vaxorin.Visual.CornerRadius",
+	})
+
+	visualSection:CreateToggle({
+		Name = "Background Blur",
+		CurrentValue = false,
+		Flag = "Vaxorin.Visual.Blur",
+		Callback = function(value: boolean)
+			self._BlurEnabled = value
+			if self._ApplyBlurTarget then
+				self._ApplyBlurTarget()
+			end
+		end,
+	})
+
+	local generalSection = optionsTab:CreateSection("🧩 General")
+	generalSection:CreateParagraph({
+		Title = "Quality of life",
+		Content = "Small extras that don't change how the UI looks, just how it feels.",
+	})
+
+	generalSection:CreateToggle({
+		Name = "Sound Effects",
+		CurrentValue = true,
+		Flag = "Vaxorin.General.Sound",
+		Callback = function(value: boolean)
+			self._SoundEnabled = value
+		end,
+	})
+
+	generalSection:CreateToggle({
+		Name = "Show Watermark",
+		CurrentValue = false,
+		Flag = "Vaxorin.General.Watermark",
+		Callback = function(value: boolean)
+			self:SetWatermarkEnabled(value)
+		end,
+	})
+
 	local configSection = optionsTab:CreateSection("⚙️ Configuration")
 	configSection:CreateParagraph({
 		Title = "Save & Restore",
@@ -1404,6 +1744,10 @@ function Window:SetVisible(visible: boolean)
 		self.Gui.Enabled = true
 	end
 
+	if self._ApplyBlurTarget then
+		self._ApplyBlurTarget()
+	end
+
 	if visible then
 		if self.Main then
 			self.Main.Visible = self._StartupComplete
@@ -1486,4 +1830,3 @@ end
 
 print("🌌 Vaxorin loaded successfully!")
 return Window
-						
