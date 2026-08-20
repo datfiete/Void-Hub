@@ -137,7 +137,7 @@ end
 
 createBootstrapLoader()
 
-local REPO = "https://raw.githubusercontent.com/datfiete/Void-Hub/refs/heads/main/CyberUI/src"
+local REPO = "https://github.com/datfiete/Void-Hub/tree/main/CyberUI%20-%20Kopie/src"
 
 local MODULE_PATHS = {
 	"Utils/Maid",
