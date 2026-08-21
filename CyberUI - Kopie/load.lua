@@ -1,6 +1,6 @@
 -- CyberUI remote loader
 -- Usage:
--- local CyberUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/fietewoozle-dot/MyHub/main/CyberUI/load.lua"))()
+-- local CyberUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/datfiete/Void-Hub/main/CyberUI%20-%20Kopie/load.lua"))()
 
 local sharedState = (getgenv and getgenv()) or _G
 local Players = game:GetService("Players")
@@ -42,6 +42,10 @@ local function createBootstrapLoader()
 	gui.Name = "CyberUI_BootstrapLoader"
 	gui.ResetOnSpawn = false
 	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	gui.DisplayOrder = 2147483647
+	pcall(function()
+		gui.ScreenInsets = Enum.ScreenInsets.None
+	end)
 	gui.Parent = playerGui
 
 	local card = Instance.new("Frame")
@@ -137,7 +141,7 @@ end
 
 createBootstrapLoader()
 
-local REPO = "https://github.com/datfiete/Void-Hub/tree/main/CyberUI%20-%20Kopie/src"
+local REPO = "https://raw.githubusercontent.com/datfiete/Void-Hub/refs/heads/main/CyberUI%20-%20Kopie/src"
 
 local MODULE_PATHS = {
 	"Utils/Maid",
@@ -249,9 +253,9 @@ local function requireModule(path: string): any
 		error(`CyberUI module not found: {path}`, 2)
 	end
 
-	local chunk = loadstring(source, "CyberUI/" .. path)
+	local chunk, compileError = loadstring(source, "CyberUI/" .. path)
 	if not chunk then
-		error(`CyberUI failed to compile: {path}`, 2)
+		error(`CyberUI failed to compile: {path}\n{tostring(compileError)}`, 2)
 	end
 
 	local moduleScript = getScriptMock(path)

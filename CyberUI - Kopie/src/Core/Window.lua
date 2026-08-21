@@ -43,6 +43,8 @@ export type WindowOptions = {
 	ShowSearch: boolean?,
 	ShowWindowControls: boolean?,
 	ToggleKey: Enum.KeyCode?,
+	TopMost: boolean?,
+	HideCoreUI: boolean?,
 }
 
 export type WindowHandle = {
@@ -87,6 +89,28 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
 	local sharedState = (getgenv and getgenv()) or _G
 
+	-- Prefer the executor's hidden/CoreGui container when available. This gets
+	-- CyberUI out of the normal PlayerGui layer and above most game UI.
+	-- It still cannot guarantee drawing over Roblox's own pause/CoreGui menus.
+	local function getTopGuiParent(): Instance
+		local ok, hidden = pcall(function()
+			if gethui then
+				return gethui()
+			end
+			if get_hidden_gui then
+				return get_hidden_gui()
+			end
+			return nil
+		end)
+		if ok and typeof(hidden) == "Instance" then
+			return hidden
+		end
+		return playerGui
+	end
+
+	local topGuiParent = getTopGuiParent()
+	self._TopGuiParent = topGuiParent
+
 	-- ============================================
 	-- CLICK SOUND
 	-- ============================================
@@ -105,10 +129,14 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	end
 	self._PlayClick = playClick
 
-	-- Clean up old GUI
-	for _, child in playerGui:GetChildren() do
-		if child:IsA("ScreenGui") and child.Name == "Vaxorin" then
-			child:Destroy()
+	-- Clean up old GUI in both PlayerGui and any hidden GUI container.
+	for _, container in { playerGui, topGuiParent } do
+		if typeof(container) == "Instance" then
+			for _, child in container:GetChildren() do
+				if child:IsA("ScreenGui") and child.Name == "Vaxorin" then
+					child:Destroy()
+				end
+			end
 		end
 	end
 	local oldBlur = Lighting:FindFirstChild("VaxorinBlur")
@@ -141,9 +169,60 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	screenGui.Name = "Vaxorin"
 	screenGui.ResetOnSpawn = false
 	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	screenGui.IgnoreGuiInset = false
-	screenGui.Parent = playerGui
+	-- Maximum practical layering for game-created UI. When the executor exposes
+	-- gethui/get_hidden_gui, use that container so CyberUI sits above normal
+	-- PlayerGui ScreenGuis. 2147483647 is the maximum signed DisplayOrder.
+	screenGui.DisplayOrder = data.DisplayOrder or 2147483647
+	screenGui.IgnoreGuiInset = data.IgnoreGuiInset ~= false
+	pcall(function()
+		screenGui.ScreenInsets = Enum.ScreenInsets.None
+	end)
+	screenGui.Parent = topGuiParent
 	self._Maid:Give(screenGui)
+
+	-- Optional "top-most" mode: hide Roblox's normal in-game CoreGui so
+	-- CyberUI remains above chat, player list, backpack, health, emotes, etc.
+	-- The Roblox pause/menu layer itself cannot be covered by game UI.
+	self._CoreUIState = nil
+	if data.TopMost ~= false and data.HideCoreUI ~= false then
+		local StarterGui = game:GetService("StarterGui")
+		local GuiService = game:GetService("GuiService")
+		local coreTypes = {
+			Enum.CoreGuiType.PlayerList,
+			Enum.CoreGuiType.Health,
+			Enum.CoreGuiType.Backpack,
+			Enum.CoreGuiType.Chat,
+			Enum.CoreGuiType.EmotesMenu,
+			Enum.CoreGuiType.SelfView,
+			Enum.CoreGuiType.Captures,
+			Enum.CoreGuiType.AvatarSwitcher,
+		}
+		self._CoreUIState = { Topbar = nil, Types = {} }
+		for _, coreType in coreTypes do
+			local ok, enabled = pcall(function()
+				return StarterGui:GetCoreGuiEnabled(coreType)
+			end)
+			if ok then
+				table.insert(self._CoreUIState.Types, { Type = coreType, Enabled = enabled })
+				pcall(function() StarterGui:SetCoreGuiEnabled(coreType, false) end)
+			end
+		end
+		pcall(function()
+			self._CoreUIState.Topbar = true
+			StarterGui:SetCore("TopbarEnabled", false)
+		end)
+		self._Maid:Give(function()
+			for _, entry in self._CoreUIState and self._CoreUIState.Types or {} do
+				pcall(function() StarterGui:SetCoreGuiEnabled(entry.Type, entry.Enabled) end)
+			end
+			if self._CoreUIState and self._CoreUIState.Topbar then
+				pcall(function() StarterGui:SetCore("TopbarEnabled", true) end)
+			end
+		end)
+		pcall(function()
+			GuiService.GuiNavigationEnabled = true
+		end)
+	end
 
 	local windowName = data.Name or data.Title or GUI_NAME
 	local windowSubtitle = data.Subtitle or data.Description or nil -- nil = don't render a subtitle at all

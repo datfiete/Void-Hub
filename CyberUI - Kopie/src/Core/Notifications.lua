@@ -41,7 +41,11 @@ function Notifications:_getContainer(): Frame
 	screenGui.Name = "CyberUI_Notifications"
 	screenGui.ResetOnSpawn = false
 	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	screenGui.Parent = playerGui
+	screenGui.DisplayOrder = 2147483647
+	pcall(function()
+		screenGui.ScreenInsets = Enum.ScreenInsets.None
+	end)
+	screenGui.Parent = parent
 	self._Maid:Give(screenGui)
 
 	local container = Helpers.CreateFrame({

@@ -84,3 +84,28 @@ local CyberUI = require(path.to.src)
 ```
 
 Or use `examples/showcase.lua` as a LocalScript sibling of `src`.
+
+## Remote loader
+
+Use the real Void-Hub loader URL:
+
+```lua
+local CyberUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/datfiete/Void-Hub/main/CyberUI%20-%20Kopie/load.lua"))()
+```
+
+The loader and main window use the maximum practical `ScreenGui.DisplayOrder` and `ScreenInsets.None`, so CyberUI stays above other **game-created** `PlayerGui` interfaces. Roblox's ESC/pause menu and other CoreGui are owned by Roblox and are rendered above `PlayerGui`; a normal `ScreenGui` cannot be placed above that CoreGui layer.
+
+
+## Top-most mode
+
+CyberUI defaults to `TopMost = true` and `HideCoreUI = true`. When the environment provides `gethui()` or `get_hidden_gui()`, the UI is parented there and uses the maximum practical `DisplayOrder` (`2147483647`). Standard Roblox CoreGui elements such as chat, backpack, player list, health, and the top bar are hidden while CyberUI is alive and restored on destroy. Roblox's own pause/menu CoreGui cannot be covered by a normal game ScreenGui.
+
+Disable this behavior with:
+
+```lua
+Library:CreateWindow({
+    Title = "CyberUI",
+    TopMost = false,
+    HideCoreUI = false,
+})
+```
