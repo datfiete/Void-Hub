@@ -39,7 +39,7 @@ function Toggle.new(section: any, data: ToggleOptions): ToggleHandle
 	local row = Helpers.CreateFrame({
 		Name = "Toggle",
 		Size = UDim2.new(1, 0, 0, Theme.ElementHeight),
-		BackgroundColor3 = library.Theme.Background,
+		BackgroundColor3 = library.Theme.ElementBackground or library.Theme.Background,
 		Parent = section.Inner,
 	})
 	Helpers.Corner(row, Theme.CornerRadiusSmall)
@@ -127,7 +127,7 @@ end
 
 function Toggle:RefreshTheme()
 	local theme = self._Section.Tab.Window.Library.Theme
-	self.Instance.BackgroundColor3 = theme.Background
+	self.Instance.BackgroundColor3 = theme.ElementBackground or theme.Background
 	self.Label.TextColor3 = theme.Text
 	self.Switch.BackgroundColor3 = if self._Value then theme.Accent else theme.Border
 	self.Knob.BackgroundColor3 = theme.Text

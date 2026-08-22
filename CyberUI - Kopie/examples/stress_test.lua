@@ -1,10 +1,10 @@
--- CyberUI stress test
+-- Vaxorin stress test
 -- Place this in a LocalScript under StarterPlayerScripts or run it directly in a LocalScript.
 
-local CyberUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/fietewoozle-dot/MyHub/main/CyberUI/load.lua"))()
+local CyberUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/datfiete/Void-Hub/refs/heads/main/CyberUI%20-%20Kopie/load.lua"))()
 
 local window = CyberUI:CreateWindow({
-	Title = "CyberUI Stress Test",
+	Title = "Vaxorin Stress Test",
 	Subtitle = "Try lots of tabs and controls",
 	Size = Vector2.new(900, 700),
 })
@@ -85,4 +85,4 @@ window:Notify({
 	Duration = 4,
 })
 
-print("CyberUI stress test loaded")
+print("Vaxorin stress test loaded")

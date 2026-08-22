@@ -38,7 +38,7 @@ function Notifications:_getContainer(): Frame
 	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
 
 	local screenGui = Instance.new("ScreenGui")
-	screenGui.Name = "CyberUI_Notifications"
+	screenGui.Name = "Vaxorin_Notifications"
 	screenGui.ResetOnSpawn = false
 	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	screenGui.DisplayOrder = 2147483647

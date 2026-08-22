@@ -77,7 +77,7 @@ function Dropdown.new(section: any, data: DropdownOptions): DropdownHandle
 		Name = "Header",
 		Size = UDim2.new(1, 0, 0, Theme.ElementHeight),
 		Text = "",
-		BackgroundColor3 = library.Theme.Background,
+		BackgroundColor3 = library.Theme.ElementBackground or library.Theme.Background,
 		Parent = container,
 	})
 	header.AutoButtonColor = false
@@ -119,7 +119,7 @@ function Dropdown.new(section: any, data: DropdownOptions): DropdownHandle
 		Name = "List",
 		Size = UDim2.new(1, 0, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
-		BackgroundColor3 = library.Theme.Background,
+		BackgroundColor3 = library.Theme.ElementBackground or library.Theme.Background,
 		Visible = false,
 		Parent = container,
 	})
@@ -165,7 +165,7 @@ function Dropdown.new(section: any, data: DropdownOptions): DropdownHandle
 				Name = option,
 				Size = UDim2.new(1, 0, 0, 32),
 				Text = `  {option}`,
-				BackgroundColor3 = if isSelected then library.Theme.Secondary else library.Theme.Background,
+				BackgroundColor3 = if isSelected then (library.Theme.SurfaceHover or library.Theme.Secondary) else (library.Theme.ElementBackground or library.Theme.Background),
 				Parent = list,
 			})
 			Helpers.Corner(button, Theme.CornerRadiusSmall)
@@ -173,13 +173,13 @@ function Dropdown.new(section: any, data: DropdownOptions): DropdownHandle
 
 			optionMaid:GiveTask(button.MouseEnter:Connect(function()
 				if not isSelected then
-					Tween.Play(button, { BackgroundColor3 = library.Theme.Secondary })
+					Tween.Play(button, { BackgroundColor3 = library.Theme.ElementHover or library.Theme.Secondary })
 				end
 			end))
 
 			optionMaid:GiveTask(button.MouseLeave:Connect(function()
 				if not isSelected then
-					Tween.Play(button, { BackgroundColor3 = library.Theme.Background })
+					Tween.Play(button, { BackgroundColor3 = library.Theme.ElementBackground or library.Theme.Background })
 				end
 			end))
 

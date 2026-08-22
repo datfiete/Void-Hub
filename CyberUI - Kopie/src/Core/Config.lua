@@ -29,10 +29,10 @@ local function sanitizeFileName(name: string): string
 end
 
 function Config.new(folderName: string?): ConfigHandle
-	local defaultFileName = `CyberUi-{sanitizeFileName(getGameName())}-Config`
+	local defaultFileName = `Vaxorin-{sanitizeFileName(getGameName())}-Config`
 
 	local self = setmetatable({
-		_folderName = folderName or "CyberUI",
+		_folderName = folderName or "Vaxorin",
 		_fileName = defaultFileName,
 		_values = {} :: { [string]: any },
 		_autoSave = true,

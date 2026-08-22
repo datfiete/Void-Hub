@@ -3,7 +3,7 @@
 
 -- This file is a copy-paste template for Roblox scripts.
 -- Run it in Studio/Roblox to see the UI blocks in action.
-local CyberUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/fietewoozle-dot/MyHub/main/CyberUI/load.lua"))()
+local CyberUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/datfiete/Void-Hub/refs/heads/main/CyberUI%20-%20Kopie/load.lua"))()
 
 local Window = CyberUI:CreateWindow({
 	Name = "Developer Suite",
@@ -75,7 +75,7 @@ Automation:CreateButton({
 	Name = "Notify",
 	Callback = function()
 		Window:Notify({
-			Title = "CyberUI",
+			Title = "Vaxorin",
 			Content = "Rayfield-style template loaded.",
 			Type = "Info",
 			Duration = 2,

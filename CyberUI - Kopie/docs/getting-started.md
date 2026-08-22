@@ -1,4 +1,4 @@
-# CyberUI
+# Vaxorin
 
 Roblox UI library with a Rayfield-like API.
 
@@ -7,7 +7,7 @@ Roblox UI library with a Rayfield-like API.
 Push `load.lua` to your repo, then run:
 
 ```lua
-local CyberUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/fietewoozle-dot/MyHub/main/CyberUI/load.lua"))()
+local CyberUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/datfiete/Void-Hub/refs/heads/main/CyberUI%20-%20Kopie/load.lua"))()
 ```
 
 Then build your UI:
@@ -90,21 +90,21 @@ Or use `examples/showcase.lua` as a LocalScript sibling of `src`.
 Use the real Void-Hub loader URL:
 
 ```lua
-local CyberUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/datfiete/Void-Hub/main/CyberUI%20-%20Kopie/load.lua"))()
+local CyberUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/datfiete/Void-Hub/refs/heads/main/CyberUI%20-%20Kopie/load.lua"))()
 ```
 
-The loader and main window use the maximum practical `ScreenGui.DisplayOrder` and `ScreenInsets.None`, so CyberUI stays above other **game-created** `PlayerGui` interfaces. Roblox's ESC/pause menu and other CoreGui are owned by Roblox and are rendered above `PlayerGui`; a normal `ScreenGui` cannot be placed above that CoreGui layer.
+The loader and main window use the maximum practical `ScreenGui.DisplayOrder` and `ScreenInsets.None`, so Vaxorin stays above other **game-created** `PlayerGui` interfaces. Roblox's ESC/pause menu and other CoreGui are owned by Roblox and are rendered above `PlayerGui`; a normal `ScreenGui` cannot be placed above that CoreGui layer.
 
 
 ## Top-most mode
 
-CyberUI defaults to `TopMost = true` and `HideCoreUI = true`. When the environment provides `gethui()` or `get_hidden_gui()`, the UI is parented there and uses the maximum practical `DisplayOrder` (`2147483647`). Standard Roblox CoreGui elements such as chat, backpack, player list, health, and the top bar are hidden while CyberUI is alive and restored on destroy. Roblox's own pause/menu CoreGui cannot be covered by a normal game ScreenGui.
+Vaxorin defaults to `TopMost = true` and `HideCoreUI = true`. When the environment provides `gethui()` or `get_hidden_gui()`, the UI is parented there and uses the maximum practical `DisplayOrder` (`2147483647`). Standard Roblox CoreGui elements such as chat, backpack, player list, health, and the top bar are hidden while CyberUI is alive and restored on destroy. Roblox's own pause/menu CoreGui cannot be covered by a normal game ScreenGui.
 
 Disable this behavior with:
 
 ```lua
 Library:CreateWindow({
-    Title = "CyberUI",
+    Title = "Vaxorin",
     TopMost = false,
     HideCoreUI = false,
 })

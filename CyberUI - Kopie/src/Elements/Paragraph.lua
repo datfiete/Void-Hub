@@ -35,7 +35,7 @@ function Paragraph.new(section: any, data: ParagraphOptions): ParagraphHandle
 		Name = "Paragraph",
 		Size = UDim2.new(1, 0, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
-		BackgroundColor3 = library.Theme.Background,
+		BackgroundColor3 = library.Theme.ElementBackground or library.Theme.Background,
 		Parent = section.Inner,
 	})
 	Helpers.Corner(row, Theme.CornerRadiusSmall)
@@ -73,7 +73,7 @@ end
 
 function Paragraph:RefreshTheme()
 	local theme = self._Section.Tab.Window.Library.Theme
-	self.Instance.BackgroundColor3 = theme.Background
+	self.Instance.BackgroundColor3 = theme.ElementBackground or theme.Background
 	self.TitleLabel.TextColor3 = theme.Text
 	self.ContentLabel.TextColor3 = theme.TextMuted
 end

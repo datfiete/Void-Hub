@@ -53,7 +53,7 @@ function Keybind.new(section: any, data: KeybindOptions): KeybindHandle
 	local row = Helpers.CreateFrame({
 		Name = "Keybind",
 		Size = UDim2.new(1, 0, 0, Theme.ElementHeight),
-		BackgroundColor3 = library.Theme.Background,
+		BackgroundColor3 = library.Theme.ElementBackground or library.Theme.Background,
 		Parent = section.Inner,
 	})
 	Helpers.Corner(row, Theme.CornerRadiusSmall)
@@ -169,8 +169,8 @@ end
 
 function Keybind:RefreshTheme()
 	local theme = self._Section.Tab.Window.Library.Theme
-	self.Instance.BackgroundColor3 = theme.Background
-	self.BindButton.BackgroundColor3 = if self._Listening then theme.Accent else theme.Secondary
+	self.Instance.BackgroundColor3 = theme.ElementBackground or theme.Background
+	self.BindButton.BackgroundColor3 = if self._Listening then theme.Accent else (theme.SurfaceHover or theme.Secondary)
 	self.BindButton.TextColor3 = if self._Listening then theme.Background else theme.Text
 	local stroke = self.BindButton:FindFirstChildOfClass("UIStroke")
 	if stroke then

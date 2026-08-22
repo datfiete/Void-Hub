@@ -1,4 +1,4 @@
--- CyberUI full test script
+-- Vaxorin full test script
 -- Place this in a LocalScript under StarterPlayerScripts or run it directly in a LocalScript.
 
 local Players = game:GetService("Players")
@@ -11,12 +11,12 @@ local Avatar = Players:GetUserThumbnailAsync(
     Enum.ThumbnailSize.Size150x150
 )
 
-local CyberUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/fietewoozle-dot/MyHub/main/CyberUI/load.lua"))()
+local CyberUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/datfiete/Void-Hub/refs/heads/main/CyberUI%20-%20Kopie/load.lua"))()
 
-CyberUI.Theme.Style = "Meng"
+CyberUI.Theme.Style = "Vaxorin"
 
 local window = CyberUI:CreateWindow({
-    Title = "Void Hub",
+    Title = "Vaxorin",
     Subtitle = "Your game name",
     BackgroundImage = "rbxassetid://106318186489675",
 
@@ -124,6 +124,6 @@ actionSection:CreateButton({
 })
 
 
-print("CyberUI test script loaded. Toggle key:", getCurrentBind().Name)
+print("Vaxorin test script loaded. Toggle key:", getCurrentBind().Name)
 
 
