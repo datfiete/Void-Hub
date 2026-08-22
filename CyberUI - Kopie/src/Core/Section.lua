@@ -56,9 +56,11 @@ function Section.new(tab: any, name: string?): SectionHandle
     Helpers.Corner(inner, Theme.CornerRadius)
     local innerStroke = Helpers.Stroke(inner, theme.Border, 1)
     innerStroke.Transparency = 0.16
-    local innerGlow = Helpers.Stroke(inner, theme.Accent, 1)
-    innerGlow.Transparency = 0.96
-    local innerGlowImage = Helpers.Glow(inner, theme.Accent, 8, 0.94)
+    -- Subtle accent light without inserting a GuiObject into the section's
+    -- UIListLayout. Image-based glow children would be measured as layout
+    -- items and create the giant empty boxes seen in earlier builds.
+    local innerGlow = Helpers.Stroke(inner, theme.Accent, 2)
+    innerGlow.Transparency = 0.90
     Helpers.Padding(inner, 16, 16)
 
     local layout = Helpers.ListLayout(inner, 10)
@@ -138,7 +140,6 @@ function Section.new(tab: any, name: string?): SectionHandle
     self._HeaderDescription = headerDescription
     self._HeaderAccent = headerAccent
     self._InnerGlow = innerGlow
-    self._InnerGlowImage = innerGlowImage
     self._Maid:Give(container)
 
     return self :: any
@@ -162,16 +163,13 @@ function Section:RefreshTheme()
     end
     if self._InnerGlow then
         self._InnerGlow.Color = theme.Accent
-        if self._InnerGlowImage then
-            self._InnerGlowImage.ImageColor3 = theme.Accent
-        end
     end
     for _, element in self._Elements do
         if element.RefreshTheme then
             element:RefreshTheme()
         end
         if element._VaxorinGlow then
-            element._VaxorinGlow.ImageColor3 = theme.Accent
+            element._VaxorinGlow.Color = theme.Accent
         end
     end
 end
@@ -179,11 +177,11 @@ end
 function Section:_track(element: any)
     table.insert(self._Elements, element)
 
-    -- Every control gets a very soft accent halo. It is intentionally subtle
-    -- and uses a shadow texture so it reads as ambient light, not a thicker
-    -- border.
+    -- Use a non-layout-affecting stroke for element glow. A child ImageLabel
+    -- glow would be included by the parent UIListLayout and inflate the row.
     if element.Instance and element.Instance:IsA("GuiObject") and not element.Switch then
-        local glow = Helpers.Glow(element.Instance, self.Tab.Window.Library.Theme.Accent, 6, 0.95)
+        local glow = Helpers.Stroke(element.Instance, self.Tab.Window.Library.Theme.Accent, 2)
+        glow.Transparency = 0.93
         element._VaxorinGlow = glow
     end
 

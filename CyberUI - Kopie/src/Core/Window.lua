@@ -1404,12 +1404,15 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		if closeButton then
 			closeButton.TextColor3 = library.Theme.TextMuted
 		end
-		mainStroke.Color = library.Theme.Border
-		glowStroke.Color = library.Theme.Accent
-		if ambientStroke then
-			ambientStroke.Color = library.Theme.Accent
+		if mainStroke then
+			mainStroke.Color = library.Theme.Border
 		end
-		watermarkStroke.Color = library.Theme.Border
+		if glowStroke then
+			glowStroke.Color = library.Theme.Accent
+		end
+		if watermarkStroke then
+			watermarkStroke.Color = library.Theme.Border
+		end
 		watermark.BackgroundColor3 = library.Theme.Secondary
 		watermarkTitle.TextColor3 = library.Theme.Accent
 		watermarkFps.TextColor3 = library.Theme.Text
