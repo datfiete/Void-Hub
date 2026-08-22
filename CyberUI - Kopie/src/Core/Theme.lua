@@ -27,12 +27,15 @@ local stylePresets = {
 		Accent = Color3.fromRGB(0, 255, 200),
 	},
 	Meng = {
-		Background = Color3.fromRGB(17, 13, 26),
-		Secondary = Color3.fromRGB(26, 19, 40),
-		Text = Color3.fromRGB(235, 228, 248),
-		TextMuted = Color3.fromRGB(168, 150, 195),
-		Border = Color3.fromRGB(66, 42, 92),
-		Accent = Color3.fromRGB(168, 85, 247),
+		Background = Color3.fromRGB(8, 7, 14),
+		Secondary = Color3.fromRGB(16, 12, 27),
+		Surface = Color3.fromRGB(21, 16, 34),
+		SurfaceHover = Color3.fromRGB(30, 22, 48),
+		Text = Color3.fromRGB(247, 242, 255),
+		TextMuted = Color3.fromRGB(157, 143, 184),
+		Border = Color3.fromRGB(59, 39, 83),
+		Accent = Color3.fromRGB(190, 92, 255),
+		AccentAlt = Color3.fromRGB(64, 218, 255),
 	},
 }
 
@@ -49,6 +52,10 @@ local themeValues = {
 	Error = Color3.fromRGB(255, 90, 90),
 
 	AccentAlt = Color3.fromRGB(236, 72, 153),
+	Surface = Color3.fromRGB(21, 21, 29),
+	SurfaceHover = Color3.fromRGB(30, 30, 42),
+	Glow = Color3.fromRGB(0, 255, 200),
+	SidebarAccent = Color3.fromRGB(255, 255, 255),
 
 	Font = Enum.Font.GothamMedium,
 	FontBold = Enum.Font.GothamBold,

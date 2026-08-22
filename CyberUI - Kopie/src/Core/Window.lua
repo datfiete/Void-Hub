@@ -11,8 +11,8 @@ local Lighting = game:GetService("Lighting")
 local SoundService = game:GetService("SoundService")
 local Stats = game:GetService("Stats")
 
-local GUI_NAME = "Vaxorin"
-local VERSION = "1.0"
+local GUI_NAME = "CyberUI"
+local VERSION = "2.0"
 local Vaxorin_Logo = "rbxassetid://135320038058277"
 
 -- Soft 9-slice drop shadow, used behind the main window for real depth instead
@@ -435,6 +435,105 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	Helpers.Corner(overlay, Theme.CornerRadius)
 
 	-- ============================================
+	-- CYBER ATMOSPHERE
+	-- A layered, animated background makes the window feel like a designed
+	-- product instead of a collection of frames. Everything stays lightweight.
+	-- ============================================
+	local atmosphere = Instance.new("Frame")
+	atmosphere.Name = "Atmosphere"
+	atmosphere.Size = UDim2.fromScale(1, 1)
+	atmosphere.BackgroundTransparency = 1
+	atmosphere.BorderSizePixel = 0
+	atmosphere.ZIndex = 2
+	atmosphere.Parent = main
+
+	local atmosphereGradient = Instance.new("UIGradient")
+	atmosphereGradient.Name = "AtmosphereGradient"
+	atmosphereGradient.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, library.Theme.Accent),
+		ColorSequenceKeypoint.new(0.45, Color3.new(0.08, 0.06, 0.14)),
+		ColorSequenceKeypoint.new(1, library.Theme.AccentAlt or library.Theme.Accent),
+	})
+	atmosphereGradient.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.985),
+		NumberSequenceKeypoint.new(0.45, 1),
+		NumberSequenceKeypoint.new(1, 0.99),
+	})
+	atmosphereGradient.Rotation = 25
+	atmosphereGradient.Parent = atmosphere
+
+	local grid = Instance.new("Frame")
+	grid.Name = "Grid"
+	grid.Size = UDim2.fromScale(1, 1)
+	grid.BackgroundTransparency = 1
+	grid.BorderSizePixel = 0
+	grid.ZIndex = 3
+	grid.Parent = main
+
+	for i = 1, 15 do
+		local line = Instance.new("Frame")
+		line.Name = "V" .. i
+		line.Size = UDim2.new(0, 1, 1, 0)
+		line.Position = UDim2.new(i / 16, 0, 0, 0)
+		line.BackgroundColor3 = library.Theme.Accent
+		line.BackgroundTransparency = 0.975
+		line.BorderSizePixel = 0
+		line.Parent = grid
+	end
+	for i = 1, 10 do
+		local line = Instance.new("Frame")
+		line.Name = "H" .. i
+		line.Size = UDim2.new(1, 0, 0, 1)
+		line.Position = UDim2.new(0, 0, i / 11, 0)
+		line.BackgroundColor3 = library.Theme.AccentAlt or library.Theme.Accent
+		line.BackgroundTransparency = 0.98
+		line.BorderSizePixel = 0
+		line.Parent = grid
+	end
+
+	local scanline = Instance.new("Frame")
+	scanline.Name = "Scanline"
+	scanline.Size = UDim2.new(1, 0, 0, 2)
+	scanline.Position = UDim2.new(0, 0, -0.1, 0)
+	scanline.BackgroundColor3 = library.Theme.Accent
+	scanline.BackgroundTransparency = 0.82
+	scanline.BorderSizePixel = 0
+	scanline.ZIndex = 4
+	scanline.Parent = main
+
+	local scanTween = TweenService:Create(scanline, TweenInfo.new(4.5, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1, false), {
+		Position = UDim2.new(0, 0, 1.1, 0),
+	})
+	scanTween:Play()
+	self._Maid:GiveTask(scanTween)
+
+	local function createOrb(name: string, position: UDim2, size: number, color: Color3)
+		local orb = Instance.new("Frame")
+		orb.Name = name
+		orb.Size = UDim2.fromOffset(size, size)
+		orb.Position = position
+		orb.AnchorPoint = Vector2.new(0.5, 0.5)
+		orb.BackgroundColor3 = color
+		orb.BackgroundTransparency = 0.94
+		orb.BorderSizePixel = 0
+		orb.ZIndex = 3
+		orb.Parent = main
+	Helpers.Corner(orb, size)
+	local stroke = Helpers.Stroke(orb, color, 1)
+	stroke.Transparency = 0.78
+	local tween = TweenService:Create(orb, TweenInfo.new(3.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+		BackgroundTransparency = 0.89,
+		Size = UDim2.fromOffset(size + 26, size + 26),
+	})
+	tween:Play()
+	self._Maid:GiveTask(tween)
+	self._Maid:Give(orb)
+	end
+
+	createOrb("OrbLeft", UDim2.new(0.06, 0, 0.18, 0), 170, library.Theme.Accent)
+	createOrb("OrbRight", UDim2.new(0.94, 0, 0.78, 0), 220, library.Theme.AccentAlt or library.Theme.Accent)
+
+	-- ============================================
 	-- TOP BAR (Title & Subtitle side by side)
 	-- ============================================
 	local topBar = Helpers.CreateFrame({
@@ -450,6 +549,22 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	topBar.ZIndex = 20
 	Helpers.Corner(topBar, Theme.CornerRadius)
 	local topBarCorner = topBar:FindFirstChildOfClass("UICorner")
+
+	local topAccent = Instance.new("Frame")
+	topAccent.Name = "AccentLine"
+	topAccent.Size = UDim2.new(1, -24, 0, 2)
+	topAccent.Position = UDim2.new(0, 12, 1, -2)
+	topAccent.BackgroundColor3 = library.Theme.Accent
+	topAccent.BorderSizePixel = 0
+	topAccent.ZIndex = 31
+	topAccent.Parent = topBar
+	local topAccentGradient = Instance.new("UIGradient")
+	topAccentGradient.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, library.Theme.Accent),
+		ColorSequenceKeypoint.new(0.5, library.Theme.AccentAlt or library.Theme.Accent),
+		ColorSequenceKeypoint.new(1, library.Theme.Accent),
+	})
+	topAccentGradient.Parent = topAccent
 
 	local topBarMask = Helpers.CreateFrame({
 		Name = "TopBarMask",
@@ -1000,6 +1115,27 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	sidebar.ClipsDescendants = true
 	Helpers.Padding(sidebar, Theme.Padding)
 
+	local sidebarRail = Instance.new("Frame")
+	sidebarRail.Name = "AccentRail"
+	sidebarRail.Size = UDim2.new(0, 2, 1, -20)
+	sidebarRail.Position = UDim2.new(1, -1, 0, 10)
+	sidebarRail.BackgroundColor3 = library.Theme.Accent
+	sidebarRail.BackgroundTransparency = 0.35
+	sidebarRail.BorderSizePixel = 0
+	sidebarRail.Parent = sidebar
+
+	local navLabel = Helpers.CreateLabel({
+		Name = "NavigationLabel",
+		Size = UDim2.new(1, 0, 0, 18),
+		Position = UDim2.new(0, 0, 0, if showSearch then 40 else 4),
+		Text = "NAVIGATION  /  MENU",
+		Font = Theme.FontBold,
+		TextSize = 9,
+		TextColor3 = library.Theme.TextMuted,
+		TextTransparency = 0.2,
+		Parent = sidebar,
+	})
+
 	-- Search Box
 	local searchBox
 	local searchTop = 0
@@ -1029,7 +1165,9 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		searchBox.ClearTextOnFocus = false
 		searchBox.Parent = searchHolder
 
-		searchTop = 44
+		searchTop = 68
+	else
+		searchTop = 28
 	end
 
 	-- Tab List
@@ -1244,6 +1382,14 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		topBar.BackgroundColor3 = library.Theme.Secondary
 		topBarMask.BackgroundColor3 = library.Theme.Secondary
 		sidebar.BackgroundColor3 = library.Theme.Secondary
+		topAccent.BackgroundColor3 = library.Theme.Accent
+		sidebarRail.BackgroundColor3 = library.Theme.Accent
+		navLabel.TextColor3 = library.Theme.TextMuted
+		atmosphereGradient.Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, library.Theme.Accent),
+			ColorSequenceKeypoint.new(0.45, Color3.new(0.08, 0.06, 0.14)),
+			ColorSequenceKeypoint.new(1, library.Theme.AccentAlt or library.Theme.Accent),
+		})
 		title.TextColor3 = library.Theme.Text
 		if subtitle then
 			subtitle.TextColor3 = library.Theme.TextMuted

@@ -107,6 +107,31 @@ function Section.new(tab: any, name: string?): SectionHandle
 
 	Helpers.Corner(inner, Theme.CornerRadiusSmall)
 
+	local innerGradient = Instance.new("UIGradient")
+	innerGradient.Name = "SurfaceGradient"
+	innerGradient.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
+		ColorSequenceKeypoint.new(0.55, Color3.new(0.96, 0.96, 1)),
+		ColorSequenceKeypoint.new(1, Color3.new(0.75, 0.75, 1)),
+	})
+	innerGradient.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.96),
+		NumberSequenceKeypoint.new(0.5, 1),
+		NumberSequenceKeypoint.new(1, 0.97),
+	})
+	innerGradient.Rotation = 18
+	innerGradient.Parent = inner
+
+	local accentLine = Instance.new("Frame")
+	accentLine.Name = "AccentLine"
+	accentLine.Size = UDim2.new(0, 3, 1, -20)
+	accentLine.Position = UDim2.new(0, 0, 0, 10)
+	accentLine.BackgroundColor3 = tab.Window.Library.Theme.Accent
+	accentLine.BackgroundTransparency = 0.15
+	accentLine.BorderSizePixel = 0
+	accentLine.Parent = inner
+	Helpers.Corner(accentLine, 2)
+
 	local innerStroke = Helpers.Stroke(inner, tab.Window.Library.Theme.Border, 1)
 
 	Helpers.Padding(inner, Theme.Padding)
@@ -141,8 +166,9 @@ function Section.new(tab: any, name: string?): SectionHandle
 
 
 	local themeConnection = tab.Window.Library.Theme.Changed:Connect(function(key)
-		if key == "Style" or key == "Accent" or key == "Secondary" or key == "Border" then
-			inner.BackgroundColor3 = tab.Window.Library.Theme.Secondary
+		if key == "Style" or key == "Accent" or key == "Secondary" or key == "Border" or key == "Surface" then
+			inner.BackgroundColor3 = tab.Window.Library.Theme.Surface or tab.Window.Library.Theme.Secondary
+			accentLine.BackgroundColor3 = tab.Window.Library.Theme.Accent
 			innerStroke.Color = tab.Window.Library.Theme.Border
 			if headerLabel then
 				headerLabel.TextColor3 = tab.Window.Library.Theme.Accent
@@ -162,7 +188,11 @@ end
 
 function Section:RefreshTheme()
 	local theme = self.Tab.Window.Library.Theme
-	self.Inner.BackgroundColor3 = theme.Secondary
+	self.Inner.BackgroundColor3 = theme.Surface or theme.Secondary
+	local accentLine = self.Inner:FindFirstChild("AccentLine")
+	if accentLine and accentLine:IsA("Frame") then
+		accentLine.BackgroundColor3 = theme.Accent
+	end
 	local stroke = self.Inner:FindFirstChildOfClass("UIStroke")
 	if stroke then
 		stroke.Color = theme.Border
