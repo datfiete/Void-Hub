@@ -36,26 +36,12 @@ function Notifications:_getContainer(): Frame
 
 	local Players = game:GetService("Players")
 	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
-	local parent = playerGui
-	pcall(function()
-		if type(gethui) == "function" then
-			local hidden = gethui()
-			if typeof(hidden) == "Instance" then parent = hidden end
-		elseif type(get_hidden_gui) == "function" then
-			local hidden = get_hidden_gui()
-			if typeof(hidden) == "Instance" then parent = hidden end
-		end
-	end)
 
 	local screenGui = Instance.new("ScreenGui")
-	screenGui.Name = "Vaxorin_Notifications"
+	screenGui.Name = "CyberUI_Notifications"
 	screenGui.ResetOnSpawn = false
 	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	screenGui.DisplayOrder = 2147483647
-	pcall(function()
-		screenGui.ScreenInsets = Enum.ScreenInsets.None
-	end)
-	screenGui.Parent = parent
+	screenGui.Parent = playerGui
 	self._Maid:Give(screenGui)
 
 	local container = Helpers.CreateFrame({

@@ -57,7 +57,7 @@ function ColorPicker.new(section: any, data: ColorPickerOptions): ColorPickerHan
 	local header = Helpers.CreateFrame({
 		Name = "Header",
 		Size = UDim2.new(1, 0, 0, Theme.ElementHeight),
-		BackgroundColor3 = library.Theme.ElementBackground or library.Theme.Background,
+		BackgroundColor3 = library.Theme.Background,
 		Active = true,
 		Parent = container,
 	})
@@ -87,7 +87,7 @@ function ColorPicker.new(section: any, data: ColorPickerOptions): ColorPickerHan
 		Name = "Panel",
 		Size = UDim2.new(1, 0, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
-		BackgroundColor3 = library.Theme.ElementBackground or library.Theme.Background,
+		BackgroundColor3 = library.Theme.Background,
 		Visible = false,
 		Parent = container,
 	})

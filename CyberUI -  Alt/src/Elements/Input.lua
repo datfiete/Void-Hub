@@ -40,7 +40,7 @@ function Input.new(section: any, data: InputOptions): InputHandle
 	local row = Helpers.CreateFrame({
 		Name = "Input",
 		Size = UDim2.new(1, 0, 0, Theme.ElementHeight + 36),
-		BackgroundColor3 = library.Theme.ElementBackground or library.Theme.Background,
+		BackgroundColor3 = library.Theme.Background,
 		Parent = section.Inner,
 	})
 	Helpers.Corner(row, Theme.CornerRadiusSmall)
@@ -94,8 +94,8 @@ end
 
 function Input:RefreshTheme()
 	local theme = self._Section.Tab.Window.Library.Theme
-	self.Instance.BackgroundColor3 = theme.ElementBackground or theme.Background
-	self.TextBox.BackgroundColor3 = theme.ElementBackground or theme.Background
+	self.Instance.BackgroundColor3 = theme.Background
+	self.TextBox.BackgroundColor3 = theme.Background
 	self.TextBox.TextColor3 = theme.Text
 	self.TextBox.PlaceholderColor3 = theme.TextMuted
 	local stroke = self.TextBox:FindFirstChildOfClass("UIStroke")

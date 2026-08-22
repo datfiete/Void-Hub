@@ -33,25 +33,20 @@ function Button.new(section: any, data: ButtonOptions): ButtonHandle
 		Size = UDim2.new(1, 0, 0, Theme.ElementHeight),
 		Text = data.Name,
 		TextXAlignment = Enum.TextXAlignment.Center,
-		BackgroundColor3 = library.Theme.ElementBackground or library.Theme.Background,
+		BackgroundColor3 = library.Theme.Background,
 		Parent = section.Inner,
 	})
 	Helpers.Corner(row, Theme.CornerRadiusSmall)
-	local rowStroke = Helpers.Stroke(row, library.Theme.Border, 1)
-	local rowGlow = Helpers.Stroke(row, library.Theme.Accent, 2)
-	rowGlow.Transparency = 0.95
-	rowStroke.Transparency = 0.18
-
-	self.RowGlow = rowGlow
+	Helpers.Stroke(row, library.Theme.Border, 1)
 
 	self.Instance = row
 
 	self._Maid:GiveTask(row.MouseEnter:Connect(function()
-		Tween.Play(row, { BackgroundColor3 = library.Theme.ElementHover or library.Theme.Secondary })
+		Tween.Play(row, { BackgroundColor3 = library.Theme.Secondary })
 	end))
 
 	self._Maid:GiveTask(row.MouseLeave:Connect(function()
-		Tween.Play(row, { BackgroundColor3 = library.Theme.ElementBackground or library.Theme.Background })
+		Tween.Play(row, { BackgroundColor3 = library.Theme.Background })
 	end))
 
 	self._Maid:GiveTask(row.MouseButton1Click:Connect(function()
@@ -65,7 +60,7 @@ end
 
 function Button:RefreshTheme()
 	local theme = self._Section.Tab.Window.Library.Theme
-	self.Instance.BackgroundColor3 = theme.ElementBackground or theme.Background
+	self.Instance.BackgroundColor3 = theme.Background
 	self.Instance.TextColor3 = theme.Text
 	local stroke = self.Instance:FindFirstChildOfClass("UIStroke")
 	if stroke then

@@ -51,13 +51,11 @@ function Slider.new(section: any, data: SliderOptions): SliderHandle
 
 	local row = Helpers.CreateFrame({
 		Name = "Slider",
-		Size = UDim2.new(1, 0, 0, Theme.ElementHeight + 20),
-		BackgroundColor3 = library.Theme.ElementBackground or library.Theme.Background,
+		Size = UDim2.new(1, 0, 0, Theme.ElementHeight + 18),
+		BackgroundColor3 = library.Theme.Background,
 		Parent = section.Inner,
 	})
 	Helpers.Corner(row, Theme.CornerRadiusSmall)
-	local rowStroke = Helpers.Stroke(row, library.Theme.Border, 1)
-	rowStroke.Transparency = 0.18
 
 	local label = Helpers.CreateLabel({
 		Name = "Label",
@@ -95,12 +93,10 @@ function Slider.new(section: any, data: SliderOptions): SliderHandle
 		Parent = track,
 	})
 	Helpers.Corner(fill, 999)
-	local fillGlow = Helpers.Stroke(fill, library.Theme.Accent, 2)
-	fillGlow.Transparency = 0.82
 
 	local knob = Helpers.CreateFrame({
 		Name = "Knob",
-		Size = UDim2.fromOffset(12, 12),
+		Size = UDim2.fromOffset(14, 14),
 		Position = UDim2.new(0, 0, 0.5, 0),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundColor3 = library.Theme.Text,
@@ -124,7 +120,6 @@ function Slider.new(section: any, data: SliderOptions): SliderHandle
 	self.Track = track
 	self.Fill = fill
 	self.Knob = knob
-	self.FillGlow = fillGlow
 
 	function self:_ratio(): number
 		if self._Max == self._Min then
@@ -203,12 +198,11 @@ end
 
 function Slider:RefreshTheme()
 	local theme = self._Section.Tab.Window.Library.Theme
-	self.Instance.BackgroundColor3 = theme.ElementBackground or theme.Background
+	self.Instance.BackgroundColor3 = theme.Background
 	self.Label.TextColor3 = theme.Text
 	self.ValueLabel.TextColor3 = theme.Accent
 	self.Track.BackgroundColor3 = theme.Border
 	self.Fill.BackgroundColor3 = theme.Accent
-	self.FillGlow.Color = theme.Accent
 	self.Knob.BackgroundColor3 = theme.Text
 	self:_applyVisual(false)
 end

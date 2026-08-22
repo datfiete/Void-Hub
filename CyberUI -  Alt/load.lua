@@ -1,6 +1,6 @@
--- Vaxorin remote loader
+-- CyberUI remote loader
 -- Usage:
--- local CyberUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/datfiete/Void-Hub/main/CyberUI%20-%20Kopie/load.lua"))()
+-- local CyberUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/fietewoozle-dot/MyHub/main/CyberUI/load.lua"))()
 
 local sharedState = (getgenv and getgenv()) or _G
 local Players = game:GetService("Players")
@@ -42,10 +42,6 @@ local function createBootstrapLoader()
 	gui.Name = "CyberUI_BootstrapLoader"
 	gui.ResetOnSpawn = false
 	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	gui.DisplayOrder = 2147483647
-	pcall(function()
-		gui.ScreenInsets = Enum.ScreenInsets.None
-	end)
 	gui.Parent = playerGui
 
 	local card = Instance.new("Frame")
@@ -83,7 +79,7 @@ local function createBootstrapLoader()
 	title.Size = UDim2.new(1, -48, 0, 28)
 	title.Position = UDim2.fromOffset(34, 18)
 	title.BackgroundTransparency = 1
-	title.Text = "Vaxorin"
+	title.Text = "CyberUI"
 	title.TextColor3 = Color3.fromRGB(240, 240, 240)
 	title.TextSize = 20
 	title.Font = Enum.Font.GothamBold
@@ -141,7 +137,7 @@ end
 
 createBootstrapLoader()
 
-local REPO = "https://raw.githubusercontent.com/datfiete/Void-Hub/refs/heads/main/CyberUI%20-%20Kopie/src"
+local REPO = "https://raw.githubusercontent.com/datfiete/Void-Hub/refs/heads/main/CyberUI/src"
 
 local MODULE_PATHS = {
 	"Utils/Maid",
@@ -177,7 +173,7 @@ local scriptMocks: { [string]: any } = {}
 
 local function pathName(path: string): string
 	if path == "init" then
-		return "Vaxorin"
+		return "CyberUI"
 	end
 	return string.match(path, "([^/]+)$") or path
 end
@@ -250,18 +246,18 @@ local function requireModule(path: string): any
 
 	local source = sources[path]
 	if not source then
-		error(`Vaxorin module not found: {path}`, 2)
+		error(`CyberUI module not found: {path}`, 2)
 	end
 
-	local chunk, compileError = loadstring(source, "CyberUI/" .. path)
+	local chunk = loadstring(source, "CyberUI/" .. path)
 	if not chunk then
-		error(`Vaxorin failed to compile: {path}\n{tostring(compileError)}`, 2)
+		error(`CyberUI failed to compile: {path}`, 2)
 	end
 
 	local moduleScript = getScriptMock(path)
 	local function cyberRequire(target: any)
 		if typeof(target) ~= "table" then
-			error("Vaxorin require expected a module reference", 2)
+			error("CyberUI require expected a module reference", 2)
 		end
 
 		local targetPath = target._cyberPath
@@ -275,7 +271,7 @@ local function requireModule(path: string): any
 		end
 
 		if not targetPath then
-			error("Vaxorin require could not resolve module", 2)
+			error("CyberUI require could not resolve module", 2)
 		end
 
 		return requireModule(targetPath)

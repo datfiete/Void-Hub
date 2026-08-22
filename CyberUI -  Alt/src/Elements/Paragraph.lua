@@ -35,14 +35,10 @@ function Paragraph.new(section: any, data: ParagraphOptions): ParagraphHandle
 		Name = "Paragraph",
 		Size = UDim2.new(1, 0, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
-		BackgroundColor3 = library.Theme.ElementBackground or library.Theme.Background,
+		BackgroundColor3 = library.Theme.Background,
 		Parent = section.Inner,
 	})
 	Helpers.Corner(row, Theme.CornerRadiusSmall)
-	local rowStroke = Helpers.Stroke(row, library.Theme.Border, 1)
-	local rowGlow = Helpers.Stroke(row, library.Theme.Accent, 2)
-	rowGlow.Transparency = 0.95
-	rowStroke.Transparency = 0.18
 	Helpers.Padding(row, 12)
 	Helpers.ListLayout(row, 6)
 
@@ -52,7 +48,7 @@ function Paragraph.new(section: any, data: ParagraphOptions): ParagraphHandle
 		AutomaticSize = Enum.AutomaticSize.Y,
 		Text = self._Title,
 		Font = Theme.FontBold,
-		TextSize = 17,
+		TextSize = 15,
 		TextWrapped = true,
 		Visible = self._Title ~= "",
 		Parent = row,
@@ -68,8 +64,6 @@ function Paragraph.new(section: any, data: ParagraphOptions): ParagraphHandle
 		Parent = row,
 	})
 
-	self.RowGlow = rowGlow
-
 	self.Instance = row
 	self.TitleLabel = titleLabel
 	self.ContentLabel = contentLabel
@@ -79,7 +73,7 @@ end
 
 function Paragraph:RefreshTheme()
 	local theme = self._Section.Tab.Window.Library.Theme
-	self.Instance.BackgroundColor3 = theme.ElementBackground or theme.Background
+	self.Instance.BackgroundColor3 = theme.Background
 	self.TitleLabel.TextColor3 = theme.Text
 	self.ContentLabel.TextColor3 = theme.TextMuted
 end
