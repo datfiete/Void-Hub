@@ -43,7 +43,8 @@ function Toggle.new(section: any, data: ToggleOptions): ToggleHandle
 		Parent = section.Inner,
 	})
 	Helpers.Corner(row, Theme.CornerRadiusSmall)
-	Helpers.Stroke(row, library.Theme.Border, 1)
+	local rowStroke = Helpers.Stroke(row, library.Theme.Border, 1)
+	rowStroke.Transparency = 0.18
 
 	local label = Helpers.CreateLabel({
 		Name = "Label",
@@ -55,7 +56,7 @@ function Toggle.new(section: any, data: ToggleOptions): ToggleHandle
 
 	local switch = Helpers.CreateFrame({
 		Name = "Switch",
-		Size = UDim2.fromOffset(40, 22),
+		Size = UDim2.fromOffset(42, 22),
 		Position = UDim2.new(1, -12, 0.5, 0),
 		AnchorPoint = Vector2.new(1, 0.5),
 		BackgroundColor3 = library.Theme.Border,

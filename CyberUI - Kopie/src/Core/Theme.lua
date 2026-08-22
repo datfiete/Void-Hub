@@ -102,17 +102,17 @@ local themeValues = {
     Font = Enum.Font.GothamMedium,
     FontBold = Enum.Font.GothamBold,
 
-    CornerRadius = 10,
-    CornerRadiusSmall = 7,
-    ElementHeight = 38,
-    SidebarWidth = 210,
-    WindowSize = Vector2.new(920, 610),
-    Padding = 14,
-    Gap = 9,
+    CornerRadius = 12,
+    CornerRadiusSmall = 8,
+    ElementHeight = 42,
+    SidebarWidth = 220,
+    WindowSize = Vector2.new(1180, 760),
+    Padding = 16,
+    Gap = 10,
 
-    TopBarHeight = 82,
+    TopBarHeight = 104,
     LogoImage = "",
-    LogoSize = 50,
+    LogoSize = 72,
 }
 
 local function applyStyle(style)

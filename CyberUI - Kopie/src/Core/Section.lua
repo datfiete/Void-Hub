@@ -55,9 +55,10 @@ function Section.new(tab: any, name: string?): SectionHandle
     })
     Helpers.Corner(inner, Theme.CornerRadius)
     local innerStroke = Helpers.Stroke(inner, theme.Border, 1)
-    Helpers.Padding(inner, 14, 14)
+    innerStroke.Transparency = 0.16
+    Helpers.Padding(inner, 16, 16)
 
-    local layout = Helpers.ListLayout(inner, 8)
+    local layout = Helpers.ListLayout(inner, 10)
     layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 
     local header = nil
@@ -68,14 +69,14 @@ function Section.new(tab: any, name: string?): SectionHandle
     if name and name ~= "" then
         header = Helpers.CreateFrame({
             Name = "Header",
-            Size = UDim2.new(1, 0, 0, 38),
+            Size = UDim2.new(1, 0, 0, 48),
             BackgroundTransparency = 1,
             Parent = inner,
         })
 
         headerAccent = Helpers.CreateFrame({
             Name = "Accent", 
-            Size = UDim2.new(0, 3, 0, 24),
+            Size = UDim2.new(0, 4, 0, 34),
             Position = UDim2.new(0, 0, 0.5, 0),
             AnchorPoint = Vector2.new(0, 0.5),
             BackgroundColor3 = theme.Accent,
@@ -86,11 +87,11 @@ function Section.new(tab: any, name: string?): SectionHandle
 
         headerLabel = Helpers.CreateLabel({
             Name = "HeaderLabel",
-            Size = UDim2.new(1, -18, 0, 20),
-            Position = UDim2.fromOffset(12, 0),
+            Size = UDim2.new(1, -20, 0, 24),
+            Position = UDim2.fromOffset(14, 0),
             Text = name,
             Font = Theme.FontBold,
-            TextSize = 15,
+            TextSize = 18,
             TextColor3 = theme.Text,
             TextXAlignment = Enum.TextXAlignment.Left,
             Parent = header,
@@ -98,11 +99,11 @@ function Section.new(tab: any, name: string?): SectionHandle
 
         headerDescription = Helpers.CreateLabel({
             Name = "HeaderDescription",
-            Size = UDim2.new(1, -18, 0, 15),
-            Position = UDim2.fromOffset(12, 20),
+            Size = UDim2.new(1, -20, 0, 18),
+            Position = UDim2.fromOffset(14, 25),
             Text = "Configure " .. string.lower(name),
             Font = Theme.Font,
-            TextSize = 10,
+            TextSize = 12,
             TextColor3 = theme.TextMuted,
             TextXAlignment = Enum.TextXAlignment.Left,
             Parent = header,

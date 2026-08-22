@@ -242,7 +242,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	local infoBarHeight = 0 -- Vaxorin keeps the content area clean; optional info bar remains available internally
 
 	-- Resize limits
-	local minWindowSize = Vector2.new(760, 480)
+	local minWindowSize = Vector2.new(900, 600)
 	local maxWindowSize = Vector2.new(1500, 980)
 
 	-- ============================================
@@ -287,7 +287,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Position = UDim2.fromOffset(20, 38),
 		Text = windowSubtitle or "Welcome to " .. windowName,
 		TextColor3 = library.Theme.TextMuted,
-		TextSize = 13,
+		TextSize = 14,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Parent = loadingFrame,
 	})
@@ -298,7 +298,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Position = UDim2.fromOffset(20, 62),
 		Text = VERSION,
 		TextColor3 = library.Theme.TextMuted,
-		TextSize = 11,
+		TextSize = 12,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Parent = loadingFrame,
 	})
@@ -404,7 +404,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	backgroundImage.Size = UDim2.fromScale(1, 1)
 	backgroundImage.BackgroundTransparency = 1
 	backgroundImage.Image = data.BackgroundImage or ""
-	backgroundImage.ImageTransparency = 0.48
+	backgroundImage.ImageTransparency = 0.66
 	backgroundImage.ScaleType = Enum.ScaleType.Crop
 	backgroundImage.ZIndex = 0
 	backgroundImage.Parent = main
@@ -416,7 +416,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	overlay.Name = "BackgroundOverlay"
 	overlay.Size = UDim2.fromScale(1, 1)
 	overlay.BackgroundColor3 = Color3.new(0, 0, 0)
-	overlay.BackgroundTransparency = 0.46
+	overlay.BackgroundTransparency = 0.56
 	overlay.BorderSizePixel = 0
 	overlay.ZIndex = 1
 	overlay.Parent = main
@@ -493,7 +493,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 
 	local brand = Helpers.CreateFrame({
 		Name = "Brand",
-		Size = UDim2.new(0, 390, 1, 0),
+		Size = UDim2.new(0, 430, 1, 0),
 		Position = UDim2.fromOffset(18, 0),
 		BackgroundTransparency = 1,
 		Parent = topBar,
@@ -538,27 +538,15 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	titleLayout.Padding = UDim.new(0, 1)
 	titleLayout.Parent = titleContainer
 
-	local title = Helpers.CreateLabel({
-		Name = "Title",
-		Size = UDim2.new(1, 0, 0, 30),
-		Text = windowName,
-		Font = Theme.FontBold,
-		TextSize = 24,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextColor3 = library.Theme.Text,
-		TextTruncate = Enum.TextTruncate.AtEnd,
-		Parent = titleContainer,
-	})
-	title.ZIndex = 31
-
 	local subtitle: TextLabel? = nil
 	if windowSubtitle and windowSubtitle ~= "" then
 		subtitle = Helpers.CreateLabel({
 			Name = "Subtitle",
-			Size = UDim2.new(1, 0, 0, 19),
+			Size = UDim2.new(1, 0, 0, 20),
 			Text = windowSubtitle,
-			TextColor3 = library.Theme.TextMuted,
-			TextSize = 13,
+			Font = Theme.Font,
+			TextColor3 = library.Theme.Accent,
+			TextSize = 14,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			TextTruncate = Enum.TextTruncate.AtEnd,
 			Parent = titleContainer,
@@ -566,13 +554,28 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		subtitle.ZIndex = 31
 	end
 
-	local controlWidth = showWindowControls and 108 or 18
+	local title = Helpers.CreateLabel({
+		Name = "Title",
+		Size = UDim2.new(1, 0, 0, 34),
+		Text = windowName,
+		Font = Theme.FontBold,
+		TextSize = 27,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextColor3 = library.Theme.Text,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		Parent = titleContainer,
+	})
+	title.ZIndex = 31
+
+	local controlWidth = showWindowControls and 112 or 20
+	local headerLeftReserved = 446
+	local headerRightReserved = controlWidth + 22
 	local badgeHolder = Helpers.CreateFrame({
 		Name = "Badges",
-		Size = UDim2.new(0, 280, 1, 0),
-		Position = UDim2.new(1, -controlWidth, 0, 0),
-		AnchorPoint = Vector2.new(1, 0),
+		Size = UDim2.new(1, -(headerLeftReserved + headerRightReserved), 1, 0),
+		Position = UDim2.fromOffset(headerLeftReserved, 0),
 		BackgroundTransparency = 1,
+		ClipsDescendants = true,
 		Parent = topBar,
 	})
 	badgeHolder.ZIndex = 31
@@ -581,7 +584,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	badgeLayout.FillDirection = Enum.FillDirection.Horizontal
 	badgeLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 	badgeLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
-	badgeLayout.Padding = UDim.new(0, 8)
+	badgeLayout.Padding = UDim.new(0, 10)
 	badgeLayout.Parent = badgeHolder
 
 	local badgeData = data.Badges or {
@@ -609,7 +612,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 			AutomaticSize = Enum.AutomaticSize.X,
 			Text = badge.Text,
 			Font = Theme.FontBold,
-			TextSize = 11,
+			TextSize = 12,
 			TextColor3 = color,
 			TextXAlignment = Enum.TextXAlignment.Center,
 			Parent = pill,
@@ -621,8 +624,8 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	if showWindowControls then
 		local controls = Helpers.CreateFrame({
 			Name = "WindowControls",
-			Size = UDim2.fromOffset(92, 44),
-			Position = UDim2.new(1, -16, 0.5, 0),
+			Size = UDim2.fromOffset(96, 46),
+			Position = UDim2.new(1, -18, 0.5, 0),
 			AnchorPoint = Vector2.new(1, 0.5),
 			BackgroundTransparency = 1,
 			Parent = topBar,
@@ -637,7 +640,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 
 		minimizeButton = Instance.new("TextButton")
 		minimizeButton.Name = "Minimize"
-		minimizeButton.Size = UDim2.fromOffset(42, 42)
+		minimizeButton.Size = UDim2.fromOffset(44, 44)
 		minimizeButton.BackgroundColor3 = library.Theme.Background
 		minimizeButton.BackgroundTransparency = 0.05
 		minimizeButton.Text = "—"
@@ -647,12 +650,12 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		minimizeButton.AutoButtonColor = false
 		minimizeButton.ZIndex = 35
 		minimizeButton.Parent = controls
-		Helpers.Corner(minimizeButton, 9)
+		Helpers.Corner(minimizeButton, 10)
 		Helpers.Stroke(minimizeButton, library.Theme.Border, 1)
 
 		closeButton = Instance.new("TextButton")
 		closeButton.Name = "Close"
-		closeButton.Size = UDim2.fromOffset(42, 42)
+		closeButton.Size = UDim2.fromOffset(44, 44)
 		closeButton.BackgroundColor3 = library.Theme.Background
 		closeButton.BackgroundTransparency = 0.05
 		closeButton.Text = "×"
@@ -662,7 +665,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		closeButton.AutoButtonColor = false
 		closeButton.ZIndex = 35
 		closeButton.Parent = controls
-		Helpers.Corner(closeButton, 9)
+		Helpers.Corner(closeButton, 10)
 		Helpers.Stroke(closeButton, library.Theme.Border, 1)
 
 		self._Maid:GiveTask(closeButton.MouseEnter:Connect(function()
@@ -765,23 +768,24 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 
 	local watermark = Helpers.CreateFrame({
 		Name = "Watermark",
-		Size = UDim2.new(0, 0, 0, 26),
+		Size = UDim2.new(0, 0, 0, 30),
 		AutomaticSize = Enum.AutomaticSize.X,
-		Position = UDim2.new(0, 16, 0, 16),
+		Position = UDim2.new(0.5, 0, 0, topBarHeight + 16),
+	AnchorPoint = Vector2.new(0.5, 0),
 		BackgroundColor3 = library.Theme.Secondary,
 		BackgroundTransparency = 0.1,
 		Visible = false,
 		Parent = screenGui,
 	})
 	watermark.ZIndex = 40
-	Helpers.Corner(watermark, 8)
+	Helpers.Corner(watermark, 9)
 	local watermarkStroke = Helpers.Stroke(watermark, library.Theme.Border, 1)
-	Helpers.Padding(watermark, 10, 0)
+	Helpers.Padding(watermark, 12, 0)
 
 	local watermarkLayout = Instance.new("UIListLayout")
 	watermarkLayout.FillDirection = Enum.FillDirection.Horizontal
 	watermarkLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-	watermarkLayout.Padding = UDim.new(0, 10)
+	watermarkLayout.Padding = UDim.new(0, 12)
 	watermarkLayout.Parent = watermark
 
 	local function watermarkStat(labelText: string)
@@ -791,13 +795,21 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 			AutomaticSize = Enum.AutomaticSize.X,
 			Text = labelText,
 			Font = Theme.FontBold,
-			TextSize = 11,
+			TextSize = 12,
 			TextColor3 = library.Theme.Text,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			Parent = watermark,
 		})
 		return lbl
 	end
+
+	local watermarkDot = Instance.new("Frame")
+	watermarkDot.Name = "AccentDot"
+	watermarkDot.Size = UDim2.fromOffset(6, 6)
+	watermarkDot.BackgroundColor3 = library.Theme.Accent
+	watermarkDot.BorderSizePixel = 0
+	watermarkDot.Parent = watermark
+	Helpers.Corner(watermarkDot, 999)
 
 	local watermarkTitle = watermarkStat(windowName)
 	watermarkTitle.TextColor3 = library.Theme.Accent
@@ -925,7 +937,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	-- ============================================
 	local resizeHandle = Instance.new("Frame")
 	resizeHandle.Name = "ResizeHandle"
-	resizeHandle.Size = UDim2.fromOffset(18, 18)
+	resizeHandle.Size = UDim2.fromOffset(16, 16)
 	resizeHandle.Position = UDim2.new(1, -4, 1, -4)
 	resizeHandle.AnchorPoint = Vector2.new(1, 1)
 	resizeHandle.BackgroundTransparency = 1
@@ -1021,7 +1033,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	})
 	local sidebarCorner = Helpers.Corner(sidebar, Theme.CornerRadius)
 	sidebar.ClipsDescendants = true
-	Helpers.Padding(sidebar, Theme.Padding)
+	Helpers.Padding(sidebar, 16)
 
 	local sidebarDivider = Instance.new("Frame")
 	sidebarDivider.Name = "Divider"
@@ -1039,7 +1051,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Position = UDim2.new(0, 0, 0, if showSearch then 50 else 8),
 		Text = "NAVIGATION",
 		Font = Theme.FontBold,
-		TextSize = 9,
+		TextSize = 10,
 		TextColor3 = library.Theme.TextMuted,
 		TextTransparency = 0.12,
 		Parent = sidebar,
@@ -1050,7 +1062,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	if showSearch then
 		local searchHolder = Helpers.CreateFrame({
 			Name = "SearchHolder",
-			Size = UDim2.new(1, 0, 0, 38),
+			Size = UDim2.new(1, 0, 0, 44),
 			Position = UDim2.fromOffset(0, 0),
 			BackgroundColor3 = library.Theme.Background,
 			BackgroundTransparency = 0.02,
@@ -1061,11 +1073,11 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 
 		local searchIcon = Helpers.CreateLabel({
 			Name = "Icon",
-			Size = UDim2.fromOffset(20, 38),
+			Size = UDim2.fromOffset(22, 44),
 			Position = UDim2.fromOffset(10, 0),
 			Text = "⌕",
 			Font = Theme.FontBold,
-			TextSize = 19,
+			TextSize = 20,
 			TextColor3 = library.Theme.TextMuted,
 			TextXAlignment = Enum.TextXAlignment.Center,
 			Parent = searchHolder,
@@ -1073,8 +1085,8 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 
 		searchBox = Instance.new("TextBox")
 		searchBox.Name = "SearchBox"
-		searchBox.Size = UDim2.new(1, -42, 1, 0)
-		searchBox.Position = UDim2.fromOffset(36, 0)
+		searchBox.Size = UDim2.new(1, -46, 1, 0)
+		searchBox.Position = UDim2.fromOffset(40, 0)
 		searchBox.BackgroundTransparency = 1
 		searchBox.PlaceholderText = "Search..."
 		searchBox.Text = ""
@@ -1085,12 +1097,12 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		searchBox.TextXAlignment = Enum.TextXAlignment.Left
 		searchBox.ClearTextOnFocus = false
 		searchBox.Parent = searchHolder
-		searchTop = 62
+		searchTop = 68
 	else
 		searchTop = 28
 	end
 
-	local footerHeight = 74
+	local footerHeight = 82
 	local tabList = Helpers.CreateFrame({
 		Name = "TabList",
 		Size = UDim2.new(1, 0, 1, -(searchTop + footerHeight + 12)),
@@ -1115,7 +1127,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	local avatarImage = Instance.new("ImageLabel")
 	avatarImage.Name = "Avatar"
 	avatarImage.Size = UDim2.fromOffset(44, 44)
-	avatarImage.Position = UDim2.fromOffset(10, 15)
+	avatarImage.Position = UDim2.fromOffset(10, 17)
 	avatarImage.BackgroundTransparency = 1
 	avatarImage.Image = data.Footer and data.Footer.Avatar or ""
 	avatarImage.ScaleType = Enum.ScaleType.Crop
@@ -1126,7 +1138,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	local footerName = Helpers.CreateLabel({
 		Name = "WelcomeLabel",
 		Size = UDim2.new(1, -70, 0, 20),
-		Position = UDim2.fromOffset(64, 12),
+		Position = UDim2.fromOffset(68, 14),
 		Text = "Welcome, " .. (data.Footer and data.Footer.Username or localPlayer),
 		Font = Theme.FontBold,
 		TextSize = 13,
@@ -1138,10 +1150,10 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	local footerStatus = Helpers.CreateLabel({
 		Name = "Status",
 		Size = UDim2.new(1, -70, 0, 18),
-		Position = UDim2.fromOffset(64, 34),
+		Position = UDim2.fromOffset(68, 38),
 		Text = "Premium User",
 		Font = Theme.FontBold,
-		TextSize = 11,
+		TextSize = 12,
 		TextColor3 = library.Theme.Accent,
 		Parent = footer,
 	})
@@ -1324,7 +1336,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		})
 		title.TextColor3 = library.Theme.Text
 		if subtitle then
-			subtitle.TextColor3 = library.Theme.TextMuted
+			subtitle.TextColor3 = library.Theme.Accent
 		end
 		if minimizeButton then
 			minimizeButton.TextColor3 = library.Theme.TextMuted

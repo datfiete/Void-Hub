@@ -136,23 +136,5 @@ function Library:Destroy()
 	table.clear(self.Flags)
 end
 
-function Library:_configureSaving(options: any?)
-	local config = if type(options) == "table" then options.ConfigurationSaving or options.ConfigSaving else nil
-	if type(config) ~= "table" then
-		self._ConfigEnabled = false
-		print("[Vaxorin] ConfigurationSaving not provided, config disabled")
-		return
-	end
-
-	self._ConfigEnabled = config.Enabled == true
-	self._AutoSave = config.AutoSave ~= false
-	self.Config:SetLocation(config.FolderName, config.FileName or config.Name)
-
-	print("[Vaxorin] Config enabled:", self._ConfigEnabled, "| autosave:", self._AutoSave, "| path:", self.Config._folderName, self.Config._fileName)
-
-	if self._ConfigEnabled and not self._ConfigLoaded then
-		self:LoadConfiguration()
-	end
-end
 
 return Library

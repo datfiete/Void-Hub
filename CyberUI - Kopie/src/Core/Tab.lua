@@ -49,7 +49,7 @@ function Tab.new(window: any, name: string): TabHandle
     -- Compact navigation item: a quiet surface with a short accent rail when active.
     local button = Helpers.CreateButton({
         Name = name,
-        Size = UDim2.new(1, 0, 0, 42),
+        Size = UDim2.new(1, 0, 0, 46),
         Text = "",
         BackgroundColor3 = theme.Surface,
         BackgroundTransparency = 1,
@@ -84,8 +84,8 @@ function Tab.new(window: any, name: string): TabHandle
         ColorSequenceKeypoint.new(1, theme.AccentAlt or theme.Accent),
     })
     activeGradient.Transparency = NumberSequence.new({
-        NumberSequenceKeypoint.new(0, 0.89),
-        NumberSequenceKeypoint.new(1, 0.96),
+        NumberSequenceKeypoint.new(0, 0.90),
+        NumberSequenceKeypoint.new(1, 0.97),
     })
     activeGradient.Parent = activeFill
 

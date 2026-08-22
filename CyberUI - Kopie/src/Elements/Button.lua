@@ -37,7 +37,8 @@ function Button.new(section: any, data: ButtonOptions): ButtonHandle
 		Parent = section.Inner,
 	})
 	Helpers.Corner(row, Theme.CornerRadiusSmall)
-	Helpers.Stroke(row, library.Theme.Border, 1)
+	local rowStroke = Helpers.Stroke(row, library.Theme.Border, 1)
+	rowStroke.Transparency = 0.18
 
 	self.Instance = row
 

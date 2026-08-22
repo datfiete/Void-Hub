@@ -39,7 +39,8 @@ function Paragraph.new(section: any, data: ParagraphOptions): ParagraphHandle
 		Parent = section.Inner,
 	})
 	Helpers.Corner(row, Theme.CornerRadiusSmall)
-	Helpers.Stroke(row, library.Theme.Border, 1)
+	local rowStroke = Helpers.Stroke(row, library.Theme.Border, 1)
+	rowStroke.Transparency = 0.18
 	Helpers.Padding(row, 12)
 	Helpers.ListLayout(row, 6)
 
@@ -49,7 +50,7 @@ function Paragraph.new(section: any, data: ParagraphOptions): ParagraphHandle
 		AutomaticSize = Enum.AutomaticSize.Y,
 		Text = self._Title,
 		Font = Theme.FontBold,
-		TextSize = 15,
+		TextSize = 17,
 		TextWrapped = true,
 		Visible = self._Title ~= "",
 		Parent = row,
