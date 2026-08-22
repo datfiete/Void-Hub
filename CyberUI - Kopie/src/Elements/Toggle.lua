@@ -43,6 +43,7 @@ function Toggle.new(section: any, data: ToggleOptions): ToggleHandle
 		Parent = section.Inner,
 	})
 	Helpers.Corner(row, Theme.CornerRadiusSmall)
+	Helpers.Stroke(row, library.Theme.Border, 1)
 
 	local label = Helpers.CreateLabel({
 		Name = "Label",
@@ -61,6 +62,7 @@ function Toggle.new(section: any, data: ToggleOptions): ToggleHandle
 		Parent = row,
 	})
 	Helpers.Corner(switch, 999)
+	local switchStroke = Helpers.Stroke(switch, library.Theme.BorderStrong or library.Theme.Border, 1)
 
 	local knob = Helpers.CreateFrame({
 		Name = "Knob",
@@ -94,9 +96,12 @@ function Toggle.new(section: any, data: ToggleOptions): ToggleHandle
 		if animate then
 			Tween.Play(knob, { Position = targetPosition })
 			Tween.Play(switch, { BackgroundColor3 = targetColor })
+			Tween.Play(switchStroke, { Color = if value then library.Theme.Accent else (library.Theme.BorderStrong or library.Theme.Border), Transparency = if value then 0.35 else 0.65 })
 		else
 			knob.Position = targetPosition
 			switch.BackgroundColor3 = targetColor
+			switchStroke.Color = if value then library.Theme.Accent else (library.Theme.BorderStrong or library.Theme.Border)
+			switchStroke.Transparency = if value then 0.35 else 0.65
 		end
 	end
 
@@ -130,6 +135,11 @@ function Toggle:RefreshTheme()
 	self.Instance.BackgroundColor3 = theme.ElementBackground or theme.Background
 	self.Label.TextColor3 = theme.Text
 	self.Switch.BackgroundColor3 = if self._Value then theme.Accent else theme.Border
+	local switchStroke = self.Switch:FindFirstChildOfClass("UIStroke")
+	if switchStroke then
+		switchStroke.Color = if self._Value then theme.Accent else (theme.BorderStrong or theme.Border)
+		switchStroke.Transparency = if self._Value then 0.35 else 0.65
+	end
 	self.Knob.BackgroundColor3 = theme.Text
 end
 

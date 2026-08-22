@@ -44,44 +44,69 @@ function Tab.new(window: any, name: string): TabHandle
         _DefaultSection = nil :: any,
     }, Tab)
 
+    local theme = window.Library.Theme
+
+    -- Compact navigation item: a quiet surface with a short accent rail when active.
     local button = Helpers.CreateButton({
         Name = name,
-        Size = UDim2.new(1, 0, 0, 44),
+        Size = UDim2.new(1, 0, 0, 42),
         Text = "",
-        BackgroundColor3 = window.Library.Theme.Secondary,
+        BackgroundColor3 = theme.Surface,
         BackgroundTransparency = 1,
         AutoButtonColor = false,
         Parent = window.TabList,
     })
     Helpers.Corner(button, Theme.CornerRadiusSmall)
 
+    local hoverFill = Instance.new("Frame")
+    hoverFill.Name = "HoverFill"
+    hoverFill.Size = UDim2.fromScale(1, 1)
+    hoverFill.BackgroundColor3 = theme.SurfaceHover
+    hoverFill.BackgroundTransparency = 1
+    hoverFill.BorderSizePixel = 0
+    hoverFill.ZIndex = 0
+    hoverFill.Parent = button
+    Helpers.Corner(hoverFill, Theme.CornerRadiusSmall)
+
     local activeFill = Instance.new("Frame")
     activeFill.Name = "ActiveFill"
     activeFill.Size = UDim2.fromScale(1, 1)
-    activeFill.BackgroundColor3 = window.Library.Theme.Accent
+    activeFill.BackgroundColor3 = theme.Accent
     activeFill.BackgroundTransparency = 1
     activeFill.BorderSizePixel = 0
-    activeFill.ZIndex = 0
+    activeFill.ZIndex = 1
     activeFill.Parent = button
     Helpers.Corner(activeFill, Theme.CornerRadiusSmall)
 
     local activeGradient = Instance.new("UIGradient")
     activeGradient.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, window.Library.Theme.Accent),
-        ColorSequenceKeypoint.new(1, window.Library.Theme.AccentAlt or window.Library.Theme.Accent),
+        ColorSequenceKeypoint.new(0, theme.Accent),
+        ColorSequenceKeypoint.new(1, theme.AccentAlt or theme.Accent),
     })
     activeGradient.Transparency = NumberSequence.new({
-        NumberSequenceKeypoint.new(0, 0.77),
-        NumberSequenceKeypoint.new(1, 0.9),
+        NumberSequenceKeypoint.new(0, 0.89),
+        NumberSequenceKeypoint.new(1, 0.96),
     })
     activeGradient.Parent = activeFill
 
+    local indicatorGlow = Instance.new("Frame")
+    indicatorGlow.Name = "IndicatorGlow"
+    indicatorGlow.Size = UDim2.new(0, 7, 0, 24)
+    indicatorGlow.Position = UDim2.new(0, -2, 0.5, 0)
+    indicatorGlow.AnchorPoint = Vector2.new(0, 0.5)
+    indicatorGlow.BackgroundColor3 = theme.Accent
+    indicatorGlow.BackgroundTransparency = 1
+    indicatorGlow.BorderSizePixel = 0
+    indicatorGlow.ZIndex = 2
+    indicatorGlow.Parent = button
+    Helpers.Corner(indicatorGlow, 4)
+
     local indicator = Instance.new("Frame")
     indicator.Name = "ActiveIndicator"
-    indicator.Size = UDim2.new(0, 3, 1, -14)
+    indicator.Size = UDim2.new(0, 2, 0, 22)
     indicator.Position = UDim2.new(0, 0, 0.5, 0)
     indicator.AnchorPoint = Vector2.new(0, 0.5)
-    indicator.BackgroundColor3 = window.Library.Theme.Accent
+    indicator.BackgroundColor3 = theme.Accent
     indicator.BackgroundTransparency = 1
     indicator.BorderSizePixel = 0
     indicator.ZIndex = 3
@@ -90,26 +115,26 @@ function Tab.new(window: any, name: string): TabHandle
 
     local icon = Instance.new("TextLabel")
     icon.Name = "Icon"
-    icon.Size = UDim2.fromOffset(26, 44)
-    icon.Position = UDim2.new(0, 13, 0, 0)
+    icon.Size = UDim2.fromOffset(24, 42)
+    icon.Position = UDim2.fromOffset(11, 0)
     icon.BackgroundTransparency = 1
     icon.Text = getIcon(name)
     icon.Font = Theme.FontBold
-    icon.TextSize = 17
-    icon.TextColor3 = window.Library.Theme.TextMuted
+    icon.TextSize = 16
+    icon.TextColor3 = theme.TextMuted
     icon.TextXAlignment = Enum.TextXAlignment.Center
     icon.ZIndex = 4
     icon.Parent = button
 
     local label = Instance.new("TextLabel")
     label.Name = "Label"
-    label.Size = UDim2.new(1, -55, 1, 0)
-    label.Position = UDim2.new(0, 49, 0, 0)
+    label.Size = UDim2.new(1, -50, 1, 0)
+    label.Position = UDim2.fromOffset(47, 0)
     label.BackgroundTransparency = 1
     label.Text = name
     label.Font = Theme.Font
     label.TextSize = 13
-    label.TextColor3 = window.Library.Theme.TextMuted
+    label.TextColor3 = theme.TextMuted
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.TextTruncate = Enum.TextTruncate.AtEnd
     label.ZIndex = 4
@@ -117,16 +142,17 @@ function Tab.new(window: any, name: string): TabHandle
 
     button.MouseEnter:Connect(function()
         if window._ActiveTab ~= self then
-            Tween.Play(activeFill, { BackgroundTransparency = 0.9 }, { Time = 0.12 })
-            Tween.Play(icon, { TextColor3 = window.Library.Theme.Text }, { Time = 0.12 })
-            Tween.Play(label, { TextColor3 = window.Library.Theme.Text }, { Time = 0.12 })
+            Tween.Play(hoverFill, { BackgroundTransparency = 0.82 }, { Time = 0.12 })
+            Tween.Play(icon, { TextColor3 = theme.Text }, { Time = 0.12 })
+            Tween.Play(label, { TextColor3 = theme.Text }, { Time = 0.12 })
         end
     end)
+
     button.MouseLeave:Connect(function()
         if window._ActiveTab ~= self then
-            Tween.Play(activeFill, { BackgroundTransparency = 1 }, { Time = 0.14 })
-            Tween.Play(icon, { TextColor3 = window.Library.Theme.TextMuted }, { Time = 0.12 })
-            Tween.Play(label, { TextColor3 = window.Library.Theme.TextMuted }, { Time = 0.12 })
+            Tween.Play(hoverFill, { BackgroundTransparency = 1 }, { Time = 0.14 })
+            Tween.Play(icon, { TextColor3 = theme.TextMuted }, { Time = 0.12 })
+            Tween.Play(label, { TextColor3 = theme.TextMuted }, { Time = 0.12 })
         end
     end)
 
@@ -138,14 +164,14 @@ function Tab.new(window: any, name: string): TabHandle
     page.BackgroundTransparency = 1
     page.BorderSizePixel = 0
     page.ScrollBarThickness = 3
-    page.ScrollBarImageColor3 = window.Library.Theme.Accent
-    page.ScrollBarImageTransparency = 0.25
+    page.ScrollBarImageColor3 = theme.Accent
+    page.ScrollBarImageTransparency = 0.45
     page.CanvasSize = UDim2.new()
     page.AutomaticCanvasSize = Enum.AutomaticSize.Y
     page.ClipsDescendants = true
     page.Parent = window.Pages
 
-    local pagePadding = Helpers.Padding(page, 18, 16)
+    local pagePadding = Helpers.Padding(page, 18, 18)
 
     local columns = Helpers.CreateFrame({
         Name = "Columns",
@@ -162,6 +188,7 @@ function Tab.new(window: any, name: string): TabHandle
         BackgroundTransparency = 1,
         Parent = columns,
     })
+
     local rightColumn = Helpers.CreateFrame({
         Name = "ColumnRight",
         Size = UDim2.new(0, 0, 0, 0),
@@ -175,11 +202,11 @@ function Tab.new(window: any, name: string): TabHandle
     columnLayout.FillDirection = Enum.FillDirection.Horizontal
     columnLayout.VerticalAlignment = Enum.VerticalAlignment.Top
     columnLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
-    columnLayout.Padding = UDim.new(0, 10)
+    columnLayout.Padding = UDim.new(0, 12)
     columnLayout.Parent = columns
 
-    local leftLayout = Helpers.ListLayout(leftColumn, 10)
-    local rightLayout = Helpers.ListLayout(rightColumn, 10)
+    local leftLayout = Helpers.ListLayout(leftColumn, 12)
+    local rightLayout = Helpers.ListLayout(rightColumn, 12)
 
     local function updateColumns()
         local count = #self._Sections
@@ -187,8 +214,8 @@ function Tab.new(window: any, name: string): TabHandle
         rightColumn.Visible = twoColumns
 
         if twoColumns then
-            leftColumn.Size = UDim2.new(0.5, -5, 0, 0)
-            rightColumn.Size = UDim2.new(0.5, -5, 0, 0)
+            leftColumn.Size = UDim2.new(0.5, -6, 0, 0)
+            rightColumn.Size = UDim2.new(0.5, -6, 0, 0)
         else
             leftColumn.Size = UDim2.new(1, 0, 0, 0)
             rightColumn.Size = UDim2.new(0, 0, 0, 0)
@@ -222,7 +249,10 @@ function Tab.new(window: any, name: string): TabHandle
     self.Page = page
     self._Icon = icon
     self._Label = label
+    self._HoverFill = hoverFill
     self._ActiveFill = activeFill
+    self._Indicator = indicator
+    self._IndicatorGlow = indicatorGlow
     self._Columns = columns
     self._LeftColumn = leftColumn
     self._RightColumn = rightColumn
@@ -231,6 +261,9 @@ function Tab.new(window: any, name: string): TabHandle
     self._Maid:Give(page)
 
     self._Maid:GiveTask(button.MouseButton1Click:Connect(function()
+        if window._PlayClick then
+            window._PlayClick()
+        end
         window:_selectTab(self)
     end))
 
@@ -249,20 +282,19 @@ end
 
 function Tab:SetActive(active: boolean)
     local theme = self.Window.Library.Theme
-    local fill = self._ActiveFill
-    fill.BackgroundColor3 = theme.Accent
-    fill.BackgroundTransparency = if active then 0.35 else 1
-    self.Button.BackgroundTransparency = 1
+    self._ActiveFill.BackgroundColor3 = theme.Accent
+    self._ActiveFill.BackgroundTransparency = if active then 0.84 else 1
+    self._HoverFill.BackgroundColor3 = theme.SurfaceHover
+    self._HoverFill.BackgroundTransparency = 1
 
-    local indicator = self.Button:FindFirstChild("ActiveIndicator")
-    if indicator and indicator:IsA("Frame") then
-        indicator.BackgroundColor3 = theme.Accent
-        indicator.BackgroundTransparency = if active then 0 else 1
-    end
+    self._Indicator.BackgroundColor3 = theme.Accent
+    self._Indicator.BackgroundTransparency = if active then 0 else 1
+    self._IndicatorGlow.BackgroundColor3 = theme.Accent
+    self._IndicatorGlow.BackgroundTransparency = if active then 0.82 else 1
 
     self._Icon.TextColor3 = if active then theme.Text else theme.TextMuted
     self._Label.TextColor3 = if active then theme.Text else theme.TextMuted
-    self._Icon.TextSize = if active then 18 else 17
+    self._Icon.TextSize = if active then 17 else 16
 end
 
 function Tab:RefreshTheme()

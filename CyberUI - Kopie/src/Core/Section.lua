@@ -35,6 +35,8 @@ function Section.new(tab: any, name: string?): SectionHandle
         _Elements = {} :: { any },
     }, Section)
 
+    local theme = tab.Window.Library.Theme
+
     local container = Helpers.CreateFrame({
         Name = name or "Section",
         Size = UDim2.new(1, 0, 0, 0),
@@ -47,49 +49,79 @@ function Section.new(tab: any, name: string?): SectionHandle
         Name = "Inner",
         Size = UDim2.new(1, 0, 0, 0),
         AutomaticSize = Enum.AutomaticSize.Y,
-        BackgroundColor3 = tab.Window.Library.Theme.Surface,
-        BackgroundTransparency = 0.02,
+        BackgroundColor3 = theme.Surface,
+        BackgroundTransparency = 0.015,
         Parent = container,
     })
     Helpers.Corner(inner, Theme.CornerRadius)
-    Helpers.Stroke(inner, tab.Window.Library.Theme.Border, 1)
-    Helpers.Padding(inner, 14, 13)
+    local innerStroke = Helpers.Stroke(inner, theme.Border, 1)
+    Helpers.Padding(inner, 14, 14)
 
     local layout = Helpers.ListLayout(inner, 8)
     layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 
     local header = nil
     local headerLabel = nil
+    local headerDescription = nil
+    local headerAccent = nil
+
     if name and name ~= "" then
         header = Helpers.CreateFrame({
             Name = "Header",
-            Size = UDim2.new(1, 0, 0, 24),
+            Size = UDim2.new(1, 0, 0, 38),
             BackgroundTransparency = 1,
             Parent = inner,
         })
 
+        headerAccent = Helpers.CreateFrame({
+            Name = "Accent", 
+            Size = UDim2.new(0, 3, 0, 24),
+            Position = UDim2.new(0, 0, 0.5, 0),
+            AnchorPoint = Vector2.new(0, 0.5),
+            BackgroundColor3 = theme.Accent,
+            BorderSizePixel = 0,
+            Parent = header,
+        })
+        Helpers.Corner(headerAccent, 2)
+
         headerLabel = Helpers.CreateLabel({
             Name = "HeaderLabel",
-            Size = UDim2.new(1, -4, 1, 0),
-            Position = UDim2.fromOffset(1, 0),
+            Size = UDim2.new(1, -18, 0, 20),
+            Position = UDim2.fromOffset(12, 0),
             Text = name,
             Font = Theme.FontBold,
             TextSize = 15,
-            TextColor3 = tab.Window.Library.Theme.Text,
+            TextColor3 = theme.Text,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            Parent = header,
+        })
+
+        headerDescription = Helpers.CreateLabel({
+            Name = "HeaderDescription",
+            Size = UDim2.new(1, -18, 0, 15),
+            Position = UDim2.fromOffset(12, 20),
+            Text = "Configure " .. string.lower(name),
+            Font = Theme.Font,
+            TextSize = 10,
+            TextColor3 = theme.TextMuted,
             TextXAlignment = Enum.TextXAlignment.Left,
             Parent = header,
         })
     end
 
     local themeConnection = tab.Window.Library.Theme.Changed:Connect(function(key)
-        if key == "Style" or key == "Accent" or key == "Secondary" or key == "Surface" or key == "Border" or key == "Text" then
-            inner.BackgroundColor3 = tab.Window.Library.Theme.Surface
-            local stroke = inner:FindFirstChildOfClass("UIStroke")
-            if stroke then
-                stroke.Color = tab.Window.Library.Theme.Border
-            end
+        if key == "Style" or key == "Accent" or key == "Surface" or key == "Border" or key == "Text" or key == "TextMuted" then
+            local currentTheme = tab.Window.Library.Theme
+            inner.BackgroundColor3 = currentTheme.Surface
+            innerStroke.Color = currentTheme.Border
             if headerLabel then
-                headerLabel.TextColor3 = tab.Window.Library.Theme.Text
+                headerLabel.TextColor3 = currentTheme.Text
+            end
+            if headerDescription then
+                headerDescription.TextColor3 = currentTheme.TextMuted
+            end
+            if headerAccent then
+                headerAccent.BackgroundColor3 = currentTheme.Accent
             end
         end
     end)
@@ -99,6 +131,8 @@ function Section.new(tab: any, name: string?): SectionHandle
     self.Inner = inner
     self.Header = header
     self._HeaderLabel = headerLabel
+    self._HeaderDescription = headerDescription
+    self._HeaderAccent = headerAccent
     self._Maid:Give(container)
 
     return self :: any
@@ -113,6 +147,12 @@ function Section:RefreshTheme()
     end
     if self._HeaderLabel then
         self._HeaderLabel.TextColor3 = theme.Text
+    end
+    if self._HeaderDescription then
+        self._HeaderDescription.TextColor3 = theme.TextMuted
+    end
+    if self._HeaderAccent then
+        self._HeaderAccent.BackgroundColor3 = theme.Accent
     end
     for _, element in self._Elements do
         if element.RefreshTheme then

@@ -242,8 +242,8 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	local infoBarHeight = 0 -- Vaxorin keeps the content area clean; optional info bar remains available internally
 
 	-- Resize limits
-	local minWindowSize = Vector2.new(420, 320)
-	local maxWindowSize = Vector2.new(1400, 950)
+	local minWindowSize = Vector2.new(760, 480)
+	local maxWindowSize = Vector2.new(1500, 980)
 
 	-- ============================================
 	-- LOADING SCREEN
@@ -348,7 +348,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Position = if data.Center ~= false then UDim2.fromScale(0.5, 0.5) else UDim2.fromOffset(40, 40),
 		AnchorPoint = if data.Center ~= false then Vector2.new(0.5, 0.5) else Vector2.new(0, 0),
 		BackgroundColor3 = library.Theme.Background,
-		BackgroundTransparency = 0.1,
+		BackgroundTransparency = 0.03,
 		Visible = false,
 		Parent = screenGui,
 	})
@@ -386,20 +386,15 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	self._Maid:GiveTask(main:GetPropertyChangedSignal("Visible"):Connect(syncShadow))
 	self._Maid:Give(shadow)
 
-	-- ============================================
-	-- BREATHING ACCENT GLOW
-	-- A slow, subtle pulsing outline in the accent color. This is the kind of
-	-- small "alive" detail that reads as hand-crafted rather than templated.
-	-- ============================================
+	-- A restrained accent edge: visible at close range, never a neon outline.
 	local glowStroke = Instance.new("UIStroke")
 	glowStroke.Name = "AccentGlow"
 	glowStroke.Color = library.Theme.Accent
-	glowStroke.Thickness = 1.25
-	glowStroke.Transparency = 0.55
+	glowStroke.Thickness = 1
+	glowStroke.Transparency = 0.38
 	glowStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 	glowStroke.Parent = main
-
-	self._Maid:GiveTask(glowStroke)
+	self._Maid:Give(glowStroke)
 
 	-- Background Image
 	local backgroundImage = Instance.new("ImageLabel")
@@ -409,7 +404,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	backgroundImage.Size = UDim2.fromScale(1, 1)
 	backgroundImage.BackgroundTransparency = 1
 	backgroundImage.Image = data.BackgroundImage or ""
-	backgroundImage.ImageTransparency = 0.2
+	backgroundImage.ImageTransparency = 0.48
 	backgroundImage.ScaleType = Enum.ScaleType.Crop
 	backgroundImage.ZIndex = 0
 	backgroundImage.Parent = main
@@ -421,7 +416,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	overlay.Name = "BackgroundOverlay"
 	overlay.Size = UDim2.fromScale(1, 1)
 	overlay.BackgroundColor3 = Color3.new(0, 0, 0)
-	overlay.BackgroundTransparency = 0.65
+	overlay.BackgroundTransparency = 0.46
 	overlay.BorderSizePixel = 0
 	overlay.ZIndex = 1
 	overlay.Parent = main
@@ -435,7 +430,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	local atmosphere = Instance.new("Frame")
 	atmosphere.Name = "Vignette"
 	atmosphere.Size = UDim2.fromScale(1, 1)
-	atmosphere.BackgroundTransparency = 0.9
+	atmosphere.BackgroundTransparency = 0.94
 	atmosphere.BackgroundColor3 = library.Theme.Background
 	atmosphere.BorderSizePixel = 0
 	atmosphere.ZIndex = 2
@@ -459,15 +454,15 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 
 	-- ============================================
 	-- TOP BAR
-	-- Vaxorin uses a compact product-style header: logo, stacked title,
-	-- badges, then restrained window controls.
+	-- A clean product header with a fixed control zone. The left content can
+	-- grow, but it can never occupy the close/minimize area.
 	-- ============================================
 	local topBar = Helpers.CreateFrame({
 		Name = "TopBar",
 		Size = UDim2.new(1, 0, 0, topBarHeight),
 		Position = UDim2.fromOffset(0, 0),
 		BackgroundColor3 = library.Theme.Secondary,
-		BackgroundTransparency = 0.02,
+		BackgroundTransparency = 0.015,
 		Active = true,
 		Selectable = true,
 		Parent = main,
@@ -475,12 +470,20 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	topBar.ZIndex = 20
 	local topBarCorner = Helpers.Corner(topBar, Theme.CornerRadius)
 
+	local topBarGradient = Instance.new("UIGradient")
+	topBarGradient.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, library.Theme.Secondary),
+		ColorSequenceKeypoint.new(1, library.Theme.Background),
+	})
+	topBarGradient.Rotation = 0
+	topBarGradient.Parent = topBar
+
 	local topDivider = Instance.new("Frame")
 	topDivider.Name = "Divider"
 	topDivider.Size = UDim2.new(1, 0, 0, 1)
 	topDivider.Position = UDim2.new(0, 0, 1, -1)
 	topDivider.BackgroundColor3 = library.Theme.Border
-	topDivider.BackgroundTransparency = 0.05
+	topDivider.BackgroundTransparency = 0.15
 	topDivider.BorderSizePixel = 0
 	topDivider.ZIndex = 30
 	topDivider.Parent = topBar
@@ -488,16 +491,26 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	local logoSize = Theme.LogoSize or 50
 	local logoAsset = data.Logo or Vaxorin_Logo
 
+	local brand = Helpers.CreateFrame({
+		Name = "Brand",
+		Size = UDim2.new(0, 390, 1, 0),
+		Position = UDim2.fromOffset(18, 0),
+		BackgroundTransparency = 1,
+		Parent = topBar,
+	})
+
 	local logoFrame = Helpers.CreateFrame({
 		Name = "LogoFrame",
 		Size = UDim2.fromOffset(logoSize + 4, logoSize + 4),
-		Position = UDim2.new(0, 20, 0.5, 0),
+		Position = UDim2.new(0, 0, 0.5, 0),
 		AnchorPoint = Vector2.new(0, 0.5),
 		BackgroundColor3 = library.Theme.Background,
-		Parent = topBar,
+		Parent = brand,
 	})
-	Helpers.Corner(logoFrame, 14)
-	Helpers.Stroke(logoFrame, library.Theme.BorderStrong or library.Theme.Border, 1)
+	Helpers.Corner(logoFrame, 13)
+	local logoStroke = Helpers.Stroke(logoFrame, library.Theme.BorderStrong or library.Theme.Border, 1)
+	local logoAccentStroke = Helpers.Stroke(logoFrame, library.Theme.Accent, 1)
+	logoAccentStroke.Transparency = 0.62
 
 	local logoImage = Instance.new("ImageLabel")
 	logoImage.Name = "Logo"
@@ -513,10 +526,10 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 
 	local titleContainer = Helpers.CreateFrame({
 		Name = "TitleContainer",
-		Size = UDim2.new(0, 330, 1, 0),
-		Position = UDim2.new(0, 20 + logoSize + 18, 0, 0),
+		Size = UDim2.new(1, -(logoSize + 18), 1, 0),
+		Position = UDim2.new(0, logoSize + 18, 0, 0),
 		BackgroundTransparency = 1,
-		Parent = topBar,
+		Parent = brand,
 	})
 	local titleLayout = Instance.new("UIListLayout")
 	titleLayout.FillDirection = Enum.FillDirection.Vertical
@@ -530,9 +543,10 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Size = UDim2.new(1, 0, 0, 30),
 		Text = windowName,
 		Font = Theme.FontBold,
-		TextSize = 25,
+		TextSize = 24,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = library.Theme.Text,
+		TextTruncate = Enum.TextTruncate.AtEnd,
 		Parent = titleContainer,
 	})
 	title.ZIndex = 31
@@ -541,23 +555,23 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	if windowSubtitle and windowSubtitle ~= "" then
 		subtitle = Helpers.CreateLabel({
 			Name = "Subtitle",
-		Size = UDim2.new(1, 0, 0, 20),
+			Size = UDim2.new(1, 0, 0, 19),
 			Text = windowSubtitle,
 			TextColor3 = library.Theme.TextMuted,
-			TextSize = 14,
+			TextSize = 13,
 			TextXAlignment = Enum.TextXAlignment.Left,
+			TextTruncate = Enum.TextTruncate.AtEnd,
 			Parent = titleContainer,
 		})
 		subtitle.ZIndex = 31
 	end
 
-	local controlsReserved = showWindowControls and 112 or 18
+	local controlWidth = showWindowControls and 108 or 18
 	local badgeHolder = Helpers.CreateFrame({
 		Name = "Badges",
-		Size = UDim2.new(0, 0, 1, 0),
-		AutomaticSize = Enum.AutomaticSize.X,
-		Position = UDim2.new(1, -controlsReserved, 0.5, 0),
-		AnchorPoint = Vector2.new(1, 0.5),
+		Size = UDim2.new(0, 280, 1, 0),
+		Position = UDim2.new(1, -controlWidth, 0, 0),
+		AnchorPoint = Vector2.new(1, 0),
 		BackgroundTransparency = 1,
 		Parent = topBar,
 	})
@@ -566,6 +580,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	local badgeLayout = Instance.new("UIListLayout")
 	badgeLayout.FillDirection = Enum.FillDirection.Horizontal
 	badgeLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+	badgeLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
 	badgeLayout.Padding = UDim.new(0, 8)
 	badgeLayout.Parent = badgeHolder
 
@@ -578,16 +593,16 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		local color = badge.Color or library.Theme.Accent
 		local pill = Helpers.CreateFrame({
 			Name = "Badge" .. i,
-			Size = UDim2.new(0, 0, 0, 30),
+			Size = UDim2.new(0, 0, 0, 28),
 			AutomaticSize = Enum.AutomaticSize.X,
 			BackgroundColor3 = color,
-			BackgroundTransparency = 0.86,
+			BackgroundTransparency = 0.9,
 			Parent = badgeHolder,
 		})
 		pill.ZIndex = 32
 		Helpers.Corner(pill, 7)
 		Helpers.Stroke(pill, color, 1)
-		Helpers.Padding(pill, 12, 4)
+		Helpers.Padding(pill, 10, 4)
 		local badgeLabel = Helpers.CreateLabel({
 			Name = "Label",
 			Size = UDim2.new(0, 0, 1, 0),
@@ -604,42 +619,54 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 
 	local minimizeButton, closeButton
 	if showWindowControls then
+		local controls = Helpers.CreateFrame({
+			Name = "WindowControls",
+			Size = UDim2.fromOffset(92, 44),
+			Position = UDim2.new(1, -16, 0.5, 0),
+			AnchorPoint = Vector2.new(1, 0.5),
+			BackgroundTransparency = 1,
+			Parent = topBar,
+		})
+		controls.ZIndex = 34
+		local controlLayout = Instance.new("UIListLayout")
+		controlLayout.FillDirection = Enum.FillDirection.Horizontal
+		controlLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+		controlLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+		controlLayout.Padding = UDim.new(0, 8)
+		controlLayout.Parent = controls
+
 		minimizeButton = Instance.new("TextButton")
 		minimizeButton.Name = "Minimize"
 		minimizeButton.Size = UDim2.fromOffset(42, 42)
-		minimizeButton.Position = UDim2.new(1, -86, 0.5, 0)
-		minimizeButton.AnchorPoint = Vector2.new(0, 0.5)
 		minimizeButton.BackgroundColor3 = library.Theme.Background
-		minimizeButton.BackgroundTransparency = 0.12
+		minimizeButton.BackgroundTransparency = 0.05
 		minimizeButton.Text = "—"
 		minimizeButton.Font = Theme.FontBold
 		minimizeButton.TextSize = 18
 		minimizeButton.TextColor3 = library.Theme.TextMuted
 		minimizeButton.AutoButtonColor = false
-		minimizeButton.ZIndex = 34
-		minimizeButton.Parent = topBar
-		Helpers.Corner(minimizeButton, 10)
+		minimizeButton.ZIndex = 35
+		minimizeButton.Parent = controls
+		Helpers.Corner(minimizeButton, 9)
 		Helpers.Stroke(minimizeButton, library.Theme.Border, 1)
 
 		closeButton = Instance.new("TextButton")
 		closeButton.Name = "Close"
 		closeButton.Size = UDim2.fromOffset(42, 42)
-		closeButton.Position = UDim2.new(1, -20, 0.5, 0)
-		closeButton.AnchorPoint = Vector2.new(1, 0.5)
 		closeButton.BackgroundColor3 = library.Theme.Background
-		closeButton.BackgroundTransparency = 0.12
+		closeButton.BackgroundTransparency = 0.05
 		closeButton.Text = "×"
 		closeButton.Font = Theme.Font
-		closeButton.TextSize = 25
+		closeButton.TextSize = 24
 		closeButton.TextColor3 = library.Theme.TextMuted
 		closeButton.AutoButtonColor = false
-		closeButton.ZIndex = 34
-		closeButton.Parent = topBar
-		Helpers.Corner(closeButton, 10)
+		closeButton.ZIndex = 35
+		closeButton.Parent = controls
+		Helpers.Corner(closeButton, 9)
 		Helpers.Stroke(closeButton, library.Theme.Border, 1)
 
 		self._Maid:GiveTask(closeButton.MouseEnter:Connect(function()
-			Tween.Play(closeButton, { BackgroundColor3 = Color3.fromRGB(150, 50, 75), TextColor3 = Color3.new(1, 1, 1) }, { Time = 0.12 })
+			Tween.Play(closeButton, { BackgroundColor3 = Color3.fromRGB(130, 45, 68), TextColor3 = Color3.new(1, 1, 1) }, { Time = 0.12 })
 		end))
 		self._Maid:GiveTask(closeButton.MouseLeave:Connect(function()
 			Tween.Play(closeButton, { BackgroundColor3 = library.Theme.Background, TextColor3 = library.Theme.TextMuted }, { Time = 0.12 })
@@ -987,47 +1014,67 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	local sidebar = Helpers.CreateFrame({
 		Name = "Sidebar",
 		Size = UDim2.new(0, Theme.SidebarWidth, 1, 0),
+		Position = UDim2.fromOffset(0, 0),
 		BackgroundColor3 = library.Theme.Secondary,
-		BackgroundTransparency = 0.02,
+		BackgroundTransparency = 0.01,
 		Parent = contentArea,
 	})
 	local sidebarCorner = Helpers.Corner(sidebar, Theme.CornerRadius)
-	-- Sidebar is a clean vertical rail; no decorative accent stripe.
 	sidebar.ClipsDescendants = true
 	Helpers.Padding(sidebar, Theme.Padding)
 
+	local sidebarDivider = Instance.new("Frame")
+	sidebarDivider.Name = "Divider"
+	sidebarDivider.Size = UDim2.new(0, 1, 1, -32)
+	sidebarDivider.Position = UDim2.new(1, 0, 0, 16)
+	sidebarDivider.BackgroundColor3 = library.Theme.Border
+	sidebarDivider.BackgroundTransparency = 0.15
+	sidebarDivider.BorderSizePixel = 0
+	sidebarDivider.ZIndex = 4
+	sidebarDivider.Parent = sidebar
 
 	local navLabel = Helpers.CreateLabel({
 		Name = "NavigationLabel",
-		Size = UDim2.new(1, 0, 0, 18),
-		Position = UDim2.new(0, 0, 0, if showSearch then 40 else 4),
-		Text = "NAVIGATION  /  MENU",
+		Size = UDim2.new(1, 0, 0, 16),
+		Position = UDim2.new(0, 0, 0, if showSearch then 50 else 8),
+		Text = "NAVIGATION",
 		Font = Theme.FontBold,
 		TextSize = 9,
 		TextColor3 = library.Theme.TextMuted,
-		TextTransparency = 0.2,
+		TextTransparency = 0.12,
 		Parent = sidebar,
 	})
 
-	-- Search Box
 	local searchBox
 	local searchTop = 0
 	if showSearch then
 		local searchHolder = Helpers.CreateFrame({
 			Name = "SearchHolder",
 			Size = UDim2.new(1, 0, 0, 38),
-			Position = UDim2.new(0, 0, 0, 0),
+			Position = UDim2.fromOffset(0, 0),
 			BackgroundColor3 = library.Theme.Background,
-			BackgroundTransparency = 0.05,
+			BackgroundTransparency = 0.02,
 			Parent = sidebar,
 		})
 		Helpers.Corner(searchHolder, Theme.CornerRadiusSmall)
 		Helpers.Stroke(searchHolder, library.Theme.Border, 1)
 
+		local searchIcon = Helpers.CreateLabel({
+			Name = "Icon",
+			Size = UDim2.fromOffset(20, 38),
+			Position = UDim2.fromOffset(10, 0),
+			Text = "⌕",
+			Font = Theme.FontBold,
+			TextSize = 19,
+			TextColor3 = library.Theme.TextMuted,
+			TextXAlignment = Enum.TextXAlignment.Center,
+			Parent = searchHolder,
+		})
+
 		searchBox = Instance.new("TextBox")
 		searchBox.Name = "SearchBox"
-		searchBox.Size = UDim2.new(1, -24, 1, 0)
-		searchBox.Position = UDim2.new(0, 12, 0, 0)
+		searchBox.Size = UDim2.new(1, -42, 1, 0)
+		searchBox.Position = UDim2.fromOffset(36, 0)
 		searchBox.BackgroundTransparency = 1
 		searchBox.PlaceholderText = "Search..."
 		searchBox.Text = ""
@@ -1038,72 +1085,64 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		searchBox.TextXAlignment = Enum.TextXAlignment.Left
 		searchBox.ClearTextOnFocus = false
 		searchBox.Parent = searchHolder
-
-		searchTop = 66
+		searchTop = 62
 	else
 		searchTop = 28
 	end
 
-	-- Tab List
+	local footerHeight = 74
 	local tabList = Helpers.CreateFrame({
 		Name = "TabList",
-		Size = UDim2.new(1, 0, 1, -(searchTop + 80)),
+		Size = UDim2.new(1, 0, 1, -(searchTop + footerHeight + 12)),
 		Position = UDim2.new(0, 0, 0, searchTop),
 		BackgroundTransparency = 1,
-		AutomaticSize = Enum.AutomaticSize.None,
 		Parent = sidebar,
 	})
-	Helpers.ListLayout(tabList, Theme.Gap)
+	local tabLayout = Helpers.ListLayout(tabList, 5)
+	tabLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
 
-	-- Footer / profile card
 	local footer = Helpers.CreateFrame({
 		Name = "Footer",
-		Size = UDim2.new(1, 0, 0, 66),
-		Position = UDim2.new(0, 0, 1, -66),
+		Size = UDim2.new(1, 0, 0, footerHeight),
+		Position = UDim2.new(0, 0, 1, -footerHeight),
 		BackgroundColor3 = library.Theme.Background,
-		BackgroundTransparency = 0.05,
+		BackgroundTransparency = 0.03,
 		Parent = sidebar,
 	})
-	Helpers.Corner(footer, 10)
+	Helpers.Corner(footer, Theme.CornerRadiusSmall)
 	Helpers.Stroke(footer, library.Theme.Border, 1)
 
-	local avatarImage
-	local footerAvatar = data.Footer and data.Footer.Avatar
-	if footerAvatar and footerAvatar ~= "" then
-		avatarImage = Instance.new("ImageLabel")
-		avatarImage.Name = "Avatar"
-		avatarImage.Size = UDim2.fromOffset(42, 42)
-		avatarImage.Position = UDim2.new(0, 10, 0.5, 0)
-		avatarImage.AnchorPoint = Vector2.new(0, 0.5)
-		avatarImage.BackgroundColor3 = library.Theme.Surface
-		avatarImage.Image = footerAvatar
-		avatarImage.Parent = footer
-		Helpers.Corner(avatarImage, 9)
-		Helpers.Stroke(avatarImage, library.Theme.Border, 1)
-	end
+	local avatarImage = Instance.new("ImageLabel")
+	avatarImage.Name = "Avatar"
+	avatarImage.Size = UDim2.fromOffset(44, 44)
+	avatarImage.Position = UDim2.fromOffset(10, 15)
+	avatarImage.BackgroundTransparency = 1
+	avatarImage.Image = data.Footer and data.Footer.Avatar or ""
+	avatarImage.ScaleType = Enum.ScaleType.Crop
+	avatarImage.Parent = footer
+	Helpers.Corner(avatarImage, 22)
+	Helpers.Stroke(avatarImage, library.Theme.BorderStrong or library.Theme.Border, 1)
 
-	local footerDisplayName = (data.Footer and data.Footer.Username) or Players.LocalPlayer.DisplayName
-	Helpers.CreateLabel({
+	local footerName = Helpers.CreateLabel({
 		Name = "WelcomeLabel",
-		Size = UDim2.new(1, if avatarImage then -62 else -20, 0, 19),
-		Position = UDim2.new(0, if avatarImage then 62 else 10, 0, 13),
-		Text = footerDisplayName,
-		TextColor3 = library.Theme.Text,
-		TextSize = 12,
-		TextXAlignment = Enum.TextXAlignment.Left,
+		Size = UDim2.new(1, -70, 0, 20),
+		Position = UDim2.fromOffset(64, 12),
+		Text = "Welcome, " .. (data.Footer and data.Footer.Username or localPlayer),
 		Font = Theme.FontBold,
+		TextSize = 13,
+		TextColor3 = library.Theme.Text,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		Parent = footer,
 	})
+
 	local footerStatus = Helpers.CreateLabel({
 		Name = "Status",
-		Size = UDim2.new(1, if avatarImage then -62 else -20, 0, 18),
-		Position = UDim2.new(0, if avatarImage then 62 else 10, 0, 32),
-		Text = "Vaxorin User",
-		TextColor3 = library.Theme.Accent,
+		Size = UDim2.new(1, -70, 0, 18),
+		Position = UDim2.fromOffset(64, 34),
+		Text = "Premium User",
+		Font = Theme.FontBold,
 		TextSize = 11,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		Font = Theme.Font,
+		TextColor3 = library.Theme.Accent,
 		Parent = footer,
 	})
 
@@ -1260,13 +1299,16 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	local function refreshWindowTheme()
 		main.BackgroundColor3 = library.Theme.Background
 		topBar.BackgroundColor3 = library.Theme.Secondary
+		topBarGradient.Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, library.Theme.Secondary),
+			ColorSequenceKeypoint.new(1, library.Theme.Background),
+		})
 		topDivider.BackgroundColor3 = library.Theme.Border
 		logoFrame.BackgroundColor3 = library.Theme.Background
-		local logoFrameStroke = logoFrame:FindFirstChildOfClass("UIStroke")
-		if logoFrameStroke then
-			logoFrameStroke.Color = library.Theme.BorderStrong or library.Theme.Border
-		end
+		logoStroke.Color = library.Theme.BorderStrong or library.Theme.Border
+		logoAccentStroke.Color = library.Theme.Accent
 		sidebar.BackgroundColor3 = library.Theme.Secondary
+		sidebarDivider.BackgroundColor3 = library.Theme.Border
 		navLabel.TextColor3 = library.Theme.TextMuted
 		if searchBox then
 			searchBox.TextColor3 = library.Theme.Text

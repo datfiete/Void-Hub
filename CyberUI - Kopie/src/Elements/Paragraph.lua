@@ -39,6 +39,7 @@ function Paragraph.new(section: any, data: ParagraphOptions): ParagraphHandle
 		Parent = section.Inner,
 	})
 	Helpers.Corner(row, Theme.CornerRadiusSmall)
+	Helpers.Stroke(row, library.Theme.Border, 1)
 	Helpers.Padding(row, 12)
 	Helpers.ListLayout(row, 6)
 

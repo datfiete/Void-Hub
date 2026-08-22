@@ -56,6 +56,7 @@ function Slider.new(section: any, data: SliderOptions): SliderHandle
 		Parent = section.Inner,
 	})
 	Helpers.Corner(row, Theme.CornerRadiusSmall)
+	Helpers.Stroke(row, library.Theme.Border, 1)
 
 	local label = Helpers.CreateLabel({
 		Name = "Label",
