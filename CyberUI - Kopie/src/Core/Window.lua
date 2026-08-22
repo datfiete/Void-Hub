@@ -23,6 +23,58 @@ local SHADOW_SLICE_CENTER = Rect.new(49, 49, 450, 450)
 
 -- Short, unobtrusive UI click. Toggleable via Options -> Sound Effects.
 local CLICK_SOUND_ID = "rbxassetid://876939830"
+local function cleanDisplayName(name: string): string
+    -- Keep the visible tab label free of emoji/symbol prefixes that may render
+    -- as empty squares on some executor/Roblox font combinations.
+    local cleaned = name
+    cleaned = cleaned:gsub("^[%s%c]+", "")
+    for _, prefix in {
+        "⚙️ ", "⚙ ", "🎨 ", "🧩 ", "⌨️ ", "🔧 ", "💡 ", "🌐 ", "👤 ", "⚔️ ",
+        "🧠 ", "📦 ", "⭐ ", "✨ ", "💎 ", "🛠️ ", "🛠 ",
+    } do
+        if cleaned:sub(1, #prefix) == prefix then
+            cleaned = cleaned:sub(#prefix + 1)
+            break
+        end
+    end
+    return cleaned ~= "" and cleaned or name
+end
+
+local function createMagnifier(parent: Instance, theme: any)
+    local root = Helpers.CreateFrame({
+        Name = "SearchIcon",
+        Size = UDim2.fromOffset(22, 22),
+        Position = UDim2.fromOffset(10, 11),
+        BackgroundTransparency = 1,
+        Parent = parent,
+    })
+    root.ZIndex = 3
+
+    local ring = Helpers.CreateFrame({
+        Name = "Ring",
+        Size = UDim2.fromOffset(12, 12),
+        Position = UDim2.fromOffset(2, 2),
+        BackgroundTransparency = 1,
+        Parent = root,
+    })
+    local stroke = Helpers.Stroke(ring, theme.TextMuted, 2)
+    stroke.Transparency = 0.08
+    Helpers.Corner(ring, 999)
+
+    local handle = Helpers.CreateFrame({
+        Name = "Handle",
+        Size = UDim2.fromOffset(8, 2),
+        Position = UDim2.fromOffset(12, 14),
+        Rotation = 45,
+        BackgroundColor3 = theme.TextMuted,
+        BorderSizePixel = 0,
+        Parent = root,
+    })
+    Helpers.Corner(handle, 2)
+
+    return root, stroke, handle
+end
+
 
 -- How often (seconds) the bottom info bar / watermark refreshes.
 -- Was previously recalculated every single Heartbeat frame (~60x/sec) for no reason.
@@ -1225,6 +1277,8 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	})
 
 	local searchBox
+	local searchIconStroke
+	local searchIconHandle
 	local searchTop = 0
 	if showSearch then
 		local searchHolder = Helpers.CreateFrame({
@@ -1239,17 +1293,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		local searchStroke = Helpers.Stroke(searchHolder, library.Theme.Border, 1)
 		searchStroke.Transparency = 0.28
 
-		local searchIcon = Helpers.CreateLabel({
-			Name = "Icon",
-			Size = UDim2.fromOffset(22, 44),
-			Position = UDim2.fromOffset(10, 0),
-			Text = "⌕",
-			Font = Theme.FontBold,
-			TextSize = 20,
-			TextColor3 = library.Theme.TextMuted,
-			TextXAlignment = Enum.TextXAlignment.Center,
-			Parent = searchHolder,
-		})
+		local searchIcon, searchIconStroke, searchIconHandle = createMagnifier(searchHolder, library.Theme)
 
 		searchBox = Instance.new("TextBox")
 		searchBox.Name = "SearchBox"
@@ -1269,6 +1313,27 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	else
 		searchTop = 28
 	end
+
+	local searchResults = Helpers.CreateFrame({
+		Name = "SearchResults",
+		Size = UDim2.new(1, 0, 0, 0),
+		Position = UDim2.fromOffset(0, if showSearch then 48 else 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Visible = false,
+		BackgroundColor3 = library.Theme.Surface,
+		BackgroundTransparency = 0.02,
+		ZIndex = 60,
+		Parent = sidebar,
+	})
+	Helpers.Corner(searchResults, Theme.CornerRadiusSmall)
+	local searchResultsStroke = Helpers.Stroke(searchResults, library.Theme.Border, 1)
+	searchResultsStroke.Transparency = 0.16
+	Helpers.Padding(searchResults, 6, 6)
+	local searchResultsLayout = Helpers.ListLayout(searchResults, 4)
+	searchResultsLayout.SortOrder = Enum.SortOrder.LayoutOrder
+
+	self._SearchResults = searchResults
+	self._SearchResultsStroke = searchResultsStroke
 
 	local footerHeight = 78
 	local tabList = Helpers.CreateFrame({
@@ -1320,7 +1385,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Name = "Status",
 		Size = UDim2.new(1, -62, 0, 17),
 		Position = UDim2.fromOffset(58, 35),
-		Text = "Premium User",
+		Text = (data.Footer and (data.Footer.Status or data.Footer.Role or data.Footer.Badge)) or "Premium User",
 		Font = Theme.FontBold,
 		TextSize = 11,
 		TextColor3 = library.Theme.Accent,
@@ -1564,6 +1629,16 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 			end
 		end
 
+		if self._SearchIconStroke then
+			self._SearchIconStroke.Color = library.Theme.TextMuted
+		end
+		if self._SearchIconHandle then
+			self._SearchIconHandle.BackgroundColor3 = library.Theme.TextMuted
+		end
+		if self._SearchResultsStroke then
+			self._SearchResultsStroke.Color = library.Theme.Border
+		end
+
 		if resizeHandle then
 			for _, line in resizeHandle:GetChildren() do
 				if line:IsA("Frame") and line.Name:match("^Line") then
@@ -1633,6 +1708,10 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	self.Pages = pages
 	self.TitleLabel = title
 	self.SearchBox = searchBox
+	self._SearchIconStroke = searchIconStroke
+	self._SearchIconHandle = searchIconHandle
+	self._FooterName = footerName
+	self._FooterStatus = footerStatus
 	self._LoadingFrame = loadingFrame
 	self._Visible = true
 	self._Minimized = false
@@ -1646,6 +1725,118 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		return windowSize
 	end
 	self._CornerInstances = { mainCorner, topBarCorner, sidebarCorner, infoBarCorner }
+
+	local function clearSearchResults()
+		for _, child in searchResults:GetChildren() do
+			if child:IsA("GuiButton") or child:IsA("TextLabel") or child:IsA("Frame") then
+				child:Destroy()
+			end
+		end
+	end
+
+	local function rebuildSearchResults(query: string)
+		query = string.lower(string.gsub(query or "", "^%s*(.-)%s*$", "%1"))
+		clearSearchResults()
+		if query == "" then
+			searchResults.Visible = false
+			return
+		end
+
+		local matches = {}
+		for _, tab in self._Tabs do
+			local tabName = tostring(tab._Name or "")
+			local tabMatches = string.find(string.lower(tabName), query, 1, true) ~= nil
+			if tabMatches then
+				table.insert(matches, { Kind = "Tab", Tab = tab, Title = cleanDisplayName(tabName), Detail = "Tab" })
+			end
+			for _, section in tab._Sections or {} do
+				local sectionName = tostring(section._Name or "")
+				local sectionMatch = string.find(string.lower(sectionName), query, 1, true) ~= nil
+				if sectionMatch then
+					table.insert(matches, { Kind = "Section", Tab = tab, Section = section, Title = cleanDisplayName(sectionName), Detail = cleanDisplayName(tabName) .. " / Section" })
+				end
+				for _, element in section._Elements or {} do
+					local elementName = ""
+					if element._Data then
+						elementName = tostring(element._Data.Name or element._Data.Title or element._Data.Label or "")
+					end
+					if elementName ~= "" and string.find(string.lower(elementName), query, 1, true) then
+						table.insert(matches, { Kind = "Element", Tab = tab, Section = section, Element = element, Title = elementName, Detail = cleanDisplayName(tabName) .. " / " .. cleanDisplayName(sectionName) })
+					end
+				end
+			end
+		end
+
+		local limit = math.min(#matches, 8)
+		for i = 1, limit do
+			local match = matches[i]
+			local result = Helpers.CreateButton({
+				Name = "Result" .. i,
+				Size = UDim2.new(1, 0, 0, 42),
+				Text = "",
+				BackgroundColor3 = library.Theme.Background,
+				BackgroundTransparency = 0.15,
+				AutoButtonColor = false,
+				ZIndex = 61,
+				Parent = searchResults,
+			})
+			Helpers.Corner(result, Theme.CornerRadiusSmall)
+			local resultStroke = Helpers.Stroke(result, library.Theme.Border, 1)
+			resultStroke.Transparency = 0.45
+			Helpers.CreateLabel({ Name = "Title", Size = UDim2.new(1, -18, 0, 18), Position = UDim2.fromOffset(9, 5), Text = match.Title, Font = Theme.FontBold, TextSize = 11, TextColor3 = library.Theme.Text, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 62, Parent = result })
+			Helpers.CreateLabel({ Name = "Detail", Size = UDim2.new(1, -18, 0, 15), Position = UDim2.fromOffset(9, 22), Text = match.Detail, Font = Theme.Font, TextSize = 9, TextColor3 = library.Theme.TextMuted, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 62, Parent = result })
+			result.MouseEnter:Connect(function()
+				Tween.Play(result, { BackgroundTransparency = 0.02 }, { Time = 0.1 })
+			end)
+			result.MouseLeave:Connect(function()
+				Tween.Play(result, { BackgroundTransparency = 0.15 }, { Time = 0.1 })
+			end)
+			result.MouseButton1Click:Connect(function()
+				searchBox.Text = ""
+				searchResults.Visible = false
+				self:_selectTab(match.Tab)
+				local target = if match.Element and match.Element.Instance then match.Element.Instance else (match.Section and match.Section.Container)
+				if target then
+					task.defer(function()
+						match.Tab.Page.CanvasPosition = Vector2.new(0, math.max(0, target.AbsolutePosition.Y - match.Tab.Page.AbsolutePosition.Y - 18))
+					end)
+				end
+			end)
+		end
+		searchResults.Visible = limit > 0
+		if limit == 0 then
+			local empty = Helpers.CreateLabel({ Name = "Empty", Size = UDim2.new(1, 0, 0, 24), Text = "No sections or elements found", Font = Theme.Font, TextSize = 10, TextColor3 = library.Theme.TextMuted, TextXAlignment = Enum.TextXAlignment.Center, Parent = searchResults })
+			searchResults.Visible = true
+		end
+	end
+
+	if searchBox then
+		self._Maid:GiveTask(searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+			rebuildSearchResults(searchBox.Text)
+		end))
+	end
+
+	function self:SetProfileStatus(status: string)
+		if self._FooterStatus then
+			self._FooterStatus.Text = tostring(status)
+		end
+	end
+
+	function self:SetProfile(username: string?, status: string?, avatar: string?)
+		if username and self._FooterName then
+			self._FooterName.Text = "Welcome, " .. tostring(username)
+		end
+		if status and self._FooterStatus then
+			self._FooterStatus.Text = tostring(status)
+		end
+		if avatar and self._FooterName then
+			local footer = self._FooterName.Parent
+			local image = footer and footer:FindFirstChild("Avatar")
+			if image and image:IsA("ImageLabel") then
+				image.Image = avatar
+			end
+		end
+	end
 
 	function self:SetCornerRadius(radius: number)
 		radius = math.clamp(radius, 0, 24)

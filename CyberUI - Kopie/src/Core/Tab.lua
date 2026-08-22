@@ -10,22 +10,38 @@ local Tab = {}
 Tab.__index = Tab
 
 local iconMap = {
-    ["main"] = "⌂",
-    ["home"] = "⌂",
-    ["player"] = "◉",
-    ["combat"] = "✦",
-    ["visuals"] = "◈",
-    ["world"] = "◎",
-    ["misc"] = "◆",
-    ["settings"] = "⚙",
-    ["options"] = "⚙",
-    ["farm"] = "✦",
-    ["aim assist"] = "✦",
+    ["main"] = "M",
+    ["home"] = "M",
+    ["player"] = "P",
+    ["combat"] = "C",
+    ["visuals"] = "V",
+    ["world"] = "W",
+    ["misc"] = "X",
+    ["settings"] = "S",
+    ["options"] = "O",
+    ["farm"] = "F",
+    ["aim assist"] = "A",
 }
 
+
+local function cleanDisplayName(name: string): string
+    local cleaned = name
+    for _, prefix in {
+        "⚙️ ", "⚙ ", "🎨 ", "🧩 ", "⌨️ ", "🔧 ", "💡 ", "🌐 ", "👤 ", "⚔️ ",
+        "🧠 ", "📦 ", "⭐ ", "✨ ", "💎 ", "🛠️ ", "🛠 ",
+    } do
+        if cleaned:sub(1, #prefix) == prefix then
+            cleaned = cleaned:sub(#prefix + 1)
+            break
+        end
+    end
+    return cleaned ~= "" and cleaned or name
+end
+
 local function getIcon(name: string): string
-    local key = string.lower(name):gsub("^[%s%p]+", ""):gsub("[%s%p]+$", "")
-    return iconMap[key] or string.upper(string.sub(name, 1, 1))
+    local visible = cleanDisplayName(name)
+    local key = string.lower(visible):gsub("^[%s%p]+", ""):gsub("[%s%p]+$", "")
+    return iconMap[key] or string.upper(string.sub(visible, 1, 1))
 end
 
 export type TabHandle = {
@@ -134,7 +150,7 @@ function Tab.new(window: any, name: string): TabHandle
     label.Size = UDim2.new(1, -50, 1, 0)
     label.Position = UDim2.fromOffset(47, 0)
     label.BackgroundTransparency = 1
-    label.Text = name
+    label.Text = cleanDisplayName(name)
     label.Font = Theme.Font
     label.TextSize = 12
     label.TextColor3 = theme.TextMuted

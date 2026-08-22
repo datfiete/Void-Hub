@@ -66,4 +66,3 @@ firesignal(Path.Activated)
 Character:MoveTo(v.WorldPivot.Position + Vector3.new(0, 3, 0))
 
 RootPart.CFrame = CFrame.new(v.Position + Vector3.new(0, 3, 0))
-
