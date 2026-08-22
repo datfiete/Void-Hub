@@ -234,7 +234,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	elseif typeof(windowSize) == "number" then
 		windowSize = Vector2.new(windowSize, windowSize)
 	elseif typeof(windowSize) ~= "Vector2" then
-		windowSize = Vector2.new(900, 620)
+		windowSize = Vector2.new(820, 540)
 	end
 
 	local showSearch = data.ShowSearch ~= false
@@ -243,8 +243,8 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	local infoBarHeight = 0 -- Vaxorin keeps the content area clean; optional info bar remains available internally
 
 	-- Resize limits
-	local minWindowSize = Vector2.new(640, 440)
-	local maxWindowSize = Vector2.new(1180, 720)
+	local minWindowSize = Vector2.new(560, 380)
+	local maxWindowSize = Vector2.new(1040, 680)
 
 	-- Keep the default window comfortably inside the current viewport. This is
 	-- especially important on small emulator resolutions where a fixed desktop
@@ -256,8 +256,8 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		math.min(minWindowSize.Y, viewport.Y * 0.76)
 	)
 	local viewportMax = Vector2.new(
-		viewport.X * 0.84,
-		viewport.Y * 0.84
+		viewport.X * 0.82,
+		viewport.Y * 0.82
 	)
 	maxWindowSize = Vector2.new(
 		math.max(effectiveMinSize.X, math.min(maxWindowSize.X, viewportMax.X)),
@@ -409,21 +409,24 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	self._Maid:GiveTask(main:GetPropertyChangedSignal("Visible"):Connect(syncShadow))
 	self._Maid:Give(shadow)
 
-	-- Subtle Vaxorin ambient glow. It is intentionally restrained: a soft
-	-- accent halo around the shell rather than a neon outline.
-	local ambientGlow = Instance.new("Frame")
+	-- True soft glow: use the same shadow texture as the drop shadow, tint it
+	-- with the accent and keep it very transparent. This reads as light
+	-- around the shell instead of a thicker purple border.
+	local ambientGlow = Instance.new("ImageLabel")
 	ambientGlow.Name = "AmbientGlow"
 	ambientGlow.BackgroundTransparency = 1
 	ambientGlow.BorderSizePixel = 0
+	ambientGlow.Image = SHADOW_IMAGE
+	ambientGlow.ImageColor3 = library.Theme.Accent
+	ambientGlow.ImageTransparency = 0.86
+	ambientGlow.ScaleType = Enum.ScaleType.Slice
+	ambientGlow.SliceCenter = SHADOW_SLICE_CENTER
 	ambientGlow.ZIndex = 0
 	ambientGlow.Parent = screenGui
-	Helpers.Corner(ambientGlow, Theme.CornerRadius + 5)
-	local ambientStroke = Helpers.Stroke(ambientGlow, library.Theme.Accent, 4)
-	ambientStroke.Transparency = 0.88
 	local function syncAmbientGlow()
 		ambientGlow.AnchorPoint = main.AnchorPoint
 		ambientGlow.Position = main.Position
-		ambientGlow.Size = UDim2.new(main.Size.X.Scale, main.Size.X.Offset + 10, main.Size.Y.Scale, main.Size.Y.Offset + 10)
+		ambientGlow.Size = UDim2.new(main.Size.X.Scale, main.Size.X.Offset + 28, main.Size.Y.Scale, main.Size.Y.Offset + 28)
 		ambientGlow.Visible = main.Visible
 	end
 	syncAmbientGlow()
@@ -432,15 +435,15 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	self._Maid:GiveTask(main:GetPropertyChangedSignal("Visible"):Connect(syncAmbientGlow))
 	self._Maid:Give(ambientGlow)
 
-	-- A restrained accent edge: visible at close range, never a neon outline.
 	local glowStroke = Instance.new("UIStroke")
-	glowStroke.Name = "AccentGlow"
+	glowStroke.Name = "AccentEdge"
 	glowStroke.Color = library.Theme.Accent
 	glowStroke.Thickness = 1
-	glowStroke.Transparency = 0.58
+	glowStroke.Transparency = 0.72
 	glowStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 	glowStroke.Parent = main
 	self._Maid:Give(glowStroke)
+	self._AmbientGlow = ambientGlow
 
 	-- Background Image
 	local backgroundImage = Instance.new("ImageLabel")
@@ -613,15 +616,22 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	})
 	title.ZIndex = 31
 
-	local controlWidth = showWindowControls and 112 or 20
+	local controlWidth = showWindowControls and 108 or 20
+	local headerControlGap = showWindowControls and 18 or 12
 	local headerLeftReserved = 390
-	local headerRightReserved = controlWidth + 30
+
+	-- The badge rail is anchored to the LEFT edge of the controls. It grows
+	-- toward the left instead of being clipped by the right side of the header.
+	-- This keeps the badges visually attached to the title while guaranteeing
+	-- breathing room before the minimize/close controls.
 	local badgeHolder = Helpers.CreateFrame({
 		Name = "Badges",
-		Size = UDim2.new(1, -(headerLeftReserved + headerRightReserved), 1, 0),
-		Position = UDim2.fromOffset(headerLeftReserved, 0),
+		Size = UDim2.new(0, 0, 0, 32),
+		AutomaticSize = Enum.AutomaticSize.X,
+		Position = UDim2.new(1, -(controlWidth + headerControlGap), 0.5, 0),
+		AnchorPoint = Vector2.new(1, 0.5),
 		BackgroundTransparency = 1,
-		ClipsDescendants = true,
+		ClipsDescendants = false,
 		Parent = topBar,
 	})
 	badgeHolder.ZIndex = 31
@@ -630,7 +640,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	badgeLayout.FillDirection = Enum.FillDirection.Horizontal
 	badgeLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 	badgeLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
-	badgeLayout.Padding = UDim.new(0, 10)
+	badgeLayout.Padding = UDim.new(0, 8)
 	badgeLayout.Parent = badgeHolder
 
 	local badgeData = data.Badges or {
@@ -654,14 +664,14 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		badgeStroke.Transparency = 0.08
 		local badgeGlow = Helpers.Stroke(pill, color, 2)
 		badgeGlow.Transparency = 0.88
-		Helpers.Padding(pill, 10, 4)
+		Helpers.Padding(pill, 9, 4)
 		local badgeLabel = Helpers.CreateLabel({
 			Name = "Label",
 			Size = UDim2.new(0, 0, 1, 0),
 			AutomaticSize = Enum.AutomaticSize.X,
 			Text = badge.Text,
 			Font = Theme.FontBold,
-			TextSize = 12,
+			TextSize = 11,
 			TextColor3 = color,
 			TextXAlignment = Enum.TextXAlignment.Center,
 			Parent = pill,
@@ -673,7 +683,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	if showWindowControls then
 		local controls = Helpers.CreateFrame({
 			Name = "WindowControls",
-			Size = UDim2.fromOffset(104, 46),
+			Size = UDim2.fromOffset(104, 44),
 			Position = UDim2.new(1, -14, 0.5, 0),
 			AnchorPoint = Vector2.new(1, 0.5),
 			BackgroundTransparency = 1,
@@ -689,7 +699,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 
 		minimizeButton = Instance.new("TextButton")
 		minimizeButton.Name = "Minimize"
-		minimizeButton.Size = UDim2.fromOffset(44, 44)
+		minimizeButton.Size = UDim2.fromOffset(42, 42)
 		minimizeButton.BackgroundColor3 = library.Theme.Background
 		minimizeButton.BackgroundTransparency = 0.05
 		minimizeButton.Text = "—"
@@ -704,7 +714,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 
 		closeButton = Instance.new("TextButton")
 		closeButton.Name = "Close"
-		closeButton.Size = UDim2.fromOffset(44, 44)
+		closeButton.Size = UDim2.fromOffset(42, 42)
 		closeButton.BackgroundColor3 = library.Theme.Background
 		closeButton.BackgroundTransparency = 0.05
 		closeButton.Text = "×"
@@ -1151,7 +1161,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		searchTop = 28
 	end
 
-	local footerHeight = 82
+	local footerHeight = 78
 	local tabList = Helpers.CreateFrame({
 		Name = "TabList",
 		Size = UDim2.new(1, 0, 1, -(searchTop + footerHeight + 12)),
@@ -1175,7 +1185,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 
 	local avatarImage = Instance.new("ImageLabel")
 	avatarImage.Name = "Avatar"
-	avatarImage.Size = UDim2.fromOffset(44, 44)
+	avatarImage.Size = UDim2.fromOffset(42, 42)
 	avatarImage.Position = UDim2.fromOffset(10, 17)
 	avatarImage.BackgroundTransparency = 1
 	avatarImage.Image = data.Footer and data.Footer.Avatar or ""
@@ -1186,11 +1196,12 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 
 	local footerName = Helpers.CreateLabel({
 		Name = "WelcomeLabel",
-		Size = UDim2.new(1, -70, 0, 20),
-		Position = UDim2.fromOffset(68, 14),
+		Size = UDim2.new(1, -62, 0, 18),
+		Position = UDim2.fromOffset(58, 12),
 		Text = "Welcome, " .. (data.Footer and data.Footer.Username or localPlayer),
+		TextTruncate = Enum.TextTruncate.AtEnd,
 		Font = Theme.FontBold,
-		TextSize = 13,
+		TextSize = 11,
 		TextColor3 = library.Theme.Text,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		Parent = footer,
@@ -1198,11 +1209,11 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 
 	local footerStatus = Helpers.CreateLabel({
 		Name = "Status",
-		Size = UDim2.new(1, -70, 0, 18),
-		Position = UDim2.fromOffset(68, 38),
+		Size = UDim2.new(1, -62, 0, 17),
+		Position = UDim2.fromOffset(58, 35),
 		Text = "Premium User",
 		Font = Theme.FontBold,
-		TextSize = 12,
+		TextSize = 11,
 		TextColor3 = library.Theme.Accent,
 		Parent = footer,
 	})

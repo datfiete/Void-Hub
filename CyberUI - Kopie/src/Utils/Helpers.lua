@@ -58,6 +58,28 @@ function Helpers.Stroke(parent: Instance, color: Color3, thickness: number?): UI
 	return stroke
 end
 
+
+
+local GLOW_IMAGE = "rbxassetid://6014261993"
+
+function Helpers.Glow(parent: Instance, color: Color3, spread: number?, transparency: number?): ImageLabel
+	local pad = spread or 8
+	local glow = Instance.new("ImageLabel")
+	glow.Name = "VaxorinGlow"
+	glow.BackgroundTransparency = 1
+	glow.BorderSizePixel = 0
+	glow.Image = GLOW_IMAGE
+	glow.ImageColor3 = color
+	glow.ImageTransparency = transparency or 0.88
+	glow.ScaleType = Enum.ScaleType.Slice
+	glow.SliceCenter = Rect.new(49, 49, 450, 450)
+	glow.Size = UDim2.new(1, pad * 2, 1, pad * 2)
+	glow.Position = UDim2.fromOffset(-pad, -pad)
+	glow.ZIndex = 0
+	glow.Parent = parent
+	return glow
+end
+
 function Helpers.Padding(parent: Instance, padding: number | Rect): UIPadding
 	local uiPadding = Instance.new("UIPadding")
 

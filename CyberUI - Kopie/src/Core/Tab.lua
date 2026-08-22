@@ -49,7 +49,7 @@ function Tab.new(window: any, name: string): TabHandle
     -- Compact navigation item: a quiet surface with a short accent rail when active.
     local button = Helpers.CreateButton({
         Name = name,
-        Size = UDim2.new(1, 0, 0, 46),
+        Size = UDim2.new(1, 0, 0, 44),
         Text = "",
         BackgroundColor3 = theme.Surface,
         BackgroundTransparency = 1,
@@ -77,8 +77,9 @@ function Tab.new(window: any, name: string): TabHandle
     activeFill.ZIndex = 1
     activeFill.Parent = button
     Helpers.Corner(activeFill, Theme.CornerRadiusSmall)
-    local activeGlow = Helpers.Stroke(activeFill, theme.Accent, 2)
-    activeGlow.Transparency = 0.90
+    local activeGlow = Helpers.Stroke(activeFill, theme.Accent, 1)
+    activeGlow.Transparency = 0.94
+    local activeGlowImage = Helpers.Glow(activeFill, theme.Accent, 8, 0.95)
 
     local activeGradient = Instance.new("UIGradient")
     activeGradient.Color = ColorSequence.new({
@@ -117,7 +118,7 @@ function Tab.new(window: any, name: string): TabHandle
 
     local icon = Instance.new("TextLabel")
     icon.Name = "Icon"
-    icon.Size = UDim2.fromOffset(24, 42)
+    icon.Size = UDim2.fromOffset(24, 40)
     icon.Position = UDim2.fromOffset(11, 0)
     icon.BackgroundTransparency = 1
     icon.Text = getIcon(name)
@@ -135,7 +136,7 @@ function Tab.new(window: any, name: string): TabHandle
     label.BackgroundTransparency = 1
     label.Text = name
     label.Font = Theme.Font
-    label.TextSize = 13
+    label.TextSize = 12
     label.TextColor3 = theme.TextMuted
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.TextTruncate = Enum.TextTruncate.AtEnd
@@ -256,6 +257,7 @@ function Tab.new(window: any, name: string): TabHandle
     self._Indicator = indicator
     self._IndicatorGlow = indicatorGlow
     self._ActiveGlow = activeGlow
+    self._ActiveGlowImage = activeGlowImage
     self._Columns = columns
     self._LeftColumn = leftColumn
     self._RightColumn = rightColumn
@@ -295,7 +297,11 @@ function Tab:SetActive(active: boolean)
     self._IndicatorGlow.BackgroundColor3 = theme.Accent
     self._IndicatorGlow.BackgroundTransparency = if active then 0.82 else 1
     self._ActiveGlow.Color = theme.Accent
-    self._ActiveGlow.Transparency = if active then 0.84 else 1
+    self._ActiveGlow.Transparency = if active then 0.94 else 1
+    if self._ActiveGlowImage then
+        self._ActiveGlowImage.ImageColor3 = theme.Accent
+        self._ActiveGlowImage.ImageTransparency = if active then 0.94 else 1
+    end
 
     self._Icon.TextColor3 = if active then theme.Text else theme.TextMuted
     self._Label.TextColor3 = if active then theme.Text else theme.TextMuted

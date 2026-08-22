@@ -56,8 +56,9 @@ function Section.new(tab: any, name: string?): SectionHandle
     Helpers.Corner(inner, Theme.CornerRadius)
     local innerStroke = Helpers.Stroke(inner, theme.Border, 1)
     innerStroke.Transparency = 0.16
-    local innerGlow = Helpers.Stroke(inner, theme.Accent, 2)
-    innerGlow.Transparency = 0.93
+    local innerGlow = Helpers.Stroke(inner, theme.Accent, 1)
+    innerGlow.Transparency = 0.96
+    local innerGlowImage = Helpers.Glow(inner, theme.Accent, 8, 0.94)
     Helpers.Padding(inner, 16, 16)
 
     local layout = Helpers.ListLayout(inner, 10)
@@ -137,6 +138,7 @@ function Section.new(tab: any, name: string?): SectionHandle
     self._HeaderDescription = headerDescription
     self._HeaderAccent = headerAccent
     self._InnerGlow = innerGlow
+    self._InnerGlowImage = innerGlowImage
     self._Maid:Give(container)
 
     return self :: any
@@ -160,16 +162,31 @@ function Section:RefreshTheme()
     end
     if self._InnerGlow then
         self._InnerGlow.Color = theme.Accent
+        if self._InnerGlowImage then
+            self._InnerGlowImage.ImageColor3 = theme.Accent
+        end
     end
     for _, element in self._Elements do
         if element.RefreshTheme then
             element:RefreshTheme()
+        end
+        if element._VaxorinGlow then
+            element._VaxorinGlow.ImageColor3 = theme.Accent
         end
     end
 end
 
 function Section:_track(element: any)
     table.insert(self._Elements, element)
+
+    -- Every control gets a very soft accent halo. It is intentionally subtle
+    -- and uses a shadow texture so it reads as ambient light, not a thicker
+    -- border.
+    if element.Instance and element.Instance:IsA("GuiObject") then
+        local glow = Helpers.Glow(element.Instance, self.Tab.Window.Library.Theme.Accent, 7, 0.92)
+        element._VaxorinGlow = glow
+    end
+
     self._Maid:Give(function()
         element:Destroy()
     end)
