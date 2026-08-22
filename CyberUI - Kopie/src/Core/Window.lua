@@ -543,6 +543,40 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	topDivider.ZIndex = 30
 	topDivider.Parent = topBar
 
+	-- Subtle product-lighting details keep the header from feeling like a flat
+	-- black block without turning it into a neon banner.
+	local topAccentRail = Instance.new("Frame")
+	topAccentRail.Name = "AccentRail"
+	topAccentRail.Size = UDim2.new(0, 150, 0, 2)
+	topAccentRail.Position = UDim2.new(0, 18, 1, -3)
+	topAccentRail.BackgroundColor3 = library.Theme.Accent
+	topAccentRail.BackgroundTransparency = 0.14
+	topAccentRail.BorderSizePixel = 0
+	topAccentRail.ZIndex = 31
+	topAccentRail.Parent = topBar
+	local topAccentGradient = Instance.new("UIGradient")
+	topAccentGradient.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, library.Theme.Accent),
+		ColorSequenceKeypoint.new(0.65, library.Theme.AccentAlt or library.Theme.Accent),
+		ColorSequenceKeypoint.new(1, library.Theme.Background),
+	})
+	topAccentGradient.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0),
+		NumberSequenceKeypoint.new(0.75, 0.18),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	topAccentGradient.Parent = topAccentRail
+
+	local topAmbient = Instance.new("Frame")
+	topAmbient.Name = "AmbientLight"
+	topAmbient.Size = UDim2.new(0.42, 0, 0, 3)
+	topAmbient.Position = UDim2.new(0, 120, 1, -4)
+	topAmbient.BackgroundColor3 = library.Theme.Accent
+	topAmbient.BackgroundTransparency = 0.92
+	topAmbient.BorderSizePixel = 0
+	topAmbient.ZIndex = 30
+	topAmbient.Parent = topBar
+
 	local logoSize = Theme.LogoSize or 50
 	local logoAsset = if data.Logo == nil or data.Logo == LEGACY_LOGO then Vaxorin_Logo else data.Logo
 
@@ -639,6 +673,21 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Parent = titleContainer,
 	})
 	title.ZIndex = 31
+
+	local productMeta = Helpers.CreateLabel({
+		Name = "ProductMeta",
+		Size = UDim2.new(1, 0, 0, 13),
+		Position = UDim2.fromOffset(1, 57),
+		Text = "VAXORIN  /  UNIVERSAL UI",
+		Font = Theme.FontBold,
+		TextSize = 9,
+		TextColor3 = library.Theme.TextMuted,
+		TextTransparency = 0.18,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		Parent = titleContainer,
+	})
+	productMeta.ZIndex = 31
 
 	local controlWidth = showWindowControls and 112 or 0
 	local headerControlGap = showWindowControls and 20 or 14
@@ -1103,6 +1152,52 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Parent = main,
 	})
 
+	-- Small status capsule in the new header/content gutter. It provides a
+	-- deliberate visual transition so the cards do not begin directly under the
+	-- top bar, while remaining independent from the page layout.
+	local statusRibbon = Helpers.CreateFrame({
+		Name = "StatusRibbon",
+		Size = UDim2.fromOffset(190, 28),
+		Position = UDim2.new(0.64, 0, 0, 7),
+		AnchorPoint = Vector2.new(0.5, 0),
+		BackgroundColor3 = library.Theme.Surface,
+		BackgroundTransparency = 0.08,
+		Parent = contentArea,
+	})
+	statusRibbon.ZIndex = 50
+	Helpers.Corner(statusRibbon, 9)
+	local statusStroke = Helpers.Stroke(statusRibbon, library.Theme.BorderStrong or library.Theme.Border, 1)
+	statusStroke.Transparency = 0.18
+	local statusGlow = Helpers.Stroke(statusRibbon, library.Theme.Accent, 1)
+	statusGlow.Transparency = 0.86
+
+	local statusDot = Instance.new("Frame")
+	statusDot.Name = "Dot"
+	statusDot.Size = UDim2.fromOffset(6, 6)
+	statusDot.Position = UDim2.fromOffset(12, 11)
+	statusDot.BackgroundColor3 = library.Theme.Success
+	statusDot.BorderSizePixel = 0
+	statusDot.Parent = statusRibbon
+	Helpers.Corner(statusDot, 3)
+
+	Helpers.CreateLabel({
+		Name = "Text",
+		Size = UDim2.new(1, -30, 1, 0),
+		Position = UDim2.fromOffset(26, 0),
+		Text = "VAXORIN  •  READY",
+		Font = Theme.FontBold,
+		TextSize = 9,
+		TextColor3 = library.Theme.TextMuted,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = statusRibbon,
+	})
+
+	self._StatusRibbon = statusRibbon
+	self._StatusStroke = statusStroke
+	self._StatusGlow = statusGlow
+	self._StatusDot = statusDot
+	self._ProductMeta = productMeta
+
 	-- Sidebar
 	local sidebar = Helpers.CreateFrame({
 		Name = "Sidebar",
@@ -1396,6 +1491,18 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 			NumberSequenceKeypoint.new(1, 0.16),
 		})
 		topDivider.BackgroundColor3 = library.Theme.Border
+		topAccentRail.BackgroundColor3 = library.Theme.Accent
+		topAccentGradient.Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, library.Theme.Accent),
+			ColorSequenceKeypoint.new(0.65, library.Theme.AccentAlt or library.Theme.Accent),
+			ColorSequenceKeypoint.new(1, library.Theme.Background),
+		})
+		topAmbient.BackgroundColor3 = library.Theme.Accent
+		productMeta.TextColor3 = library.Theme.TextMuted
+		statusRibbon.BackgroundColor3 = library.Theme.Surface
+		statusStroke.Color = library.Theme.BorderStrong or library.Theme.Border
+		statusGlow.Color = library.Theme.Accent
+		statusDot.BackgroundColor3 = library.Theme.Success
 		logoFrame.BackgroundColor3 = library.Theme.Background
 		logoStroke.Color = library.Theme.BorderStrong or library.Theme.Border
 		logoAccentStroke.Color = library.Theme.Accent
@@ -1518,6 +1625,9 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	self.Gui = screenGui
 	self.Main = main
 	self.TopBar = topBar
+	self._TopAccentRail = topAccentRail
+	self._TopAmbient = topAmbient
+	self._ProductMeta = productMeta
 	self.Sidebar = sidebar
 	self.TabList = tabList
 	self.Pages = pages

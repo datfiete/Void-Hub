@@ -176,10 +176,14 @@ function Tab.new(window: any, name: string): TabHandle
 
     local pagePadding = Helpers.Padding(page, 0)
 
+    local pageTopInset = 44
+    local pageSideInset = 18
+    local pageRightReserve = 22
+
     local columns = Helpers.CreateFrame({
         Name = "Columns",
-        Size = UDim2.new(1, -36, 0, 0),
-        Position = UDim2.fromOffset(18, 0),
+        Size = UDim2.new(1, -(pageSideInset + pageRightReserve), 0, 0),
+        Position = UDim2.fromOffset(pageSideInset, pageTopInset),
         AutomaticSize = Enum.AutomaticSize.Y,
         BackgroundTransparency = 1,
         Parent = page,
@@ -236,7 +240,7 @@ function Tab.new(window: any, name: string): TabHandle
             page.CanvasSize = UDim2.new(
                 0, 0, 0,
                 math.max(leftColumn.AbsoluteSize.Y, rightColumn.AbsoluteSize.Y)
-                    + pagePadding.PaddingTop.Offset + pagePadding.PaddingBottom.Offset
+                    + pageTopInset + pagePadding.PaddingTop.Offset + pagePadding.PaddingBottom.Offset + 6
             )
         end)
     end
@@ -245,7 +249,7 @@ function Tab.new(window: any, name: string): TabHandle
         page.CanvasSize = UDim2.new(
             0, 0, 0,
             math.max(leftColumn.AbsoluteSize.Y, rightColumn.AbsoluteSize.Y)
-                + pagePadding.PaddingTop.Offset + pagePadding.PaddingBottom.Offset
+                + pageTopInset + pagePadding.PaddingTop.Offset + pagePadding.PaddingBottom.Offset + 6
         )
     end))
 
