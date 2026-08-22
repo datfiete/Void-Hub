@@ -42,7 +42,11 @@ local window = CyberUI:CreateWindow({
 })
 
 local Farmtab = window:CreateTab("Farm")
-local Farmsection = Farmtab:CreateSection("Farm")
+
+local Farmsection = Farmtab:CreateSection({
+    Name = "Farm",
+    Description = "Automate your farming actions.",
+})
 
 local Autofarm = false 
 

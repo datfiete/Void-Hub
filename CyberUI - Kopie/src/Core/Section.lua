@@ -27,10 +27,11 @@ export type SectionHandle = {
     Destroy: (self: SectionHandle) -> (),
 }
 
-function Section.new(tab: any, name: string?): SectionHandle
+function Section.new(tab: any, name: string?, description: string?): SectionHandle
     local self = setmetatable({
         Tab = tab,
         _Name = name,
+        _Description = description,
         _Maid = Maid.new(),
         _Elements = {} :: { any },
     }, Section)
@@ -106,7 +107,7 @@ function Section.new(tab: any, name: string?): SectionHandle
             Name = "HeaderDescription",
             Size = UDim2.new(1, -20, 0, 18),
             Position = UDim2.fromOffset(14, 25),
-            Text = "Configure " .. string.lower(name),
+            Text = description or ("Configure " .. string.lower(name)),
             Font = Theme.Font,
             TextSize = 12,
             TextColor3 = theme.TextMuted,
@@ -138,11 +139,19 @@ function Section.new(tab: any, name: string?): SectionHandle
     self.Header = header
     self._HeaderLabel = headerLabel
     self._HeaderDescription = headerDescription
+    self._Description = description
     self._HeaderAccent = headerAccent
     self._InnerGlow = innerGlow
     self._Maid:Give(container)
 
     return self :: any
+end
+
+function Section:SetDescription(description: string)
+    self._Description = description
+    if self._HeaderDescription then
+        self._HeaderDescription.Text = description or ""
+    end
 end
 
 function Section:RefreshTheme()

@@ -345,13 +345,15 @@ end
 
 function Tab:CreateSection(nameOrData: any)
     local name = nil
+    local description = nil
     if type(nameOrData) == "string" then
         name = nameOrData
     elseif type(nameOrData) == "table" then
         name = nameOrData.Name or nameOrData.Title or nil
+        description = nameOrData.Description or nameOrData.Desc or nil
     end
 
-    local section = Section.new(self, name)
+    local section = Section.new(self, name, description)
     table.insert(self._Sections, section)
     self._UpdateColumns()
     return section
