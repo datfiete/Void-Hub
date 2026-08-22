@@ -174,11 +174,12 @@ function Tab.new(window: any, name: string): TabHandle
     page.ClipsDescendants = true
     page.Parent = window.Pages
 
-    local pagePadding = Helpers.Padding(page, 18, 18)
+    local pagePadding = Helpers.Padding(page, 0)
 
     local columns = Helpers.CreateFrame({
         Name = "Columns",
-        Size = UDim2.new(1, 0, 0, 0),
+        Size = UDim2.new(1, -36, 0, 0),
+        Position = UDim2.fromOffset(18, 0),
         AutomaticSize = Enum.AutomaticSize.Y,
         BackgroundTransparency = 1,
         Parent = page,

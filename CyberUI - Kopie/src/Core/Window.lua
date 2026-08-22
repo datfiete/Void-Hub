@@ -511,7 +511,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Size = UDim2.new(1, 0, 0, topBarHeight),
 		Position = UDim2.fromOffset(0, 0),
 		BackgroundColor3 = library.Theme.Secondary,
-		BackgroundTransparency = 0.015,
+		BackgroundTransparency = 0.10,
 		Active = true,
 		Selectable = true,
 		Parent = main,
@@ -522,7 +522,13 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	local topBarGradient = Instance.new("UIGradient")
 	topBarGradient.Color = ColorSequence.new({
 		ColorSequenceKeypoint.new(0, library.Theme.Secondary),
+		ColorSequenceKeypoint.new(0.55, library.Theme.Secondary),
 		ColorSequenceKeypoint.new(1, library.Theme.Background),
+	})
+	topBarGradient.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.02),
+		NumberSequenceKeypoint.new(0.55, 0.06),
+		NumberSequenceKeypoint.new(1, 0.16),
 	})
 	topBarGradient.Rotation = 0
 	topBarGradient.Parent = topBar
@@ -532,7 +538,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	topDivider.Size = UDim2.new(1, 0, 0, 1)
 	topDivider.Position = UDim2.new(0, 0, 1, -1)
 	topDivider.BackgroundColor3 = library.Theme.Border
-	topDivider.BackgroundTransparency = 0.15
+	topDivider.BackgroundTransparency = 0.72
 	topDivider.BorderSizePixel = 0
 	topDivider.ZIndex = 30
 	topDivider.Parent = topBar
@@ -572,6 +578,24 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	logoImage.ZIndex = 31
 	logoImage.Parent = logoFrame
 	Helpers.Corner(logoImage, 12)
+	logoFrame.Active = true
+	logoImage.Active = true
+
+	local discordInvite = data.DiscordLink or "https://discord.gg/9jZTsy7Wtb"
+	self._Maid:GiveTask(logoFrame.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			playClick()
+			if setclipboard then
+				pcall(setclipboard, discordInvite)
+			end
+			self:Notify({
+				Title = "Vaxorin",
+				Content = "Discord invite copied to clipboard!",
+				Type = "Success",
+				Duration = 3,
+			})
+		end
+	end))
 
 	local titleContainer = Helpers.CreateFrame({
 		Name = "TitleContainer",
@@ -616,22 +640,20 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	})
 	title.ZIndex = 31
 
-	local controlWidth = showWindowControls and 108 or 20
-	local headerControlGap = showWindowControls and 18 or 12
-	local headerLeftReserved = 390
+	local controlWidth = showWindowControls and 112 or 0
+	local headerControlGap = showWindowControls and 20 or 14
+	local brandWidth = 372
 
-	-- The badge rail is anchored to the LEFT edge of the controls. It grows
-	-- toward the left instead of being clipped by the right side of the header.
-	-- This keeps the badges visually attached to the title while guaranteeing
-	-- breathing room before the minimize/close controls.
+	-- Reserve a real rectangle for badges instead of letting an auto-sized
+	-- container compete with the window controls. The badges are right-aligned
+	-- inside that rectangle, so their right edge is always protected.
 	local badgeHolder = Helpers.CreateFrame({
 		Name = "Badges",
-		Size = UDim2.new(0, 0, 0, 32),
-		AutomaticSize = Enum.AutomaticSize.X,
-		Position = UDim2.new(1, -(controlWidth + headerControlGap), 0.5, 0),
-		AnchorPoint = Vector2.new(1, 0.5),
+		Size = UDim2.new(1, -(brandWidth + controlWidth + headerControlGap + 24), 0, 34),
+		Position = UDim2.new(0, brandWidth + 8, 0.5, 0),
+		AnchorPoint = Vector2.new(0, 0.5),
 		BackgroundTransparency = 1,
-		ClipsDescendants = false,
+		ClipsDescendants = true,
 		Parent = topBar,
 	})
 	badgeHolder.ZIndex = 31
@@ -829,8 +851,8 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Name = "Watermark",
 		Size = UDim2.new(0, 0, 0, 30),
 		AutomaticSize = Enum.AutomaticSize.X,
-		Position = UDim2.new(0.5, 0, 0, topBarHeight + 16),
-	AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(1, -18, 1, -18),
+	AnchorPoint = Vector2.new(1, 1),
 		BackgroundColor3 = library.Theme.Secondary,
 		BackgroundTransparency = 0.1,
 		Visible = false,
@@ -1094,15 +1116,6 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	sidebar.ClipsDescendants = true
 	Helpers.Padding(sidebar, 16)
 
-	local sidebarDivider = Instance.new("Frame")
-	sidebarDivider.Name = "Divider"
-	sidebarDivider.Size = UDim2.new(0, 1, 1, -32)
-	sidebarDivider.Position = UDim2.new(1, 0, 0, 16)
-	sidebarDivider.BackgroundColor3 = library.Theme.Border
-	sidebarDivider.BackgroundTransparency = 0.15
-	sidebarDivider.BorderSizePixel = 0
-	sidebarDivider.ZIndex = 4
-	sidebarDivider.Parent = sidebar
 
 	local navLabel = Helpers.CreateLabel({
 		Name = "NavigationLabel",
@@ -1128,7 +1141,8 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 			Parent = sidebar,
 		})
 		Helpers.Corner(searchHolder, Theme.CornerRadiusSmall)
-		Helpers.Stroke(searchHolder, library.Theme.Border, 1)
+		local searchStroke = Helpers.Stroke(searchHolder, library.Theme.Border, 1)
+		searchStroke.Transparency = 0.28
 
 		local searchIcon = Helpers.CreateLabel({
 			Name = "Icon",
@@ -1373,14 +1387,19 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		topBar.BackgroundColor3 = library.Theme.Secondary
 		topBarGradient.Color = ColorSequence.new({
 			ColorSequenceKeypoint.new(0, library.Theme.Secondary),
+			ColorSequenceKeypoint.new(0.55, library.Theme.Secondary),
 			ColorSequenceKeypoint.new(1, library.Theme.Background),
+		})
+		topBarGradient.Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.02),
+			NumberSequenceKeypoint.new(0.55, 0.06),
+			NumberSequenceKeypoint.new(1, 0.16),
 		})
 		topDivider.BackgroundColor3 = library.Theme.Border
 		logoFrame.BackgroundColor3 = library.Theme.Background
 		logoStroke.Color = library.Theme.BorderStrong or library.Theme.Border
 		logoAccentStroke.Color = library.Theme.Accent
 		sidebar.BackgroundColor3 = library.Theme.Secondary
-		sidebarDivider.BackgroundColor3 = library.Theme.Border
 		navLabel.TextColor3 = library.Theme.TextMuted
 		if searchBox then
 			searchBox.TextColor3 = library.Theme.Text
