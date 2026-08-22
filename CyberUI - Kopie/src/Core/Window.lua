@@ -649,11 +649,11 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	-- inside that rectangle, so their right edge is always protected.
 	local badgeHolder = Helpers.CreateFrame({
 		Name = "Badges",
-		Size = UDim2.new(1, -(brandWidth + controlWidth + headerControlGap + 24), 0, 34),
-		Position = UDim2.new(0, brandWidth + 8, 0.5, 0),
+		Size = UDim2.new(1, -(brandWidth + controlWidth + headerControlGap + 16), 0, 34),
+		Position = UDim2.new(0, brandWidth, 0.5, 0),
 		AnchorPoint = Vector2.new(0, 0.5),
 		BackgroundTransparency = 1,
-		ClipsDescendants = true,
+		ClipsDescendants = false,
 		Parent = topBar,
 	})
 	badgeHolder.ZIndex = 31
