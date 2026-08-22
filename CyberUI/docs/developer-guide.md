@@ -122,3 +122,27 @@ The optional watermark is independent from the header and lives at the lower-rig
 ## 10. Design guidelines
 
 Vaxorin is intentionally restrained: dark surfaces, small purple accents, subtle glow, clear spacing, and readable hierarchy. Avoid adding large decorative neon effects around ordinary controls; use the accent as light rather than as a full background.
+
+
+## Search, Profile Status, and Tab Icons
+
+The built-in search now searches tab names, section names, and element names. Matching results appear under the search field; selecting a result jumps to the relevant tab and section.
+
+Profile text is configurable through `Footer.Status` (with `Footer.Role` and `Footer.Badge` accepted as aliases):
+
+```lua
+Footer = {
+    Avatar = Avatar,
+    Username = Player.Name,
+    Status = "Developer",
+},
+```
+
+It can also be changed after the window is created with:
+
+```lua
+window:SetProfileStatus("Owner")
+window:SetProfile("PlayerName", "VIP", Avatar)
+```
+
+Tab icons avoid emoji glyphs in the visible UI because those glyphs can render as empty blocks on some environments. The framework uses compact text icons instead.
