@@ -95,6 +95,8 @@ function Slider.new(section: any, data: SliderOptions): SliderHandle
 		Parent = track,
 	})
 	Helpers.Corner(fill, 999)
+	local fillGlow = Helpers.Stroke(fill, library.Theme.Accent, 2)
+	fillGlow.Transparency = 0.82
 
 	local knob = Helpers.CreateFrame({
 		Name = "Knob",
@@ -122,6 +124,7 @@ function Slider.new(section: any, data: SliderOptions): SliderHandle
 	self.Track = track
 	self.Fill = fill
 	self.Knob = knob
+	self.FillGlow = fillGlow
 
 	function self:_ratio(): number
 		if self._Max == self._Min then
@@ -205,6 +208,7 @@ function Slider:RefreshTheme()
 	self.ValueLabel.TextColor3 = theme.Accent
 	self.Track.BackgroundColor3 = theme.Border
 	self.Fill.BackgroundColor3 = theme.Accent
+	self.FillGlow.Color = theme.Accent
 	self.Knob.BackgroundColor3 = theme.Text
 	self:_applyVisual(false)
 end

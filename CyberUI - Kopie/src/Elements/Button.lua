@@ -38,7 +38,11 @@ function Button.new(section: any, data: ButtonOptions): ButtonHandle
 	})
 	Helpers.Corner(row, Theme.CornerRadiusSmall)
 	local rowStroke = Helpers.Stroke(row, library.Theme.Border, 1)
+	local rowGlow = Helpers.Stroke(row, library.Theme.Accent, 2)
+	rowGlow.Transparency = 0.95
 	rowStroke.Transparency = 0.18
+
+	self.RowGlow = rowGlow
 
 	self.Instance = row
 

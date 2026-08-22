@@ -40,6 +40,8 @@ function Paragraph.new(section: any, data: ParagraphOptions): ParagraphHandle
 	})
 	Helpers.Corner(row, Theme.CornerRadiusSmall)
 	local rowStroke = Helpers.Stroke(row, library.Theme.Border, 1)
+	local rowGlow = Helpers.Stroke(row, library.Theme.Accent, 2)
+	rowGlow.Transparency = 0.95
 	rowStroke.Transparency = 0.18
 	Helpers.Padding(row, 12)
 	Helpers.ListLayout(row, 6)
@@ -65,6 +67,8 @@ function Paragraph.new(section: any, data: ParagraphOptions): ParagraphHandle
 		TextWrapped = true,
 		Parent = row,
 	})
+
+	self.RowGlow = rowGlow
 
 	self.Instance = row
 	self.TitleLabel = titleLabel

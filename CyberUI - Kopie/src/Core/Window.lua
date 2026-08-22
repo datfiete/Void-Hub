@@ -14,6 +14,7 @@ local Stats = game:GetService("Stats")
 local GUI_NAME = "Vaxorin"
 local VERSION = "3.0"
 local Vaxorin_Logo = "rbxassetid://135320038058277"
+local LEGACY_LOGO = "rbxassetid://128228297210141"
 
 -- Soft 9-slice drop shadow, used behind the main window for real depth instead
 -- of a flat card floating on nothing.
@@ -242,8 +243,30 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	local infoBarHeight = 0 -- Vaxorin keeps the content area clean; optional info bar remains available internally
 
 	-- Resize limits
-	local minWindowSize = Vector2.new(900, 600)
-	local maxWindowSize = Vector2.new(1500, 980)
+	local minWindowSize = Vector2.new(640, 440)
+	local maxWindowSize = Vector2.new(1180, 720)
+
+	-- Keep the default window comfortably inside the current viewport. This is
+	-- especially important on small emulator resolutions where a fixed desktop
+	-- size can otherwise consume the entire screen.
+	local camera = workspace.CurrentCamera
+	local viewport = camera and camera.ViewportSize or Vector2.new(1280, 720)
+	local effectiveMinSize = Vector2.new(
+		math.min(minWindowSize.X, viewport.X * 0.76),
+		math.min(minWindowSize.Y, viewport.Y * 0.76)
+	)
+	local viewportMax = Vector2.new(
+		viewport.X * 0.84,
+		viewport.Y * 0.84
+	)
+	maxWindowSize = Vector2.new(
+		math.max(effectiveMinSize.X, math.min(maxWindowSize.X, viewportMax.X)),
+		math.max(effectiveMinSize.Y, math.min(maxWindowSize.Y, viewportMax.Y))
+	)
+	windowSize = Vector2.new(
+		math.clamp(windowSize.X, effectiveMinSize.X, maxWindowSize.X),
+		math.clamp(windowSize.Y, effectiveMinSize.Y, maxWindowSize.Y)
+	)
 
 	-- ============================================
 	-- LOADING SCREEN
@@ -386,12 +409,35 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	self._Maid:GiveTask(main:GetPropertyChangedSignal("Visible"):Connect(syncShadow))
 	self._Maid:Give(shadow)
 
+	-- Subtle Vaxorin ambient glow. It is intentionally restrained: a soft
+	-- accent halo around the shell rather than a neon outline.
+	local ambientGlow = Instance.new("Frame")
+	ambientGlow.Name = "AmbientGlow"
+	ambientGlow.BackgroundTransparency = 1
+	ambientGlow.BorderSizePixel = 0
+	ambientGlow.ZIndex = 0
+	ambientGlow.Parent = screenGui
+	Helpers.Corner(ambientGlow, Theme.CornerRadius + 5)
+	local ambientStroke = Helpers.Stroke(ambientGlow, library.Theme.Accent, 4)
+	ambientStroke.Transparency = 0.88
+	local function syncAmbientGlow()
+		ambientGlow.AnchorPoint = main.AnchorPoint
+		ambientGlow.Position = main.Position
+		ambientGlow.Size = UDim2.new(main.Size.X.Scale, main.Size.X.Offset + 10, main.Size.Y.Scale, main.Size.Y.Offset + 10)
+		ambientGlow.Visible = main.Visible
+	end
+	syncAmbientGlow()
+	self._Maid:GiveTask(main:GetPropertyChangedSignal("Position"):Connect(syncAmbientGlow))
+	self._Maid:GiveTask(main:GetPropertyChangedSignal("Size"):Connect(syncAmbientGlow))
+	self._Maid:GiveTask(main:GetPropertyChangedSignal("Visible"):Connect(syncAmbientGlow))
+	self._Maid:Give(ambientGlow)
+
 	-- A restrained accent edge: visible at close range, never a neon outline.
 	local glowStroke = Instance.new("UIStroke")
 	glowStroke.Name = "AccentGlow"
 	glowStroke.Color = library.Theme.Accent
 	glowStroke.Thickness = 1
-	glowStroke.Transparency = 0.38
+	glowStroke.Transparency = 0.58
 	glowStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 	glowStroke.Parent = main
 	self._Maid:Give(glowStroke)
@@ -489,11 +535,11 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	topDivider.Parent = topBar
 
 	local logoSize = Theme.LogoSize or 50
-	local logoAsset = data.Logo or Vaxorin_Logo
+	local logoAsset = if data.Logo == nil or data.Logo == LEGACY_LOGO then Vaxorin_Logo else data.Logo
 
 	local brand = Helpers.CreateFrame({
 		Name = "Brand",
-		Size = UDim2.new(0, 430, 1, 0),
+		Size = UDim2.new(0, 370, 1, 0),
 		Position = UDim2.fromOffset(18, 0),
 		BackgroundTransparency = 1,
 		Parent = topBar,
@@ -568,8 +614,8 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	title.ZIndex = 31
 
 	local controlWidth = showWindowControls and 112 or 20
-	local headerLeftReserved = 446
-	local headerRightReserved = controlWidth + 22
+	local headerLeftReserved = 390
+	local headerRightReserved = controlWidth + 30
 	local badgeHolder = Helpers.CreateFrame({
 		Name = "Badges",
 		Size = UDim2.new(1, -(headerLeftReserved + headerRightReserved), 1, 0),
@@ -604,7 +650,10 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		})
 		pill.ZIndex = 32
 		Helpers.Corner(pill, 7)
-		Helpers.Stroke(pill, color, 1)
+		local badgeStroke = Helpers.Stroke(pill, color, 1)
+		badgeStroke.Transparency = 0.08
+		local badgeGlow = Helpers.Stroke(pill, color, 2)
+		badgeGlow.Transparency = 0.88
 		Helpers.Padding(pill, 10, 4)
 		local badgeLabel = Helpers.CreateLabel({
 			Name = "Label",
@@ -624,8 +673,8 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	if showWindowControls then
 		local controls = Helpers.CreateFrame({
 			Name = "WindowControls",
-			Size = UDim2.fromOffset(96, 46),
-			Position = UDim2.new(1, -18, 0.5, 0),
+			Size = UDim2.fromOffset(104, 46),
+			Position = UDim2.new(1, -14, 0.5, 0),
 			AnchorPoint = Vector2.new(1, 0.5),
 			BackgroundTransparency = 1,
 			Parent = topBar,
@@ -1346,6 +1395,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		end
 		mainStroke.Color = library.Theme.Border
 		glowStroke.Color = library.Theme.Accent
+		ambientStroke.Color = library.Theme.Accent
 		watermarkStroke.Color = library.Theme.Border
 		watermark.BackgroundColor3 = library.Theme.Secondary
 		watermarkTitle.TextColor3 = library.Theme.Accent

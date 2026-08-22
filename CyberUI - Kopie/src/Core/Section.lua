@@ -56,6 +56,8 @@ function Section.new(tab: any, name: string?): SectionHandle
     Helpers.Corner(inner, Theme.CornerRadius)
     local innerStroke = Helpers.Stroke(inner, theme.Border, 1)
     innerStroke.Transparency = 0.16
+    local innerGlow = Helpers.Stroke(inner, theme.Accent, 2)
+    innerGlow.Transparency = 0.93
     Helpers.Padding(inner, 16, 16)
 
     local layout = Helpers.ListLayout(inner, 10)
@@ -134,6 +136,7 @@ function Section.new(tab: any, name: string?): SectionHandle
     self._HeaderLabel = headerLabel
     self._HeaderDescription = headerDescription
     self._HeaderAccent = headerAccent
+    self._InnerGlow = innerGlow
     self._Maid:Give(container)
 
     return self :: any
@@ -154,6 +157,9 @@ function Section:RefreshTheme()
     end
     if self._HeaderAccent then
         self._HeaderAccent.BackgroundColor3 = theme.Accent
+    end
+    if self._InnerGlow then
+        self._InnerGlow.Color = theme.Accent
     end
     for _, element in self._Elements do
         if element.RefreshTheme then

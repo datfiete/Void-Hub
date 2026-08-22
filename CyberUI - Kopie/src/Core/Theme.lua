@@ -105,14 +105,14 @@ local themeValues = {
     CornerRadius = 12,
     CornerRadiusSmall = 8,
     ElementHeight = 42,
-    SidebarWidth = 220,
-    WindowSize = Vector2.new(1180, 760),
+    SidebarWidth = 188,
+    WindowSize = Vector2.new(900, 580),
     Padding = 16,
     Gap = 10,
 
-    TopBarHeight = 104,
+    TopBarHeight = 88,
     LogoImage = "",
-    LogoSize = 72,
+    LogoSize = 60,
 }
 
 local function applyStyle(style)

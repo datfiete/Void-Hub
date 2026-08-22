@@ -77,6 +77,8 @@ function Tab.new(window: any, name: string): TabHandle
     activeFill.ZIndex = 1
     activeFill.Parent = button
     Helpers.Corner(activeFill, Theme.CornerRadiusSmall)
+    local activeGlow = Helpers.Stroke(activeFill, theme.Accent, 2)
+    activeGlow.Transparency = 0.90
 
     local activeGradient = Instance.new("UIGradient")
     activeGradient.Color = ColorSequence.new({
@@ -95,7 +97,7 @@ function Tab.new(window: any, name: string): TabHandle
     indicatorGlow.Position = UDim2.new(0, -2, 0.5, 0)
     indicatorGlow.AnchorPoint = Vector2.new(0, 0.5)
     indicatorGlow.BackgroundColor3 = theme.Accent
-    indicatorGlow.BackgroundTransparency = 1
+    indicatorGlow.BackgroundTransparency = 0.96
     indicatorGlow.BorderSizePixel = 0
     indicatorGlow.ZIndex = 2
     indicatorGlow.Parent = button
@@ -253,6 +255,7 @@ function Tab.new(window: any, name: string): TabHandle
     self._ActiveFill = activeFill
     self._Indicator = indicator
     self._IndicatorGlow = indicatorGlow
+    self._ActiveGlow = activeGlow
     self._Columns = columns
     self._LeftColumn = leftColumn
     self._RightColumn = rightColumn
@@ -291,6 +294,8 @@ function Tab:SetActive(active: boolean)
     self._Indicator.BackgroundTransparency = if active then 0 else 1
     self._IndicatorGlow.BackgroundColor3 = theme.Accent
     self._IndicatorGlow.BackgroundTransparency = if active then 0.82 else 1
+    self._ActiveGlow.Color = theme.Accent
+    self._ActiveGlow.Transparency = if active then 0.84 else 1
 
     self._Icon.TextColor3 = if active then theme.Text else theme.TextMuted
     self._Label.TextColor3 = if active then theme.Text else theme.TextMuted
