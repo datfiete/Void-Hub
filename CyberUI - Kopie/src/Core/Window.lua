@@ -1406,7 +1406,9 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		end
 		mainStroke.Color = library.Theme.Border
 		glowStroke.Color = library.Theme.Accent
-		ambientStroke.Color = library.Theme.Accent
+		if ambientStroke then
+			ambientStroke.Color = library.Theme.Accent
+		end
 		watermarkStroke.Color = library.Theme.Border
 		watermark.BackgroundColor3 = library.Theme.Secondary
 		watermarkTitle.TextColor3 = library.Theme.Accent

@@ -64,8 +64,8 @@ function Toggle.new(section: any, data: ToggleOptions): ToggleHandle
 	})
 	Helpers.Corner(switch, 999)
 	local switchStroke = Helpers.Stroke(switch, library.Theme.BorderStrong or library.Theme.Border, 1)
-	local switchGlow = Helpers.Stroke(switch, library.Theme.Accent, 2)
-	switchGlow.Transparency = 1
+	local switchGlow = Helpers.Glow(switch, library.Theme.Accent, 7, 0.93)
+	switchGlow.ZIndex = 0
 
 	local knob = Helpers.CreateFrame({
 		Name = "Knob",
@@ -73,6 +73,7 @@ function Toggle.new(section: any, data: ToggleOptions): ToggleHandle
 		Position = UDim2.new(0, 3, 0.5, 0),
 		AnchorPoint = Vector2.new(0, 0.5),
 		BackgroundColor3 = library.Theme.Text,
+		ZIndex = 2,
 		Parent = switch,
 	})
 	Helpers.Corner(knob, 999)
@@ -82,6 +83,7 @@ function Toggle.new(section: any, data: ToggleOptions): ToggleHandle
 		Size = UDim2.fromScale(1, 1),
 		Text = "",
 		BackgroundTransparency = 1,
+		ZIndex = 3,
 		Parent = row,
 	})
 
@@ -106,8 +108,8 @@ function Toggle.new(section: any, data: ToggleOptions): ToggleHandle
 			switch.BackgroundColor3 = targetColor
 			switchStroke.Color = if value then library.Theme.Accent else (library.Theme.BorderStrong or library.Theme.Border)
 			switchStroke.Transparency = if value then 0.35 else 0.65
-			switchGlow.Color = library.Theme.Accent
-			switchGlow.Transparency = if value then 0.84 else 1
+			switchGlow.ImageColor3 = library.Theme.Accent
+			switchGlow.ImageTransparency = if value then 0.88 else 1
 		end
 	end
 

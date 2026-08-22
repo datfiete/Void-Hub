@@ -182,8 +182,8 @@ function Section:_track(element: any)
     -- Every control gets a very soft accent halo. It is intentionally subtle
     -- and uses a shadow texture so it reads as ambient light, not a thicker
     -- border.
-    if element.Instance and element.Instance:IsA("GuiObject") then
-        local glow = Helpers.Glow(element.Instance, self.Tab.Window.Library.Theme.Accent, 7, 0.92)
+    if element.Instance and element.Instance:IsA("GuiObject") and not element.Switch then
+        local glow = Helpers.Glow(element.Instance, self.Tab.Window.Library.Theme.Accent, 6, 0.95)
         element._VaxorinGlow = glow
     end
 
