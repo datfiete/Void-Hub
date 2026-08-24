@@ -91,6 +91,14 @@ local enabled = stateSection:CreateToggle({
     end,
 })
 
+stateSection:CreateButton({
+    Name = "Test",
+    Callback = function()
+        print("Button clicked!")
+        window:SetProfileStatus("Owner")
+    end,
+})
+
 local speed = stateSection:CreateSlider({
     Name = "Speed",
     Min = 0,

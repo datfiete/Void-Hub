@@ -178,6 +178,10 @@ function Tab.new(window: any, name: string): TabHandle
     local page = Instance.new("ScrollingFrame")
     page.Name = name
     page.Visible = false
+    page.Active = true
+    page.ScrollingEnabled = true
+    page.ScrollingDirection = Enum.ScrollingDirection.Y
+    page.ElasticBehavior = Enum.ElasticBehavior.WhenScrollable
     page.Size = UDim2.fromScale(1, 1)
     page.Position = UDim2.fromOffset(0, 0)
     page.BackgroundTransparency = 1
@@ -253,20 +257,14 @@ function Tab.new(window: any, name: string): TabHandle
         end
 
         task.defer(function()
-            page.CanvasSize = UDim2.new(
-                0, 0, 0,
-                math.max(leftColumn.AbsoluteSize.Y, rightColumn.AbsoluteSize.Y)
-                    + pageTopInset + pagePadding.PaddingTop.Offset + pagePadding.PaddingBottom.Offset + 6
-            )
+            local contentHeight = math.max(leftColumn.AbsoluteSize.Y, rightColumn.AbsoluteSize.Y)
+            page.CanvasSize = UDim2.fromOffset(0, math.max(0, pageTopInset + contentHeight + 24))
         end)
     end
 
     self._Maid:GiveTask(columnLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        page.CanvasSize = UDim2.new(
-            0, 0, 0,
-            math.max(leftColumn.AbsoluteSize.Y, rightColumn.AbsoluteSize.Y)
-                + pageTopInset + pagePadding.PaddingTop.Offset + pagePadding.PaddingBottom.Offset + 6
-        )
+        local contentHeight = math.max(leftColumn.AbsoluteSize.Y, rightColumn.AbsoluteSize.Y)
+        page.CanvasSize = UDim2.fromOffset(0, math.max(0, pageTopInset + contentHeight + 24))
     end))
 
     self.Button = button

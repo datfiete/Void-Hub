@@ -1336,13 +1336,22 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	self._SearchResultsStroke = searchResultsStroke
 
 	local footerHeight = 78
-	local tabList = Helpers.CreateFrame({
-		Name = "TabList",
-		Size = UDim2.new(1, 0, 1, -(searchTop + footerHeight + 12)),
-		Position = UDim2.new(0, 0, 0, searchTop),
-		BackgroundTransparency = 1,
-		Parent = sidebar,
-	})
+	local tabList = Instance.new("ScrollingFrame")
+	tabList.Name = "TabList"
+	tabList.Size = UDim2.new(1, 0, 1, -(searchTop + footerHeight + 12))
+	tabList.Position = UDim2.new(0, 0, 0, searchTop)
+	tabList.BackgroundTransparency = 1
+	tabList.BorderSizePixel = 0
+	tabList.Active = true
+	tabList.ScrollingEnabled = true
+	tabList.ScrollingDirection = Enum.ScrollingDirection.Y
+	tabList.ScrollBarThickness = 2
+	tabList.ScrollBarImageColor3 = library.Theme.Accent
+	tabList.ScrollBarImageTransparency = 0.75
+	tabList.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	tabList.CanvasSize = UDim2.new()
+	tabList.ClipsDescendants = true
+	tabList.Parent = sidebar
 	local tabLayout = Helpers.ListLayout(tabList, 5)
 	tabLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
 
