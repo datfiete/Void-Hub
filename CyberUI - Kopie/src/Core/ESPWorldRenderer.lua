@@ -10,7 +10,6 @@ local Maid = require(script.Parent.Parent.Utils.Maid)
 local ESPWorldRenderer = {}
 ESPWorldRenderer.__index = ESPWorldRenderer
 
-
 local DEFAULT_LAYOUT = {
     Version = 2,
     Canvas = { Width = 420, Height = 430 },
@@ -139,9 +138,7 @@ end
 
 function ESPWorldRenderer.new(options)
     local data = {}
-    if type(options) == "table" then
-        data = options
-    end
+    if type(options) == "table" then data = options end
     local parent = data.Parent
     if not parent then
         local localPlayer = Players.LocalPlayer
@@ -189,111 +186,252 @@ function ESPWorldRenderer.new(options)
     end))
 
     for _, player in ipairs(Players:GetPlayers()) do
-        local shouldRender = true
-
-        if player == localPlayer and self._IgnoreLocalPlayer then
-            shouldRender = false
+        if player ~= Players.LocalPlayer then
+            self:_ensurePlayer(player)
         end
+    end
 
+    self._Maid:Give(Players.PlayerAdded:Connect(function(player)
+        self:_ensurePlayer(player)
+    end))
+
+    return self
+end
+
+function ESPWorldRenderer:_ensurePlayer(player)
+    if self._PlayerMaids[player] then
+        return
+    end
+    local maid = Maid.new()
+    self._PlayerMaids[player] = maid
+    maid:Give(player.CharacterAdded:Connect(function()
+        self:_clearPlayerGui(player)
+    end))
+end
+
+function ESPWorldRenderer:_clearPlayerGui(player)
+    local maid = self._PlayerMaids[player]
+    if maid then
+        -- Keep the CharacterAdded connection; only destroy the current visual container.
+        local current = self._Visuals and self._Visuals[player]
+        if current then
+            current:Destroy()
+            self._Visuals[player] = nil
+        end
+    end
+end
+
+function ESPWorldRenderer:_removePlayer(player)
+    local maid = self._PlayerMaids[player]
+    if maid then
+        maid:DoCleaning()
+        self._PlayerMaids[player] = nil
+    end
+    local current = self._Visuals and self._Visuals[player]
+    if current then
+        current:Destroy()
+        self._Visuals[player] = nil
+    end
+end
+
+function ESPWorldRenderer:_makeVisuals(player)
+    self._Visuals = self._Visuals or {}
+    local existing = self._Visuals[player]
+    if existing then
+        return existing
+    end
+
+    local root = Instance.new("Frame")
+    root.Name = "ESP_" .. player.UserId
+    root.BackgroundTransparency = 1
+    root.BorderSizePixel = 0
+    root.Size = UDim2.fromOffset(1, 1)
+    root.Parent = self.Gui
+    self._Visuals[player] = root
+    return root
+end
+
+function ESPWorldRenderer:_destroyChildren(root)
+    for _, child in ipairs(root:GetChildren()) do
+        child:Destroy()
+    end
+end
+
+function ESPWorldRenderer:_renderElement(root, element, box, screenWidth, screenHeight, sample)
+    if element.Visible == false then
+        return
+    end
+
+    local design = self._Layout.Canvas or { Width = 420, Height = 430 }
+    local designW = math.max(tonumber(design.Width) or 420, 1)
+    local designH = math.max(tonumber(design.Height) or 430, 1)
+    local boxElement = box.design
+
+    local sx = box.w / math.max(boxElement.Width, 1)
+    local sy = box.h / math.max(boxElement.Height, 1)
+    local relativeX = (tonumber(element.X) or 0) - boxElement.X
+    local relativeY = (tonumber(element.Y) or 0) - boxElement.Y
+
+    local x = box.x + relativeX * sx
+    local y = box.y + relativeY * sy
+    local w = math.max((tonumber(element.Width) or 20) * sx, 1)
+    local h = math.max((tonumber(element.Height) or 20) * sy, 1)
+
+    if element.Type == "Tracer" then
+        local tracer = Instance.new("Frame")
+        tracer.Name = element.Id or "Tracer"
+        tracer.AnchorPoint = Vector2.new(0.5, 0)
+        tracer.Position = UDim2.fromOffset(box.x + box.w * 0.5, box.y + box.h)
+        tracer.Size = UDim2.fromOffset(math.max(tonumber(element.Width) or 2, 1), math.max(screenHeight - (box.y + box.h), 0))
+        tracer.BackgroundColor3 = colorFrom(element.Color, Color3.fromRGB(161, 76, 255))
+        tracer.BackgroundTransparency = math.clamp(tonumber(element.Transparency) or 0, 0, 1)
+        tracer.BorderSizePixel = 0
+        tracer.ZIndex = 1
+        tracer.Parent = root
+        return
+    end
+
+    if element.Type == "Box" then
+        local frame = Instance.new("Frame")
+        frame.Name = element.Id or "Box"
+        frame.Position = UDim2.fromOffset(box.x, box.y)
+        frame.Size = UDim2.fromOffset(box.w, box.h)
+        frame.BackgroundTransparency = 1
+        frame.BorderSizePixel = 0
+        frame.ZIndex = 2
+        local stroke = Instance.new("UIStroke")
+        stroke.Color = colorFrom(element.Color, Color3.fromRGB(161, 76, 255))
+        stroke.Thickness = math.max(tonumber(element.Thickness) or 2, 1)
+        stroke.Transparency = math.clamp(tonumber(element.Transparency) or 0, 0, 1)
+        stroke.Parent = frame
+        frame.Parent = root
+        return
+    end
+
+    if element.Type == "HealthBar" then
+        local bg = Instance.new("Frame")
+        bg.Name = element.Id or "HealthBar"
+        bg.Position = UDim2.fromOffset(x, y)
+        bg.Size = UDim2.fromOffset(w, h)
+        bg.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+        bg.BackgroundTransparency = 0.25
+        bg.BorderSizePixel = 0
+        bg.ZIndex = 3
+        bg.Parent = root
+
+        local fill = Instance.new("Frame")
+        fill.Name = "Fill"
+        fill.AnchorPoint = Vector2.new(0, 1)
+        fill.Position = UDim2.fromScale(0, 1)
+        fill.Size = UDim2.fromScale(1, math.clamp((tonumber(sample.Health) or 0) / math.max(tonumber(sample.MaxHealth) or 100, 1), 0, 1))
+        fill.BackgroundColor3 = colorFrom(element.Color, Color3.fromRGB(76, 220, 137))
+        fill.BackgroundTransparency = math.clamp(tonumber(element.Transparency) or 0, 0, 1)
+        fill.BorderSizePixel = 0
+        fill.ZIndex = 4
+        fill.Parent = bg
+        return
+    end
+
+    local label = Instance.new("TextLabel")
+    label.Name = element.Id or element.Type or "ESPElement"
+    label.Position = UDim2.fromOffset(x, y)
+    label.Size = UDim2.fromOffset(w, h)
+    label.BackgroundTransparency = 1
+    label.Text = replaceTokens(tostring(element.Text or element.Name or element.Type or ""), sample)
+    label.TextColor3 = colorFrom(element.Color, Color3.new(1, 1, 1))
+    label.TextSize = math.clamp(tonumber(element.TextSize) or 12, 6, 40)
+    label.Font = Enum.Font.GothamMedium
+    label.TextXAlignment = Enum.TextXAlignment.Center
+    if element.Anchor == "Left" then
+        label.TextXAlignment = Enum.TextXAlignment.Left
+    elseif element.Anchor == "Right" then
+        label.TextXAlignment = Enum.TextXAlignment.Right
+    end
+    label.TextYAlignment = Enum.TextYAlignment.Center
+    label.TextStrokeTransparency = 0.5
+    label.TextTransparency = math.clamp(tonumber(element.Transparency) or 0, 0, 1)
+    label.ZIndex = 5
+    label.Parent = root
+end
+
+function ESPWorldRenderer:_render()
+    if not self._Enabled then
+        if self._Visuals then
+            for _, root in pairs(self._Visuals) do
+                root.Visible = false
+            end
+        end
+        return
+    end
+
+    local camera = workspace.CurrentCamera
+    local localPlayer = Players.LocalPlayer
+    if not camera or not localPlayer then return end
+
+    local viewport = camera.ViewportSize
+    local layoutElements = self._Layout.Elements or {}
+    local boxDesign = nil
+    for _, element in ipairs(layoutElements) do
+        if element.Type == "Box" and element.Visible ~= false then
+            boxDesign = element
+            break
+        end
+    end
+    if not boxDesign then
+        boxDesign = { X = 125, Y = 90, Width = 170, Height = 250 }
+    end
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        local shouldRender = true
+        if player == localPlayer and self._IgnoreLocalPlayer then shouldRender = false end
         self:_ensurePlayer(player)
 
         local character = player.Character
-        local rootPart = nil
-        local humanoid = nil
-
-        if character then
-            rootPart = character:FindFirstChild("HumanoidRootPart")
-            humanoid = character:FindFirstChildOfClass("Humanoid")
-        end
-
+        local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
         local rootGui = self:_makeVisuals(player)
         rootGui.Visible = false
 
-        if not character or not rootPart or not humanoid or humanoid.Health <= 0 then
-            shouldRender = false
-        end
-
+        if not character or not rootPart or not humanoid or humanoid.Health <= 0 then shouldRender = false end
         local distance = 0
         if shouldRender then
             distance = (camera.CFrame.Position - rootPart.Position).Magnitude
-            if distance > self._MaxDistance then
-                shouldRender = false
-            end
+            if distance > self._MaxDistance then shouldRender = false end
         end
-
-        if shouldRender and self._TeamCheck and localPlayer.Team ~= nil and player.Team == localPlayer.Team then
-            shouldRender = false
-        end
-
-        if shouldRender and self._VisibleCheck and not rayVisible(camera, camera.CFrame.Position, rootPart.Position, character) then
-            shouldRender = false
-        end
-
-        local bounds = nil
-        if shouldRender then
-            bounds = getCharacterBounds(character)
-            if not bounds then
-                shouldRender = false
-            end
-        end
-
-        local projected = nil
-        if shouldRender then
-            local cf, size = bounds
-            projected = projectBounds(camera, cf, size)
-            if not projected then
-                shouldRender = false
-            end
-        end
+        if shouldRender and self._TeamCheck and localPlayer.Team ~= nil and player.Team == localPlayer.Team then shouldRender = false end
+        if shouldRender and self._VisibleCheck and not rayVisible(camera, camera.CFrame.Position, rootPart.Position, character) then shouldRender = false end
 
         if shouldRender then
-            local minX, minY, maxX, maxY = projected
-            local boxWidth = math.max(maxX - minX, 2)
-            local boxHeight = math.max(maxY - minY, 2)
-
-            if maxX < 0 or minX > viewport.X or maxY < 0 or minY > viewport.Y then
+            local cf, size = getCharacterBounds(character)
+            if not cf or not size then
                 shouldRender = false
             else
-                local teamName = "Neutral"
-                if player.Team then
-                    teamName = player.Team.Name
-                end
-
-                local health = humanoid.Health
-                local maxHealth = humanoid.MaxHealth
-                local percent = health / math.max(maxHealth, 1)
-
-                local state = "Normal"
-                if percent <= 0.25 then
-                    state = "Low Health"
-                elseif percent < 1 then
-                    state = "Injured"
-                end
-
-                local sample = {
-                    Name = player.DisplayName ~= "" and player.DisplayName or player.Name,
-                    Health = health,
-                    MaxHealth = maxHealth,
-                    Distance = distance,
-                    Weapon = getWeapon(character),
-                    Team = teamName,
-                    Class = "Player",
-                    State = state,
-                }
-
-                self:_destroyChildren(rootGui)
-                rootGui.Visible = true
-
-                local box = {
-                    x = minX,
-                    y = minY,
-                    w = boxWidth,
-                    h = boxHeight,
-                    design = boxDesign,
-                }
-
-                for _, element in ipairs(layoutElements) do
-                    self:_renderElement(rootGui, element, box, viewport.X, viewport.Y, sample)
+                local minX, minY, maxX, maxY = projectBounds(camera, cf, size)
+                if not minX then
+                    shouldRender = false
+                elseif maxX < 0 or minX > viewport.X or maxY < 0 or minY > viewport.Y then
+                    shouldRender = false
+                else
+                    local boxWidth = math.max(maxX - minX, 2)
+                    local boxHeight = math.max(maxY - minY, 2)
+                    local teamName = "Neutral"
+                    if player.Team then teamName = player.Team.Name end
+                    local health = humanoid.Health
+                    local maxHealth = humanoid.MaxHealth
+                    local percent = health / math.max(maxHealth, 1)
+                    local state = "Normal"
+                    if percent <= 0.25 then state = "Low Health" elseif percent < 1 then state = "Injured" end
+                    local sample = {
+                        Name = player.DisplayName ~= "" and player.DisplayName or player.Name,
+                        Health = health, MaxHealth = maxHealth, Distance = distance,
+                        Weapon = getWeapon(character), Team = teamName, Class = "Player", State = state,
+                    }
+                    self:_destroyChildren(rootGui)
+                    rootGui.Visible = true
+                    local box = { x = minX, y = minY, w = boxWidth, h = boxHeight, design = boxDesign }
+                    for _, element in ipairs(layoutElements) do
+                        self:_renderElement(rootGui, element, box, viewport.X, viewport.Y, sample)
+                    end
                 end
             end
         end
