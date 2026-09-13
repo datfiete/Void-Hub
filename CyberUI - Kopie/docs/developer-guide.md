@@ -146,22 +146,3 @@ window:SetProfile("PlayerName", "VIP", Avatar)
 ```
 
 Tab icons avoid emoji glyphs in the visible UI because those glyphs can render as empty blocks on some environments. The framework uses compact text icons instead.
-
-
-## Custom ESP Designer
-
-Vaxorin includes a visual Custom ESP Designer for building a renderer-agnostic ESP layout.
-
-```lua
-local esp = Window:CreateESPBuilder({
-    Title = "Custom ESP Designer",
-    SampleName = "Tom23",
-    SampleHealth = 58,
-    SampleMaxHealth = 100,
-    SampleDistance = 42,
-})
-
-local layout = esp:GetLayout()
-```
-
-The preview starts with Box, Health, Name and Distance. Add more elements from the right side and drag them directly on the preview. Text elements support `{name}`, `{health}`, `{maxhealth}`, `{health_percent}`, `{distance}`, `{weapon}` and `{team}` in the preview. `Export()` / `GetLayout()` returns a renderer-agnostic table containing positions, sizes, visibility, colors and element types.
