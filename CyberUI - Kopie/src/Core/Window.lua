@@ -1977,7 +1977,14 @@ end
 
 function Window:CreateTab(name: string)
 	local tab = Tab.new(self, name)
-	table.insert(self._Tabs, tab)
+
+	-- Options is a utility tab and should always stay at the end of the
+	-- navigation list. New user tabs are inserted immediately before it.
+	if self._OptionsTab then
+		table.insert(self._Tabs, #self._Tabs, tab)
+	else
+		table.insert(self._Tabs, tab)
+	end
 
 	if not self._OptionsTab then
 		self:_createOptionsTab()
@@ -2501,13 +2508,114 @@ end
 
 function Window:CreateESPWorldRenderer(options: any?)
 	local data = (typeof(options) == "table") and options or {}
+
 	if self._ESPWorldRenderer then
 		pcall(function() self._ESPWorldRenderer:Destroy() end)
 		self._ESPWorldRenderer = nil
 	end
+
 	data.Parent = self._TopGuiParent or self.Gui.Parent
+
+	-- Keep the renderer layout in Window as well so the built-in controls can
+	-- change individual ESP elements without needing a separate script.
+	local espLayout = data.Layout or {
+		Version = 2,
+		Canvas = { Width = 420, Height = 430 },
+		Elements = {
+			{ Id = "box", Type = "Box", Name = "Box", X = 125, Y = 90, Width = 170, Height = 250, Color = { R = 161, G = 76, B = 255 }, Thickness = 2, Transparency = 0, Visible = true },
+			{ Id = "name", Type = "Name", Name = "Name", X = 145, Y = 62, Width = 130, Height = 24, Text = "{name}", Color = { R = 245, G = 245, B = 248 }, TextSize = 14, Anchor = "Center", Visible = true },
+			{ Id = "health", Type = "Health", Name = "Health", X = 145, Y = 34, Width = 130, Height = 22, Text = "{health}/{maxhealth}", Color = { R = 76, G = 220, B = 137 }, TextSize = 13, Anchor = "Center", Visible = true },
+			{ Id = "distance", Type = "Distance", Name = "Distance", X = 145, Y = 350, Width = 130, Height = 22, Text = "{distance}", Color = { R = 220, G = 225, B = 235 }, TextSize = 13, Anchor = "Center", Visible = true },
+			{ Id = "healthbar", Type = "HealthBar", Name = "Health Bar", X = 116, Y = 92, Width = 6, Height = 246, Color = { R = 76, G = 220, B = 137 }, Thickness = 0, Visible = true },
+			{ Id = "tracer", Type = "Tracer", Name = "Tracer", X = 210, Y = 385, Width = 2, Height = 42, Color = { R = 161, G = 76, B = 255 }, Thickness = 2, Visible = true },
+			{ Id = "weapon", Type = "Weapon", Name = "Weapon", X = 300, Y = 132, Width = 105, Height = 22, Text = "{weapon}", Color = { R = 245, G = 245, B = 248 }, TextSize = 11, Anchor = "Left", Visible = true },
+			{ Id = "status", Type = "Status", Name = "Status", X = 300, Y = 158, Width = 105, Height = 22, Text = "{team}", Color = { R = 247, G = 185, B = 78 }, TextSize = 11, Anchor = "Left", Visible = true },
+		},
+	}
+	data.Layout = espLayout
+
 	local renderer = ESPWorldRenderer.new(data)
 	self._ESPWorldRenderer = renderer
+
+	-- Automatically create a proper ESP page. The user no longer needs to
+	-- manually create a Toggle that has to know about the renderer.
+	local espTab
+	for _, existingTab in self._Tabs do
+		if existingTab and tostring(existingTab._Name or ""):lower() == "esp" then
+			espTab = existingTab
+			break
+		end
+	end
+	if not espTab then
+		espTab = self:CreateTab("ESP")
+	end
+
+	local espSection = espTab:CreateSection("👁 Player ESP")
+	espSection:CreateParagraph({
+		Title = "World ESP",
+		Content = "Configure the player overlay directly from Vaxorin.",
+	})
+
+	local function setElementEnabled(id, enabled)
+		for _, element in ipairs(espLayout.Elements or {}) do
+			if element.Id == id then
+				element.Visible = enabled
+			end
+		end
+		renderer:SetLayout(espLayout)
+	end
+
+	espSection:CreateToggle({
+		Name = "Enable ESP",
+		CurrentValue = data.Enabled ~= false,
+		Flag = "Vaxorin.ESP.Enabled",
+		Callback = function(value)
+			renderer:SetEnabled(value)
+		end,
+	})
+
+	local elementControls = {
+		{ Id = "box", Name = "Box" },
+		{ Id = "name", Name = "Name" },
+		{ Id = "health", Name = "Health Text" },
+		{ Id = "healthbar", Name = "Health Bar" },
+		{ Id = "distance", Name = "Distance" },
+		{ Id = "tracer", Name = "Tracer" },
+		{ Id = "weapon", Name = "Weapon" },
+		{ Id = "status", Name = "Team / Status" },
+	}
+
+	for _, control in ipairs(elementControls) do
+		local enabled = true
+		for _, element in ipairs(espLayout.Elements or {}) do
+			if element.Id == control.Id then
+				enabled = element.Visible ~= false
+				break
+			end
+		end
+
+		espSection:CreateToggle({
+			Name = control.Name,
+			CurrentValue = enabled,
+			Flag = "Vaxorin.ESP." .. control.Id,
+			Callback = function(value)
+				setElementEnabled(control.Id, value)
+			end,
+		})
+	end
+
+	espSection:CreateSlider({
+		Name = "Max Distance",
+		Min = 50,
+		Max = 5000,
+		CurrentValue = tonumber(data.MaxDistance) or 1000,
+		Rounding = 0,
+		Flag = "Vaxorin.ESP.MaxDistance",
+		Callback = function(value)
+			renderer:SetMaxDistance(value)
+		end,
+	})
+
 	return renderer
 end
 
