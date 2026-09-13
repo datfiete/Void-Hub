@@ -1742,6 +1742,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	self._ESPTab = nil
 	self._ESPBuilder = nil
 	self._ESPBuilderHardClose = nil
+	self._ESPSavedLayouts = {}
 	self._ESPWorldRenderer = nil
 	self.RefreshTheme = refreshWindowTheme
 	self._InfoBar = infoBar
@@ -2571,6 +2572,7 @@ function Window:CreateESPBuilder(options: any?)
 
 	local tab = self:_ensureESPDesignerTab()
 	data.Parent = self._TopGuiParent or self.Gui.Parent
+	data.SavedLayouts = self._ESPSavedLayouts
 
 	local builder = ESPBuilder.new(data)
 	self._ESPBuilder = builder

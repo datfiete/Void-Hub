@@ -62,7 +62,7 @@ local DEFAULTS: { [string]: { [string]: any } } = {
     Tracer = { Name = "Tracer", X = 210, Y = 385, Width = 2, Height = 42, Color = Color3.fromRGB(161, 76, 255), Thickness = 2, Anchor = "Center" },
     Weapon = { Name = "Weapon", X = 300, Y = 132, Width = 105, Height = 22, Text = "{weapon}", Color = Color3.fromRGB(245, 245, 248), TextSize = 11, Anchor = "Left" },
     Status = { Name = "Status", X = 300, Y = 158, Width = 105, Height = 22, Text = "{team}", Color = Color3.fromRGB(247, 185, 78), TextSize = 11, Anchor = "Left" },
-    CustomText = { Name = "Custom Text", X = 300, Y = 184, Width = 105, Height = 22, Text = "{team} • {distance}", Color = Color3.fromRGB(245, 245, 248), TextSize = 11, Anchor = "Left" },
+    CustomText = { Name = "Custom Text", X = 300, Y = 184, Width = 105, Height = 22, Text = "{team} / {distance}", Color = Color3.fromRGB(245, 245, 248), TextSize = 11, Anchor = "Left" },
     Team = { Name = "Team", X = 300, Y = 158, Width = 105, Height = 22, Text = "{team}", Color = Color3.fromRGB(247, 185, 78), TextSize = 11, Anchor = "Left" },
     Class = { Name = "Class", X = 300, Y = 184, Width = 105, Height = 22, Text = "{class}", Color = Color3.fromRGB(190, 190, 210), TextSize = 11, Anchor = "Left" },
     State = { Name = "State", X = 300, Y = 210, Width = 105, Height = 22, Text = "{state}", Color = Color3.fromRGB(190, 190, 210), TextSize = 11, Anchor = "Left" },
@@ -95,9 +95,9 @@ local TYPE_LABELS = {
 }
 
 local TYPE_GLYPHS = {
-    Box = "□", CornerBox = "⌗", FilledBox = "▣", Name = "T", Health = "♡", HealthPercent = "%",
-    HealthBar = "▤", Distance = "⌖", Tracer = "╱", HeadMarker = "◉", Skeleton = "⌁", Weapon = "◈",
-    Team = "◆", Class = "◇", State = "✦", Status = "✦", CustomText = "</>",
+    Box = "BOX", CornerBox = "CORN", FilledBox = "FILL", Name = "TXT", Health = "HP", HealthPercent = "%",
+    HealthBar = "BAR", Distance = "DIST", Tracer = "LINE", HeadMarker = "HEAD", Skeleton = "SKEL", Weapon = "ITEM",
+    Team = "TEAM", Class = "CLASS", State = "STATE", Status = "STATUS", CustomText = "TEXT",
 }
 
 local TYPE_DESCRIPTIONS = {
@@ -210,6 +210,7 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
         _Zoom = 1,
         _History = {} :: { [number]: any },
         _HistoryIndex = 0,
+        _SavedLayouts = type(data.SavedLayouts) == "table" and data.SavedLayouts or {},
         _Changed = Instance.new("BindableEvent"),
         _Sample = {
             Name = tostring(data.SampleName or "Tom23"),
@@ -266,7 +267,7 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
     header.Active = true
     Helpers.Corner(header, Theme.CornerRadius)
 
-    local backButton = Helpers.CreateButton({ Name = "Back", Size = UDim2.fromOffset(42, 38), Position = UDim2.fromOffset(12, 14), Text = "‹", TextColor3 = Theme.Text, TextSize = 24, BackgroundColor3 = Theme.ElementBackground, Parent = header })
+    local backButton = Helpers.CreateButton({ Name = "Back", Size = UDim2.fromOffset(42, 38), Position = UDim2.fromOffset(12, 14), Text = "BACK", TextColor3 = Theme.Text, TextSize = 24, BackgroundColor3 = Theme.ElementBackground, Parent = header })
     Helpers.Corner(backButton, 10)
     Helpers.Stroke(backButton, Theme.Border, 1)
 
@@ -282,7 +283,7 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
     Helpers.CreateLabel({
         Name = "LogoGlyph",
         Size = UDim2.fromScale(1, 1),
-        Text = "◎",
+        Text = "V",
         TextColor3 = Theme.Accent,
         TextSize = 23,
         Font = Theme.FontBold,
@@ -328,20 +329,20 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
         Name = "Chevron",
         Size = UDim2.fromOffset(25, 42),
         Position = UDim2.new(1, -30, 0, 0),
-        Text = "⌄",
+        Text = "DOWN",
         TextColor3 = Theme.TextMuted,
         TextSize = 15,
         TextXAlignment = Enum.TextXAlignment.Center,
         Parent = presetButton,
     })
 
-    local saveButton = Helpers.CreateButton({ Name = "Save", Size = UDim2.fromOffset(82, 42), Position = UDim2.new(1, -414, 0, 12), Text = "▣  Save", TextColor3 = Theme.Text, TextSize = 10, Font = Theme.FontBold, BackgroundColor3 = Theme.ElementBackground, Parent = header })
+    local saveButton = Helpers.CreateButton({ Name = "Save", Size = UDim2.fromOffset(82, 42), Position = UDim2.new(1, -414, 0, 12), Text = "SAVE", TextColor3 = Theme.Text, TextSize = 10, Font = Theme.FontBold, BackgroundColor3 = Theme.ElementBackground, Parent = header })
     Helpers.Corner(saveButton, 8)
     Helpers.Stroke(saveButton, Theme.Border, 1)
-    local importButton = Helpers.CreateButton({ Name = "Import", Size = UDim2.fromOffset(82, 42), Position = UDim2.new(1, -326, 0, 12), Text = "⇲  Import", TextColor3 = Theme.Text, TextSize = 10, Font = Theme.FontBold, BackgroundColor3 = Theme.ElementBackground, Parent = header })
+    local importButton = Helpers.CreateButton({ Name = "Import", Size = UDim2.fromOffset(82, 42), Position = UDim2.new(1, -326, 0, 12), Text = "IMPORT", TextColor3 = Theme.Text, TextSize = 10, Font = Theme.FontBold, BackgroundColor3 = Theme.ElementBackground, Parent = header })
     Helpers.Corner(importButton, 8)
     Helpers.Stroke(importButton, Theme.Border, 1)
-    local exportButton = Helpers.CreateButton({ Name = "Export", Size = UDim2.fromOffset(92, 42), Position = UDim2.new(1, -218, 0, 12), Text = "⇱  Export", TextColor3 = Theme.Text, TextSize = 10, Font = Theme.FontBold, BackgroundColor3 = Theme.ElementBackground, Parent = header })
+    local exportButton = Helpers.CreateButton({ Name = "Export", Size = UDim2.fromOffset(92, 42), Position = UDim2.new(1, -218, 0, 12), Text = "EXPORT", TextColor3 = Theme.Text, TextSize = 10, Font = Theme.FontBold, BackgroundColor3 = Theme.ElementBackground, Parent = header })
     Helpers.Corner(exportButton, 8)
     Helpers.Stroke(exportButton, Theme.Border, 1)
     local doneButton = Helpers.CreateButton({ Name = "Done", Size = UDim2.fromOffset(96, 42), Position = UDim2.new(1, -114, 0, 12), Text = "Done", TextColor3 = Color3.new(1, 1, 1), TextSize = 10, Font = Theme.FontBold, BackgroundColor3 = Theme.Accent, Parent = header })
@@ -354,7 +355,7 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
     Helpers.Corner(components, Theme.CornerRadiusSmall)
     local componentsStroke = Helpers.Stroke(components, Theme.Border, 1)
     Helpers.CreateLabel({ Name = "Title", Size = UDim2.new(1, -24, 0, 24), Position = UDim2.fromOffset(12, 9), Text = "ELEMENTS", TextColor3 = Theme.Text, TextSize = 11, Font = Theme.FontBold, Parent = components })
-    local search = Helpers.CreateTextBox({ Name = "Search", Size = UDim2.new(1, -24, 0, 34), Position = UDim2.fromOffset(12, 38), PlaceholderText = "⌕  Search elements...", Text = "", TextColor3 = Theme.Text, PlaceholderColor3 = Theme.TextMuted, TextSize = 9, BackgroundColor3 = Theme.ElementBackground, Parent = components })
+    local search = Helpers.CreateTextBox({ Name = "Search", Size = UDim2.new(1, -24, 0, 34), Position = UDim2.fromOffset(12, 38), PlaceholderText = "Search elements...", Text = "", TextColor3 = Theme.Text, PlaceholderColor3 = Theme.TextMuted, TextSize = 9, BackgroundColor3 = Theme.ElementBackground, Parent = components })
     Helpers.Corner(search, 7)
     Helpers.Stroke(search, Theme.Border, 1)
 
@@ -380,13 +381,13 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
     local previewStroke = Helpers.Stroke(preview, Theme.Border, 1)
     Helpers.CreateLabel({ Name = "Title", Size = UDim2.new(1, -24, 0, 24), Position = UDim2.fromOffset(12, 9), Text = "LIVE PREVIEW", TextColor3 = Theme.Text, TextSize = 11, Font = Theme.FontBold, Parent = preview })
 
-    local entityButton = Helpers.CreateButton({ Name = "Entity", Size = UDim2.fromOffset(155, 32), Position = UDim2.fromOffset(12, 38), Text = "●  Player", TextColor3 = Theme.Text, TextSize = 9, BackgroundColor3 = Theme.ElementBackground, Parent = preview })
+    local entityButton = Helpers.CreateButton({ Name = "Entity", Size = UDim2.fromOffset(155, 32), Position = UDim2.fromOffset(12, 38), Text = "PLAYER", TextColor3 = Theme.Text, TextSize = 9, BackgroundColor3 = Theme.ElementBackground, Parent = preview })
     Helpers.Corner(entityButton, 7)
     Helpers.Stroke(entityButton, Theme.Border, 1)
-    local stateButton = Helpers.CreateButton({ Name = "State", Size = UDim2.fromOffset(135, 32), Position = UDim2.fromOffset(174, 38), Text = "◔  Normal", TextColor3 = Theme.Text, TextSize = 9, BackgroundColor3 = Theme.ElementBackground, Parent = preview })
+    local stateButton = Helpers.CreateButton({ Name = "State", Size = UDim2.fromOffset(135, 32), Position = UDim2.fromOffset(174, 38), Text = "NORMAL", TextColor3 = Theme.Text, TextSize = 9, BackgroundColor3 = Theme.ElementBackground, Parent = preview })
     Helpers.Corner(stateButton, 7)
 
-    local zoomOut = Helpers.CreateButton({ Name = "ZoomOut", Size = UDim2.fromOffset(32, 32), Position = UDim2.new(1, -106, 0, 38), Text = "−", TextColor3 = Theme.TextMuted, TextSize = 16, BackgroundColor3 = Theme.ElementBackground, Parent = preview })
+    local zoomOut = Helpers.CreateButton({ Name = "ZoomOut", Size = UDim2.fromOffset(32, 32), Position = UDim2.new(1, -106, 0, 38), Text = "-", TextColor3 = Theme.TextMuted, TextSize = 16, BackgroundColor3 = Theme.ElementBackground, Parent = preview })
     Helpers.Corner(zoomOut, 7)
     local zoomLabel = Helpers.CreateLabel({ Name = "Zoom", Size = UDim2.fromOffset(52, 32), Position = UDim2.new(1, -72, 0, 38), Text = "100%", TextColor3 = Theme.Text, TextSize = 9, Font = Theme.FontBold, TextXAlignment = Enum.TextXAlignment.Center, Parent = preview })
     local zoomIn = Helpers.CreateButton({ Name = "ZoomIn", Size = UDim2.fromOffset(32, 32), Position = UDim2.new(1, -32, 0, 38), Text = "+", TextColor3 = Theme.TextMuted, TextSize = 16, BackgroundColor3 = Theme.ElementBackground, Parent = preview })
@@ -477,17 +478,133 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
     Helpers.Stroke(footer, Theme.Border, 1)
     local footerLayout = Helpers.ListLayout(footer, 7, true, Enum.FillDirection.Horizontal)
     footerLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-    local layoutButton = Helpers.CreateButton({ Name = "Layout", Size = UDim2.fromOffset(150, 30), Text = "▣  Layout  ⌄", TextColor3 = Theme.Text, TextSize = 9, BackgroundColor3 = Theme.ElementBackground, Parent = footer })
+    local layoutButton = Helpers.CreateButton({ Name = "Layout", Size = UDim2.fromOffset(150, 30), Text = "LAYOUT  DOWN", TextColor3 = Theme.Text, TextSize = 9, BackgroundColor3 = Theme.ElementBackground, Parent = footer })
     Helpers.Corner(layoutButton, 7)
     Helpers.Stroke(layoutButton, Theme.Border, 1)
-    local undoButton = Helpers.CreateButton({ Name = "Undo", Size = UDim2.fromOffset(34, 30), Text = "↶", TextColor3 = Theme.TextMuted, TextSize = 16, BackgroundColor3 = Theme.ElementBackground, Parent = footer })
+    local undoButton = Helpers.CreateButton({ Name = "Undo", Size = UDim2.fromOffset(34, 30), Text = "UNDO", TextColor3 = Theme.TextMuted, TextSize = 16, BackgroundColor3 = Theme.ElementBackground, Parent = footer })
     Helpers.Corner(undoButton, 7)
-    local redoButton = Helpers.CreateButton({ Name = "Redo", Size = UDim2.fromOffset(34, 30), Text = "↷", TextColor3 = Theme.TextMuted, TextSize = 16, BackgroundColor3 = Theme.ElementBackground, Parent = footer })
+    local redoButton = Helpers.CreateButton({ Name = "Redo", Size = UDim2.fromOffset(34, 30), Text = "REDO", TextColor3 = Theme.TextMuted, TextSize = 16, BackgroundColor3 = Theme.ElementBackground, Parent = footer })
     Helpers.Corner(redoButton, 7)
-    local footerHint = Helpers.CreateLabel({ Name = "Hint", Size = UDim2.new(1, -520, 0, 30), Text = "Click an element to select it  •  Drag to move  •  Drag the corner handle to resize", TextColor3 = Theme.TextMuted, TextSize = 8, Parent = footer })
+    local footerHint = Helpers.CreateLabel({ Name = "Hint", Size = UDim2.new(1, -520, 0, 30), Text = "Click an element to select it  |  Drag to move  |  Drag the corner handle to resize", TextColor3 = Theme.TextMuted, TextSize = 8, Parent = footer })
     footerHint.LayoutOrder = 5
     local footerZoom = Helpers.CreateLabel({ Name = "Zoom", Size = UDim2.fromOffset(100, 30), Text = "Zoom 100%", TextColor3 = Theme.TextMuted, TextSize = 8, TextXAlignment = Enum.TextXAlignment.Right, Parent = footer })
     footerZoom.LayoutOrder = 6
+
+    -- Save / Import manager. Saved layouts live in a shared table supplied by Window,
+    -- so closing and reopening the designer in the same window keeps them available.
+    local modal = Helpers.CreateFrame({ Name = "StorageModal", Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.38, Visible = false, Parent = gui })
+    modal.ZIndex = 100
+
+    local modalPanel = Helpers.CreateFrame({ Name = "Panel", Size = UDim2.fromOffset(520, 470), Position = UDim2.new(0.5, -260, 0.5, -235), BackgroundColor3 = Theme.Background, Parent = modal })
+    modalPanel.ZIndex = 101
+    Helpers.Corner(modalPanel, 12)
+    Helpers.Stroke(modalPanel, Theme.BorderStrong, 1)
+    local modalTitle = Helpers.CreateLabel({ Name = "Title", Size = UDim2.new(1, -80, 0, 34), Position = UDim2.fromOffset(18, 14), Text = "Saved Layouts", TextColor3 = Theme.Text, TextSize = 14, Font = Theme.FontBold, Parent = modalPanel })
+    modalTitle.ZIndex = 102
+    local modalClose = Helpers.CreateButton({ Name = "Close", Size = UDim2.fromOffset(34, 30), Position = UDim2.new(1, -46, 0, 12), Text = "X", TextColor3 = Theme.TextMuted, TextSize = 11, BackgroundColor3 = Theme.ElementBackground, Parent = modalPanel })
+    modalClose.ZIndex = 102
+    Helpers.Corner(modalClose, 7)
+
+    local nameInput = Helpers.CreateTextBox({ Name = "NameInput", Size = UDim2.new(1, -36, 0, 36), Position = UDim2.fromOffset(18, 58), PlaceholderText = "Layout name...", Text = "", TextColor3 = Theme.Text, PlaceholderColor3 = Theme.TextMuted, TextSize = 10, BackgroundColor3 = Theme.ElementBackground, Parent = modalPanel })
+    nameInput.ZIndex = 102
+    Helpers.Corner(nameInput, 7)
+    Helpers.Stroke(nameInput, Theme.Border, 1)
+    local modalAction = Helpers.CreateButton({ Name = "Action", Size = UDim2.fromOffset(110, 36), Position = UDim2.new(1, -128, 0, 58), Text = "SAVE", TextColor3 = Color3.new(1,1,1), TextSize = 9, Font = Theme.FontBold, BackgroundColor3 = Theme.Accent, Parent = modalPanel })
+    modalAction.ZIndex = 102
+    Helpers.Corner(modalAction, 7)
+
+    local savedList = Instance.new("ScrollingFrame")
+    savedList.Name = "SavedList"
+    savedList.Size = UDim2.new(1, -36, 1, -112)
+    savedList.Position = UDim2.fromOffset(18, 102)
+    savedList.BackgroundTransparency = 1
+    savedList.BorderSizePixel = 0
+    savedList.ScrollBarThickness = 3
+    savedList.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    savedList.CanvasSize = UDim2.new()
+    savedList.ZIndex = 102
+    savedList.Parent = modalPanel
+    Helpers.ListLayout(savedList, 6)
+
+    local modalHint = Helpers.CreateLabel({ Name = "Hint", Size = UDim2.new(1, -36, 0, 22), Position = UDim2.new(0, 18, 1, -28), Text = "Saved layouts are kept for this UI session. Use Export for a portable JSON copy.", TextColor3 = Theme.TextMuted, TextSize = 8, Parent = modalPanel })
+    modalHint.ZIndex = 102
+
+    local modalMode = "import"
+    local function closeStorageModal()
+        modal.Visible = false
+    end
+
+    local function refreshSavedList()
+        for _, child in ipairs(savedList:GetChildren()) do
+            if child:IsA("GuiButton") or child:IsA("TextLabel") then
+                child:Destroy()
+            end
+        end
+        local count = 0
+        for _, entry in ipairs(self._SavedLayouts) do
+            if type(entry) == "table" and type(entry.Layout) == "table" then
+                count += 1
+                local row = Helpers.CreateButton({ Name = "Saved", Size = UDim2.new(1, -2, 0, 48), Text = "", AutoButtonColor = false, BackgroundColor3 = Theme.ElementBackground, Parent = savedList })
+                row.ZIndex = 103
+                Helpers.Corner(row, 7)
+                Helpers.Stroke(row, Theme.Border, 1)
+                local title = Helpers.CreateLabel({ Size = UDim2.new(1, -140, 0, 20), Position = UDim2.fromOffset(12, 5), Text = tostring(entry.Name or "Unnamed"), TextColor3 = Theme.Text, TextSize = 9, Font = Theme.FontBold, Parent = row })
+                title.ZIndex = 104
+                local details = Helpers.CreateLabel({ Size = UDim2.new(1, -140, 0, 15), Position = UDim2.fromOffset(12, 26), Text = tostring(#(entry.Layout.Elements or {})) .. " elements", TextColor3 = Theme.TextMuted, TextSize = 7, Parent = row })
+                details.ZIndex = 104
+                local load = Helpers.CreateButton({ Size = UDim2.fromOffset(54, 30), Position = UDim2.new(1, -116, 0, 9), Text = "LOAD", TextColor3 = Theme.Text, TextSize = 8, Font = Theme.FontBold, BackgroundColor3 = Theme.AccentSoft, Parent = row })
+                load.ZIndex = 104
+                Helpers.Corner(load, 6)
+                local del = Helpers.CreateButton({ Size = UDim2.fromOffset(54, 30), Position = UDim2.new(1, -58, 0, 9), Text = "DELETE", TextColor3 = Theme.Error, TextSize = 7, Font = Theme.FontBold, BackgroundColor3 = Theme.ElementBackground, Parent = row })
+                del.ZIndex = 104
+                Helpers.Corner(del, 6)
+                local captured = entry
+                self._Maid:GiveTask(load.MouseButton1Click:Connect(function()
+                    self:SetLayout(cloneTable(captured.Layout))
+                    self._Preset = tostring(captured.Layout.Preset or "Custom")
+                    closeStorageModal()
+                end))
+                self._Maid:GiveTask(del.MouseButton1Click:Connect(function()
+                    for i, value in ipairs(self._SavedLayouts) do
+                        if value == captured then table.remove(self._SavedLayouts, i); break end
+                    end
+                    refreshSavedList()
+                end))
+            end
+        end
+        if count == 0 then
+            local empty = Helpers.CreateLabel({ Size = UDim2.new(1, -2, 0, 60), Text = "No saved layouts yet.\nPress SAVE to create one.", TextColor3 = Theme.TextMuted, TextSize = 9, TextWrapped = true, Parent = savedList })
+            empty.ZIndex = 103
+        end
+    end
+
+    local function openImportModal()
+        modalMode = "import"
+        modalTitle.Text = "Saved Layouts"
+        nameInput.Visible = false
+        modalAction.Visible = false
+        modalHint.Text = "Select LOAD to use a saved layout. Export creates a portable JSON copy."
+        savedList.Position = UDim2.fromOffset(18, 58)
+        savedList.Size = UDim2.new(1, -36, 1, -88)
+        refreshSavedList()
+        modal.Visible = true
+    end
+
+    local function openSaveModal()
+        modalMode = "save"
+        modalTitle.Text = "Save Layout"
+        nameInput.Visible = true
+        modalAction.Visible = true
+        nameInput.Text = "Layout " .. tostring(#self._SavedLayouts + 1)
+        modalHint.Text = "Enter a name, then press SAVE. Existing names will be replaced."
+        savedList.Position = UDim2.fromOffset(18, 104)
+        savedList.Size = UDim2.new(1, -36, 1, -134)
+        refreshSavedList()
+        modal.Visible = true
+        task.defer(function()
+            pcall(function() nameInput:CaptureFocus() end)
+        end)
+    end
 
     local previewInstances: { [string]: GuiObject } = {}
     local previewHitboxes: { [string]: TextButton } = {}
@@ -586,7 +703,7 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
     local function makeChoice(labelText: string, value: string, choices: { string }, callback: (string) -> ())
         makePropertyLabel(labelText)
         local index = table.find(choices, value) or 1
-        local button = Helpers.CreateButton({ Size = UDim2.new(1, 0, 0, 30), Text = value .. "  ⌄", TextColor3 = Theme.Text, TextSize = 9, BackgroundColor3 = Theme.ElementBackground, Parent = propertyScroll })
+        local button = Helpers.CreateButton({ Size = UDim2.new(1, 0, 0, 30), Text = value .. "  DOWN", TextColor3 = Theme.Text, TextSize = 9, BackgroundColor3 = Theme.ElementBackground, Parent = propertyScroll })
         Helpers.Corner(button, 6)
         Helpers.Stroke(button, Theme.Border, 1)
         self._PropertyMaid:GiveTask(button.MouseButton1Click:Connect(function()
@@ -946,7 +1063,7 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
                 local button = Helpers.CreateButton({ Size = UDim2.new(1, -2, 0, 48), Text = "", BackgroundColor3 = Theme.ElementBackground, Parent = componentList })
                 Helpers.Corner(button, 7)
                 Helpers.Stroke(button, Theme.Border, 1)
-                local glyph = Helpers.CreateLabel({ Size = UDim2.fromOffset(30, 48), Position = UDim2.fromOffset(8, 0), Text = TYPE_GLYPHS[elementType] or "•", TextColor3 = Theme.Accent, TextSize = 16, Font = Theme.FontBold, TextXAlignment = Enum.TextXAlignment.Center, Parent = button })
+                local glyph = Helpers.CreateLabel({ Size = UDim2.fromOffset(30, 48), Position = UDim2.fromOffset(8, 0), Text = TYPE_GLYPHS[elementType] or "EL", TextColor3 = Theme.Accent, TextSize = 16, Font = Theme.FontBold, TextXAlignment = Enum.TextXAlignment.Center, Parent = button })
                 Helpers.CreateLabel({ Size = UDim2.new(1, -50, 0, 20), Position = UDim2.fromOffset(46, 5), Text = label, TextColor3 = Theme.Text, TextSize = 9, Font = Theme.FontBold, Parent = button })
                 Helpers.CreateLabel({ Size = UDim2.new(1, -50, 0, 16), Position = UDim2.fromOffset(46, 25), Text = TYPE_DESCRIPTIONS[elementType] or "Additional target information", TextColor3 = Theme.TextMuted, TextSize = 7, Parent = button })
                 componentButtons[elementType] = button
@@ -967,10 +1084,10 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
                 local row = Helpers.CreateButton({ Size = UDim2.new(1, -2, 0, 46), Text = "", BackgroundColor3 = if self._Selected == id then Theme.AccentSoft else Theme.ElementBackground, Parent = layerList })
                 Helpers.Corner(row, 7)
                 Helpers.Stroke(row, if self._Selected == id then Theme.Accent else Theme.Border, 1)
-                local eye = Helpers.CreateButton({ Size = UDim2.fromOffset(28, 42), Position = UDim2.fromOffset(2, 2), Text = if element.Visible ~= false then "◉" else "○", TextColor3 = if element.Visible ~= false then Theme.Accent else Theme.TextMuted, TextSize = 13, BackgroundTransparency = 1, Parent = row })
+                local eye = Helpers.CreateButton({ Size = UDim2.fromOffset(28, 42), Position = UDim2.fromOffset(2, 2), Text = if element.Visible ~= false then "ON" else "OFF", TextColor3 = if element.Visible ~= false then Theme.Accent else Theme.TextMuted, TextSize = 13, BackgroundTransparency = 1, Parent = row })
                 local name = Helpers.CreateLabel({ Size = UDim2.new(1, -74, 0, 20), Position = UDim2.fromOffset(34, 5), Text = element.Name, TextColor3 = Theme.Text, TextSize = 9, Font = Theme.FontBold, Parent = row })
                 local typeLabel = Helpers.CreateLabel({ Size = UDim2.new(1, -74, 0, 15), Position = UDim2.fromOffset(34, 24), Text = TYPE_LABELS[element.Type] or element.Type, TextColor3 = Theme.TextMuted, TextSize = 7, Parent = row })
-                local move = Helpers.CreateLabel({ Size = UDim2.fromOffset(30, 42), Position = UDim2.new(1, -34, 0, 2), Text = "⁙", TextColor3 = Theme.TextMuted, TextSize = 16, TextXAlignment = Enum.TextXAlignment.Center, Parent = row })
+                local move = Helpers.CreateLabel({ Size = UDim2.fromOffset(30, 42), Position = UDim2.new(1, -34, 0, 2), Text = "DRAG", TextColor3 = Theme.TextMuted, TextSize = 16, TextXAlignment = Enum.TextXAlignment.Center, Parent = row })
                 listButtons[id] = row
                 local captured = id
                 self._Maid:GiveTask(row.MouseButton1Click:Connect(function() self._Selected = captured; refreshLayers(); refreshProperties(); updateSelection() end))
@@ -1157,19 +1274,25 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
             self:Close()
         end
     end))
-    self._Maid:GiveTask(saveButton.MouseButton1Click:Connect(function()
+    self._Maid:GiveTask(saveButton.MouseButton1Click:Connect(function() openSaveModal() end))
+    self._Maid:GiveTask(importButton.MouseButton1Click:Connect(function() openImportModal() end))
+    self._Maid:GiveTask(modalClose.MouseButton1Click:Connect(closeStorageModal))
+    self._Maid:GiveTask(modalAction.MouseButton1Click:Connect(function()
+        local name = string.gsub(tostring(nameInput.Text or ""), "^%s*(.-)%s*$", "%1")
+        if name == "" then name = "Layout " .. tostring(#self._SavedLayouts + 1) end
         local layout = self:GetLayout()
-        if type(data.OnSave) == "function" then pcall(data.OnSave, layout) end
-    end))
-    self._Maid:GiveTask(importButton.MouseButton1Click:Connect(function()
-        if not getclipboard then return end
-        local ok, raw = pcall(getclipboard)
-        if not ok or type(raw) ~= "string" or raw == "" then return end
-        local decoded
-        local decodeOk = pcall(function() decoded = game:GetService("HttpService"):JSONDecode(raw) end)
-        if decodeOk and type(decoded) == "table" and type(decoded.Elements) == "table" then
-            self:SetLayout(decoded)
+        local saved = { Name = name, Layout = cloneTable(layout), SavedAt = os.time() }
+        local replaced = false
+        for i, entry in ipairs(self._SavedLayouts) do
+            if type(entry) == "table" and tostring(entry.Name or "") == name then
+                self._SavedLayouts[i] = saved
+                replaced = true
+                break
+            end
         end
+        if not replaced then table.insert(self._SavedLayouts, saved) end
+        if type(data.OnSave) == "function" then pcall(data.OnSave, layout, name, cloneTable(self._SavedLayouts)) end
+        closeStorageModal()
     end))
     self._Maid:GiveTask(exportButton.MouseButton1Click:Connect(function() self:Export() end))
     self._Maid:GiveTask(doneButton.MouseButton1Click:Connect(function() self:Close() end))
@@ -1233,6 +1356,7 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
     end))
 
     function self:Close()
+        modal.Visible = false
         self._Maid:DoCleaning()
         self._PropertyMaid:DoCleaning()
         self._SelectionMaid:DoCleaning()

@@ -155,9 +155,13 @@ function ESPWorldRenderer.new(options)
         _Layout = copy(data.Layout or DEFAULT_LAYOUT),
         _Enabled = data.Enabled ~= false,
         _MaxDistance = math.max(tonumber(data.MaxDistance) or 5000, 0),
+        _MaxDistanceSquared = math.max(tonumber(data.MaxDistance) or 5000, 0) ^ 2,
         _TeamCheck = data.TeamCheck == true,
         _VisibleCheck = data.VisibleCheck == true,
         _IgnoreLocalPlayer = data.IgnoreLocalPlayer ~= false,
+        _UpdateRate = math.clamp(tonumber(data.UpdateRate) or 15, 10, 30),
+        _Accumulator = 0,
+        _LastLayout = nil,
     }, ESPWorldRenderer)
 
     local gui = Instance.new("ScreenGui")
@@ -169,7 +173,11 @@ function ESPWorldRenderer.new(options)
     gui.Parent = parent
     self.Gui = gui
 
-    self._Maid:Give(RunService.RenderStepped:Connect(function()
+    self._Maid:Give(RunService.RenderStepped:Connect(function(dt)
+        self._Accumulator += dt
+        local interval = 1 / self._UpdateRate
+        if self._Accumulator < interval then return end
+        self._Accumulator = 0
         self:_render()
     end))
 
@@ -497,14 +505,19 @@ function ESPWorldRenderer:_render()
         local character = player.Character
         local rootPart = character and character:FindFirstChild("HumanoidRootPart")
         local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-        local rootGui = self:_makeVisuals(player)
-        rootGui.Visible = false
+        local rootGui = self._Visuals and self._Visuals[player]
+        if rootGui then rootGui.Visible = false end
 
         if not character or not rootPart or not humanoid or humanoid.Health <= 0 then shouldRender = false end
         local distance = 0
         if shouldRender then
-            distance = (camera.CFrame.Position - rootPart.Position).Magnitude
-            if distance > self._MaxDistance then shouldRender = false end
+            local offset = camera.CFrame.Position - rootPart.Position
+            local distanceSquared = offset.X * offset.X + offset.Y * offset.Y + offset.Z * offset.Z
+            if distanceSquared > self._MaxDistanceSquared then
+                shouldRender = false
+            else
+                distance = math.sqrt(distanceSquared)
+            end
         end
         if shouldRender and self._TeamCheck and localPlayer.Team ~= nil and player.Team == localPlayer.Team then shouldRender = false end
         if shouldRender and self._VisibleCheck and not rayVisible(camera, camera.CFrame.Position, rootPart.Position, character) then shouldRender = false end
@@ -532,6 +545,7 @@ function ESPWorldRenderer:_render()
                         Health = health, MaxHealth = maxHealth, Distance = distance,
                         Weapon = getWeapon(character), Team = teamName, Class = "Player", State = state,
                     }
+                    rootGui = self:_makeVisuals(player)
                     self:_destroyChildren(rootGui)
                     rootGui.Visible = true
                     local box = { x = minX, y = minY, w = boxWidth, h = boxHeight, design = boxDesign }
@@ -549,6 +563,7 @@ function ESPWorldRenderer:SetLayout(layout)
         return
     end
     self._Layout = copy(layout)
+    self._LastLayout = nil
 end
 
 function ESPWorldRenderer:SetEnabled(enabled)
@@ -566,6 +581,7 @@ end
 
 function ESPWorldRenderer:SetMaxDistance(distance)
     self._MaxDistance = math.max(tonumber(distance) or self._MaxDistance, 0)
+    self._MaxDistanceSquared = self._MaxDistance * self._MaxDistance
 end
 
 function ESPWorldRenderer:GetMaxDistance()
