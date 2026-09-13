@@ -1739,6 +1739,10 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	self._Minimized = false
 	self._StartupComplete = false
 	self._OptionsTab = nil
+	self._ESPTab = nil
+	self._ESPBuilder = nil
+	self._ESPBuilderHardClose = nil
+	self._ESPWorldRenderer = nil
 	self.RefreshTheme = refreshWindowTheme
 	self._InfoBar = infoBar
 	self._InfoRefs = infoRefs
@@ -1931,10 +1935,19 @@ end
 
 function Window:_selectTab(tab: any)
 	if self._ActiveTab == tab then
+		if self._ESPTab == tab and self._ESPBuilder and self._ESPBuilder.Open then
+			pcall(function() self._ESPBuilder:Open() end)
+		end
 		return
 	end
 
 	local previousTab = self._ActiveTab
+
+	-- The ESP Designer is a separate full-size studio surface, not a normal
+	-- ScrollingFrame page. Hide it whenever the user switches to another tab.
+	if previousTab == self._ESPTab and self._ESPBuilder and self._ESPBuilder.Gui then
+		self._ESPBuilder.Gui.Enabled = false
+	end
 
 	for _, existingTab in self._Tabs do
 		if existingTab and existingTab.SetActive then
@@ -1963,6 +1976,16 @@ function Window:_selectTab(tab: any)
 	local newPage = tab.Page
 	local oldPage = previousTab and previousTab.Page
 
+	if tab == self._ESPTab then
+		-- Keep the normal tab page empty/hidden; the visual ESP Studio owns the
+		-- entire content area while this tab is active.
+		newPage.Visible = false
+		if self._ESPBuilder and self._ESPBuilder.Open then
+			pcall(function() self._ESPBuilder:Open() end)
+		end
+		return
+	end
+
 	if oldPage and oldPage ~= newPage then
 		oldPage.Visible = false
 		oldPage.Position = UDim2.fromOffset(0, 0)
@@ -1978,10 +2001,13 @@ end
 function Window:CreateTab(name: string)
 	local tab = Tab.new(self, name)
 
-	-- Options is a utility tab and should always stay at the end of the
-	-- navigation list. New user tabs are inserted immediately before it.
 	if self._OptionsTab then
-		table.insert(self._Tabs, #self._Tabs, tab)
+		local optionsIndex = table.find(self._Tabs, self._OptionsTab)
+		if optionsIndex then
+			table.insert(self._Tabs, optionsIndex, tab)
+		else
+			table.insert(self._Tabs, tab)
+		end
 	else
 		table.insert(self._Tabs, tab)
 	end
@@ -2494,15 +2520,79 @@ end
 
 -- Opens the visual Custom ESP Designer. The returned layout is renderer-agnostic
 -- and can be consumed by a project-specific ESP/overlay renderer.
+-- Creates the dedicated ESP navigation item. Unlike a normal tab, this tab
+-- launches the visual ESP Studio instead of putting old-style toggles into a
+-- ScrollingFrame.
+function Window:_ensureESPDesignerTab()
+	if self._ESPTab then
+		return self._ESPTab
+	end
+
+	-- Options is intentionally the last normal navigation item. Insert the ESP
+	-- tab immediately before it so the order stays: user tabs -> ESP -> Options.
+	local tab = Tab.new(self, "🎨 ESP Designer")
+	self._ESPTab = tab
+
+	if self._OptionsTab then
+		local optionsIndex = table.find(self._Tabs, self._OptionsTab)
+		if optionsIndex then
+			table.insert(self._Tabs, optionsIndex, tab)
+		else
+			table.insert(self._Tabs, tab)
+		end
+	else
+		table.insert(self._Tabs, tab)
+	end
+
+	-- The button already calls Window:_selectTab(). This extra connection only
+	-- makes the intent explicit and also handles a builder that was created
+	-- after the tab itself.
+	self._Maid:GiveTask(tab.Button.MouseButton1Click:Connect(function()
+		if self._ESPBuilder and self._ESPBuilder.Open then
+			pcall(function() self._ESPBuilder:Open() end)
+		end
+	end))
+
+	return tab
+end
+
 function Window:CreateESPBuilder(options: any?)
 	local data = (typeof(options) == "table") and options or {}
+
 	if self._ESPBuilder then
-		pcall(function() self._ESPBuilder:Close() end)
+		if self._ESPBuilderHardClose then
+			pcall(self._ESPBuilderHardClose)
+		else
+			pcall(function() self._ESPBuilder:Close() end)
+		end
 		self._ESPBuilder = nil
+		self._ESPBuilderHardClose = nil
 	end
+
+	local tab = self:_ensureESPDesignerTab()
 	data.Parent = self._TopGuiParent or self.Gui.Parent
+
 	local builder = ESPBuilder.new(data)
 	self._ESPBuilder = builder
+
+	-- ESPBuilder:Close() destroys its ScreenGui. For a navigation tab we want
+	-- Done/close to behave like closing a panel: hide it, then allow the ESP tab
+	-- to reopen it without rebuilding the whole UI. Keep the original Close for
+	-- Window:Destroy().
+	local originalClose = builder.Close
+	self._ESPBuilderHardClose = function()
+		pcall(function() originalClose(builder) end)
+	end
+	builder.Close = function()
+		if builder.Gui then
+			builder.Gui.Enabled = false
+		end
+	end
+
+	-- The designer owns the active visual surface. Hide the ordinary empty tab
+	-- page while it is open.
+	tab.Page.Visible = false
+
 	return builder
 end
 
@@ -2516,105 +2606,23 @@ function Window:CreateESPWorldRenderer(options: any?)
 
 	data.Parent = self._TopGuiParent or self.Gui.Parent
 
-	-- Keep the renderer layout in Window as well so the built-in controls can
-	-- change individual ESP elements without needing a separate script.
-	local espLayout = data.Layout or {
-		Version = 2,
-		Canvas = { Width = 420, Height = 430 },
-		Elements = {
-			{ Id = "box", Type = "Box", Name = "Box", X = 125, Y = 90, Width = 170, Height = 250, Color = { R = 161, G = 76, B = 255 }, Thickness = 2, Transparency = 0, Visible = true },
-			{ Id = "name", Type = "Name", Name = "Name", X = 145, Y = 62, Width = 130, Height = 24, Text = "{name}", Color = { R = 245, G = 245, B = 248 }, TextSize = 14, Anchor = "Center", Visible = true },
-			{ Id = "health", Type = "Health", Name = "Health", X = 145, Y = 34, Width = 130, Height = 22, Text = "{health}/{maxhealth}", Color = { R = 76, G = 220, B = 137 }, TextSize = 13, Anchor = "Center", Visible = true },
-			{ Id = "distance", Type = "Distance", Name = "Distance", X = 145, Y = 350, Width = 130, Height = 22, Text = "{distance}", Color = { R = 220, G = 225, B = 235 }, TextSize = 13, Anchor = "Center", Visible = true },
-			{ Id = "healthbar", Type = "HealthBar", Name = "Health Bar", X = 116, Y = 92, Width = 6, Height = 246, Color = { R = 76, G = 220, B = 137 }, Thickness = 0, Visible = true },
-			{ Id = "tracer", Type = "Tracer", Name = "Tracer", X = 210, Y = 385, Width = 2, Height = 42, Color = { R = 161, G = 76, B = 255 }, Thickness = 2, Visible = true },
-			{ Id = "weapon", Type = "Weapon", Name = "Weapon", X = 300, Y = 132, Width = 105, Height = 22, Text = "{weapon}", Color = { R = 245, G = 245, B = 248 }, TextSize = 11, Anchor = "Left", Visible = true },
-			{ Id = "status", Type = "Status", Name = "Status", X = 300, Y = 158, Width = 105, Height = 22, Text = "{team}", Color = { R = 247, G = 185, B = 78 }, TextSize = 11, Anchor = "Left", Visible = true },
-		},
-	}
-	data.Layout = espLayout
+	-- The world renderer and the visual designer are a single workflow: the
+	-- designer edits the exact layout consumed by the renderer. Set
+	-- Builder=false to opt out and use a renderer without the designer.
+	local useBuilder = data.Builder ~= false
+	local builder = nil
+	if useBuilder then
+		local builderData = {}
+		for key, value in pairs(data) do
+			builderData[key] = value
+		end
+		builderData.Builder = nil
+		builder = self:CreateESPBuilder(builderData)
+		data.Builder = builder
+	end
 
 	local renderer = ESPWorldRenderer.new(data)
 	self._ESPWorldRenderer = renderer
-
-	-- Automatically create a proper ESP page. The user no longer needs to
-	-- manually create a Toggle that has to know about the renderer.
-	local espTab
-	for _, existingTab in self._Tabs do
-		if existingTab and tostring(existingTab._Name or ""):lower() == "esp" then
-			espTab = existingTab
-			break
-		end
-	end
-	if not espTab then
-		espTab = self:CreateTab("ESP")
-	end
-
-	local espSection = espTab:CreateSection("👁 Player ESP")
-	espSection:CreateParagraph({
-		Title = "World ESP",
-		Content = "Configure the player overlay directly from Vaxorin.",
-	})
-
-	local function setElementEnabled(id, enabled)
-		for _, element in ipairs(espLayout.Elements or {}) do
-			if element.Id == id then
-				element.Visible = enabled
-			end
-		end
-		renderer:SetLayout(espLayout)
-	end
-
-	espSection:CreateToggle({
-		Name = "Enable ESP",
-		CurrentValue = data.Enabled ~= false,
-		Flag = "Vaxorin.ESP.Enabled",
-		Callback = function(value)
-			renderer:SetEnabled(value)
-		end,
-	})
-
-	local elementControls = {
-		{ Id = "box", Name = "Box" },
-		{ Id = "name", Name = "Name" },
-		{ Id = "health", Name = "Health Text" },
-		{ Id = "healthbar", Name = "Health Bar" },
-		{ Id = "distance", Name = "Distance" },
-		{ Id = "tracer", Name = "Tracer" },
-		{ Id = "weapon", Name = "Weapon" },
-		{ Id = "status", Name = "Team / Status" },
-	}
-
-	for _, control in ipairs(elementControls) do
-		local enabled = true
-		for _, element in ipairs(espLayout.Elements or {}) do
-			if element.Id == control.Id then
-				enabled = element.Visible ~= false
-				break
-			end
-		end
-
-		espSection:CreateToggle({
-			Name = control.Name,
-			CurrentValue = enabled,
-			Flag = "Vaxorin.ESP." .. control.Id,
-			Callback = function(value)
-				setElementEnabled(control.Id, value)
-			end,
-		})
-	end
-
-	espSection:CreateSlider({
-		Name = "Max Distance",
-		Min = 50,
-		Max = 5000,
-		CurrentValue = tonumber(data.MaxDistance) or 1000,
-		Rounding = 0,
-		Flag = "Vaxorin.ESP.MaxDistance",
-		Callback = function(value)
-			renderer:SetMaxDistance(value)
-		end,
-	})
 
 	return renderer
 end
@@ -2788,9 +2796,15 @@ function Window:Destroy()
 		self._DeveloperGui = nil
 	end
 	if self._ESPBuilder then
-		pcall(function() self._ESPBuilder:Close() end)
+		if self._ESPBuilderHardClose then
+			pcall(self._ESPBuilderHardClose)
+		else
+			pcall(function() self._ESPBuilder:Close() end)
+		end
 		self._ESPBuilder = nil
+		self._ESPBuilderHardClose = nil
 	end
+	self._ESPTab = nil
 	if self._ESPWorldRenderer then
 		pcall(function() self._ESPWorldRenderer:Destroy() end)
 		self._ESPWorldRenderer = nil
