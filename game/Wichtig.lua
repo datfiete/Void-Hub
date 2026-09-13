@@ -67,7 +67,14 @@ Character:MoveTo(v.WorldPivot.Position + Vector3.new(0, 3, 0))
 
 RootPart.CFrame = CFrame.new(v.Position + Vector3.new(0, 3, 0))
 
+local BusoCheck = workspace.Characters[LocalPlayer.Name].Humanoid
 
-
-
-
+if BusoCheck:FindFirstChild("LeftHand_BusoLayer1") then 
+    print("Buso is active")
+else
+    print("Activating Buso!")
+    local Event = game:GetService("ReplicatedStorage").Remotes.CommF_
+    Event:InvokeServer(
+        "Buso"
+    )
+end

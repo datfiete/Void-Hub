@@ -273,3 +273,38 @@ end)
 -- Vaxorin:Destroy()
 
 print("[Vaxorin] Developer example loaded successfully.")
+
+
+-- Custom ESP Designer
+-- Opens a visual editor where elements can be dragged around a 2D preview.
+local espDesigner = Window:CreateESPBuilder({
+    Title = "Custom ESP Designer",
+    SampleName = "Tom23",
+    SampleHealth = 58,
+    SampleMaxHealth = 100,
+    SampleDistance = 42,
+})
+
+-- Layout is renderer-agnostic and can be consumed by your own ESP system.
+local layout = espDesigner:GetLayout()
+print("ESP elements:", #layout.Elements)
+
+-- Visual ESP Builder example.
+-- The builder is a layout editor only: the exported layout can be consumed by
+-- your own entity/world renderer.
+local espBuilder = window:CreateESPBuilder({
+    Title = "ESP Builder",
+    SampleName = "Tom23",
+    SampleHealth = 58,
+    SampleMaxHealth = 100,
+    SampleDistance = 42,
+    SampleWeapon = "Pulse Rifle",
+    SampleTeam = "Enemy",
+    OnExport = function(layout)
+        print("ESP layout exported:", #layout.Elements, "elements")
+    end,
+})
+
+-- You can also start from a saved layout:
+-- espBuilder:SetLayout(savedLayout)
+-- local savedLayout = espBuilder:GetLayout()

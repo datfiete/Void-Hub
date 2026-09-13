@@ -161,6 +161,7 @@ local MODULE_PATHS = {
 	"Elements/Paragraph",
 	"Core/Section",
 	"Core/Tab",
+	"Core/ESPBuilder",
 	"Core/Window",
 }
 
