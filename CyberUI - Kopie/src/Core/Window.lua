@@ -5,6 +5,8 @@ local Tab = require(script.Parent.Tab)
 local Maid = require(script.Parent.Parent.Utils.Maid)
 local Helpers = require(script.Parent.Parent.Utils.Helpers)
 local Tween = require(script.Parent.Parent.Utils.Tween)
+local ESPBuilder = require(script.Parent.ESPBuilder)
+local ESPWorldRenderer = require(script.Parent.ESPWorldRenderer)
 
 local TweenService = game:GetService("TweenService")
 local Lighting = game:GetService("Lighting")
@@ -100,8 +102,19 @@ export type WindowOptions = {
 	HideCoreUI: boolean?,
 }
 
+export type DeveloperPanelHandle = {
+	SetStats: (self: DeveloperPanelHandle, stats: { [string]: any }) -> (),
+	SetContent: (self: DeveloperPanelHandle, content: string) -> (),
+	Close: (self: DeveloperPanelHandle) -> (),
+	Open: (self: DeveloperPanelHandle) -> (),
+}
+
 export type WindowHandle = {
 	CreateTab: (self: WindowHandle, name: string) -> any,
+	CreateDeveloperWindow: (self: WindowHandle, options: any?) -> DeveloperPanelHandle,
+	OpenDeveloperWindow: (self: WindowHandle, options: any?) -> DeveloperPanelHandle,
+	CreateESPBuilder: (self: WindowHandle, options: any?) -> any,
+	CreateESPWorldRenderer: (self: WindowHandle, options: any?) -> any,
 	Notify: (self: WindowHandle, options: any) -> any,
 	Destroy: (self: WindowHandle) -> (),
 }
@@ -2216,6 +2229,289 @@ function Window:_createOptionsTab()
 	return optionsTab
 end
 
+
+-- ============================================
+-- DEVELOPER WINDOW
+-- ============================================
+-- Opens a separate, draggable panel that developers can use for live stats,
+-- debug values, counters, status information, or any other text.
+--
+-- Example:
+-- local dev = Window:CreateDeveloperWindow({
+--     Title = "Developer Stats",
+--     Stats = {
+--         Players = #game:GetService("Players"):GetPlayers(),
+--         FPS = 60,
+--         Status = "Online",
+--     },
+-- })
+--
+-- Update it later:
+-- dev:SetStats({ Players = 12, FPS = 144, Status = "Running" })
+-- dev:SetContent("Custom developer text")
+function Window:CreateDeveloperWindow(options: any?): DeveloperPanelHandle
+	local data = (typeof(options) == "table") and options or {}
+	local parent = self._TopGuiParent or self.Gui.Parent
+	local existing = self._DeveloperGui
+	if existing then
+		existing:Destroy()
+	end
+
+	local developerGui = Instance.new("ScreenGui")
+	developerGui.Name = "VaxorinDeveloper"
+	developerGui.ResetOnSpawn = false
+	developerGui.IgnoreGuiInset = true
+	developerGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	developerGui.DisplayOrder = 999
+	developerGui.Parent = parent
+	self._DeveloperGui = developerGui
+
+	local width = tonumber(data.Width) or 360
+	local height = tonumber(data.Height) or 300
+	local titleText = tostring(data.Title or "Developer Panel")
+
+	local panel = Instance.new("Frame")
+	panel.Name = "DeveloperPanel"
+	panel.Size = UDim2.fromOffset(width, height)
+	panel.Position = UDim2.new(0.5, -width / 2, 0.5, -height / 2)
+	panel.BackgroundColor3 = Theme.Surface
+	panel.BorderSizePixel = 0
+	panel.Active = true
+	panel.Parent = developerGui
+	Helpers.Corner(panel, Theme.CornerRadius)
+	Helpers.Stroke(panel, Theme.BorderStrong, 1)
+	Helpers.Glow(panel, Theme.Accent, 10, 0.94)
+
+	local top = Instance.new("Frame")
+	top.Name = "Header"
+	top.Size = UDim2.new(1, 0, 0, 48)
+	top.BackgroundColor3 = Theme.Secondary
+	top.BorderSizePixel = 0
+	top.Active = true
+	top.Parent = panel
+
+	local title = Helpers.CreateLabel({
+		Name = "Title",
+		Size = UDim2.new(1, -56, 1, 0),
+		Position = UDim2.fromOffset(16, 0),
+		Text = titleText,
+		TextColor3 = Theme.Text,
+		TextSize = 15,
+		Font = Theme.FontBold,
+		Parent = top,
+	})
+
+	local close = Helpers.CreateButton({
+		Name = "Close",
+		Size = UDim2.fromOffset(40, 40),
+		Position = UDim2.new(1, -44, 0, 4),
+		Text = "×",
+		TextColor3 = Theme.TextMuted,
+		TextSize = 22,
+		Font = Theme.FontBold,
+		BackgroundTransparency = 1,
+		Parent = top,
+	})
+	close.MouseButton1Click:Connect(function()
+		developerGui:Destroy()
+		if self._DeveloperGui == developerGui then
+			self._DeveloperGui = nil
+		end
+	end)
+
+	local accent = Instance.new("Frame")
+	accent.Name = "Accent"
+	accent.Size = UDim2.new(1, 0, 0, 2)
+	accent.Position = UDim2.fromOffset(0, 46)
+	accent.BackgroundColor3 = Theme.Accent
+	accent.BorderSizePixel = 0
+	accent.Parent = top
+
+	local content = Instance.new("ScrollingFrame")
+	content.Name = "Content"
+	content.Size = UDim2.new(1, -24, 1, -64)
+	content.Position = UDim2.fromOffset(12, 56)
+	content.BackgroundTransparency = 1
+	content.BorderSizePixel = 0
+	content.ScrollBarThickness = 4
+	content.CanvasSize = UDim2.new()
+	content.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	content.ScrollingDirection = Enum.ScrollingDirection.Y
+	content.Parent = panel
+
+	local layout = Instance.new("UIListLayout")
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Padding = UDim.new(0, 7)
+	layout.Parent = content
+
+	local padding = Instance.new("UIPadding")
+	padding.PaddingBottom = UDim.new(0, 8)
+	padding.Parent = content
+
+	local panelHandle = {} :: any
+	local function clearContent()
+		for _, child in content:GetChildren() do
+			if child:IsA("TextLabel") or child:IsA("Frame") then
+				child:Destroy()
+			end
+		end
+	end
+
+	function panelHandle:SetStats(stats: { [string]: any })
+		clearContent()
+		local entries = {}
+		for key, value in stats do
+			table.insert(entries, { Key = tostring(key), Value = tostring(value) })
+		end
+		table.sort(entries, function(a, b)
+			return a.Key < b.Key
+		end)
+
+		for index, entry in entries do
+			local row = Instance.new("Frame")
+			row.Name = "Stat_" .. tostring(index)
+			row.Size = UDim2.new(1, 0, 0, 34)
+			row.BackgroundColor3 = Theme.ElementBackground
+			row.BorderSizePixel = 0
+			row.LayoutOrder = index
+			row.Parent = content
+			Helpers.Corner(row, Theme.CornerRadiusSmall)
+
+			Helpers.CreateLabel({
+				Name = "Key",
+				Size = UDim2.new(0.5, -12, 1, 0),
+				Position = UDim2.fromOffset(12, 0),
+				Text = entry.Key,
+				TextColor3 = Theme.TextMuted,
+				TextSize = 13,
+				Parent = row,
+			})
+
+			Helpers.CreateLabel({
+				Name = "Value",
+				Size = UDim2.new(0.5, -12, 1, 0),
+				Position = UDim2.new(0.5, 0, 0, 0),
+				Text = entry.Value,
+				TextColor3 = Theme.Text,
+				TextSize = 13,
+				Font = Theme.FontBold,
+				TextXAlignment = Enum.TextXAlignment.Right,
+				Parent = row,
+			})
+		end
+	end
+
+	function panelHandle:SetContent(text: string)
+		clearContent()
+		local label = Helpers.CreateLabel({
+			Name = "DeveloperContent",
+			Size = UDim2.new(1, -12, 0, 0),
+			Text = tostring(text or ""),
+			TextColor3 = Theme.Text,
+			TextSize = 13,
+			TextWrapped = true,
+			AutomaticSize = Enum.AutomaticSize.Y,
+			Parent = content,
+		})
+		label.LayoutOrder = 1
+	end
+
+	function panelHandle:Close()
+		if developerGui.Parent then
+			developerGui:Destroy()
+		end
+		if self._DeveloperGui == developerGui then
+			self._DeveloperGui = nil
+		end
+	end
+
+	function panelHandle:Open()
+		if not developerGui.Parent then
+			developerGui.Parent = parent
+		end
+		developerGui.Enabled = true
+	end
+
+	-- Simple drag support for the header.
+	local UserInputService = game:GetService("UserInputService")
+	local dragging = false
+	local dragStart: Vector2
+	local startPos: UDim2
+	local dragInput: InputObject?
+
+	top.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			dragStart = input.Position
+			startPos = panel.Position
+		end
+	end)
+
+	top.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = false
+		end
+	end)
+
+	top.InputChanged:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseMovement
+			or input.UserInputType == Enum.UserInputType.Touch then
+			dragInput = input
+		end
+	end)
+
+	UserInputService.InputChanged:Connect(function(input)
+		if dragging and input == dragInput then
+			local delta = input.Position - dragStart
+			panel.Position = UDim2.new(
+				startPos.X.Scale, startPos.X.Offset + delta.X,
+				startPos.Y.Scale, startPos.Y.Offset + delta.Y
+			)
+		end
+	end)
+
+	if type(data.Stats) == "table" then
+		panelHandle:SetStats(data.Stats)
+	elseif data.Content ~= nil then
+		panelHandle:SetContent(tostring(data.Content))
+	end
+
+	return panelHandle
+end
+
+function Window:OpenDeveloperWindow(options: any?): DeveloperPanelHandle
+	return self:CreateDeveloperWindow(options)
+end
+
+-- Opens the visual Custom ESP Designer. The returned layout is renderer-agnostic
+-- and can be consumed by a project-specific ESP/overlay renderer.
+function Window:CreateESPBuilder(options: any?)
+	local data = (typeof(options) == "table") and options or {}
+	if self._ESPBuilder then
+		pcall(function() self._ESPBuilder:Close() end)
+		self._ESPBuilder = nil
+	end
+	data.Parent = self._TopGuiParent or self.Gui.Parent
+	local builder = ESPBuilder.new(data)
+	self._ESPBuilder = builder
+	return builder
+end
+
+function Window:CreateESPWorldRenderer(options: any?)
+	local data = (typeof(options) == "table") and options or {}
+	if self._ESPWorldRenderer then
+		pcall(function() self._ESPWorldRenderer:Destroy() end)
+		self._ESPWorldRenderer = nil
+	end
+	data.Parent = self._TopGuiParent or self.Gui.Parent
+	local renderer = ESPWorldRenderer.new(data)
+	self._ESPWorldRenderer = renderer
+	return renderer
+end
+
+
 function Window:CreateFolder(name: string)
 	return self:CreateTab(name)
 end
@@ -2379,6 +2675,18 @@ function Window:Notify(options: any)
 end
 
 function Window:Destroy()
+	if self._DeveloperGui then
+		self._DeveloperGui:Destroy()
+		self._DeveloperGui = nil
+	end
+	if self._ESPBuilder then
+		pcall(function() self._ESPBuilder:Close() end)
+		self._ESPBuilder = nil
+	end
+	if self._ESPWorldRenderer then
+		pcall(function() self._ESPWorldRenderer:Destroy() end)
+		self._ESPWorldRenderer = nil
+	end
 	for _, tab in self._Tabs do
 		if tab and tab.Destroy then
 			tab:Destroy()

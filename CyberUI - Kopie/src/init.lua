@@ -4,12 +4,14 @@ local Theme = require(script.Core.Theme)
 local Config = require(script.Core.Config)
 local Notifications = require(script.Core.Notifications)
 local Window = require(script.Core.Window)
+local ESPWorldRenderer = require(script.Core.ESPWorldRenderer)
 
 export type Library = {
 	Flags: { [string]: any },
 	Theme: typeof(Theme),
 	Config: typeof(Config.new()),
 	Notifications: any,
+	ESPWorldRenderer: typeof(ESPWorldRenderer),
 	CreateWindow: (self: Library, options: any?) -> any,
 	Notify: (self: Library, options: any) -> any,
 	Destroy: (self: Library) -> (),
@@ -31,6 +33,7 @@ local Library = {
 
 Library.Config = Config.new()
 Library.Notifications = Notifications.new(Library)
+Library.ESPWorldRenderer = ESPWorldRenderer
 
 sharedState.CyberUI_Library = Library
 

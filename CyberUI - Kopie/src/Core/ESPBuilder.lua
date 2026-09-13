@@ -55,13 +55,13 @@ local PRESETS = { "Custom", "Minimal", "Classic", "Cyber", "Compact" }
 
 local DEFAULTS: { [string]: { [string]: any } } = {
     Box = { Name = "Box", X = 125, Y = 90, Width = 170, Height = 250, Color = Color3.fromRGB(161, 76, 255), Thickness = 2, Transparency = 0, Anchor = "Center" },
-    Name = { Name = "Name", X = 145, Y = 62, Width = 130, Height = 24, Text = "Tom23", Color = Color3.fromRGB(245, 245, 248), TextSize = 14, Anchor = "Center" },
-    Health = { Name = "Health", X = 145, Y = 34, Width = 130, Height = 22, Text = "58/100", Color = Color3.fromRGB(76, 220, 137), TextSize = 13, Anchor = "Center" },
-    Distance = { Name = "Distance", X = 145, Y = 350, Width = 130, Height = 22, Text = "42m", Color = Color3.fromRGB(220, 225, 235), TextSize = 13, Anchor = "Center" },
+    Name = { Name = "Name", X = 145, Y = 62, Width = 130, Height = 24, Text = "{name}", Color = Color3.fromRGB(245, 245, 248), TextSize = 14, Anchor = "Center" },
+    Health = { Name = "Health", X = 145, Y = 34, Width = 130, Height = 22, Text = "{health}/{maxhealth}", Color = Color3.fromRGB(76, 220, 137), TextSize = 13, Anchor = "Center" },
+    Distance = { Name = "Distance", X = 145, Y = 350, Width = 130, Height = 22, Text = "{distance}", Color = Color3.fromRGB(220, 225, 235), TextSize = 13, Anchor = "Center" },
     HealthBar = { Name = "Health Bar", X = 116, Y = 92, Width = 6, Height = 246, Color = Color3.fromRGB(76, 220, 137), Thickness = 0, Anchor = "Center" },
     Tracer = { Name = "Tracer", X = 210, Y = 385, Width = 2, Height = 42, Color = Color3.fromRGB(161, 76, 255), Thickness = 2, Anchor = "Center" },
-    Weapon = { Name = "Weapon", X = 300, Y = 132, Width = 105, Height = 22, Text = "Pulse Rifle", Color = Color3.fromRGB(245, 245, 248), TextSize = 11, Anchor = "Left" },
-    Status = { Name = "Status", X = 300, Y = 158, Width = 105, Height = 22, Text = "Enemy", Color = Color3.fromRGB(247, 185, 78), TextSize = 11, Anchor = "Left" },
+    Weapon = { Name = "Weapon", X = 300, Y = 132, Width = 105, Height = 22, Text = "{weapon}", Color = Color3.fromRGB(245, 245, 248), TextSize = 11, Anchor = "Left" },
+    Status = { Name = "Status", X = 300, Y = 158, Width = 105, Height = 22, Text = "{team}", Color = Color3.fromRGB(247, 185, 78), TextSize = 11, Anchor = "Left" },
     CustomText = { Name = "Custom Text", X = 300, Y = 184, Width = 105, Height = 22, Text = "{team} • {distance}", Color = Color3.fromRGB(245, 245, 248), TextSize = 11, Anchor = "Left" },
 }
 
