@@ -1,10 +1,39 @@
+--!strict
 -- Vaxorin remote loader
--- Usage:
--- local CyberUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/datfiete/Void-Hub/main/CyberUI%20-%20Kopie/load.lua"))()
+-- Current repository:
+-- https://github.com/datfiete/Void-Hub/tree/main/CyberUI%20-%20Kopie
 
 local sharedState = (getgenv and getgenv()) or _G
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
+
+local REPO = "https://raw.githubusercontent.com/datfiete/Void-Hub/main/CyberUI%20-%20Kopie/src"
+
+local MODULE_PATHS = {
+	"Utils/Maid",
+	"Utils/Signal",
+	"Utils/Tween",
+	"Utils/Helpers",
+
+	"Core/Theme",
+	"Core/Config",
+	"Core/Notifications",
+
+	"Elements/Toggle",
+	"Elements/Button",
+	"Elements/Slider",
+	"Elements/Dropdown",
+	"Elements/Input",
+	"Elements/Keybind",
+	"Elements/ColorPicker",
+	"Elements/Paragraph",
+
+	"Core/Section",
+	"Core/Tab",
+	"Core/ESPBuilder",
+	"Core/ESPWorldRenderer",
+	"Core/Window",
+}
 
 local function destroyBootstrapLoader()
 	local loader = sharedState.CyberUI_BootstrapLoader
@@ -15,14 +44,23 @@ local function destroyBootstrapLoader()
 		if card then
 			for _, child in card:GetDescendants() do
 				if child:IsA("TextLabel") or child:IsA("TextButton") or child:IsA("TextBox") then
-					TweenService:Create(child, TweenInfo.new(0.15), { TextTransparency = 1 }):Play()
+					TweenService:Create(child, TweenInfo.new(0.15), {
+						TextTransparency = 1,
+					}):Play()
 				elseif child:IsA("Frame") then
-					TweenService:Create(child, TweenInfo.new(0.15), { BackgroundTransparency = 1 }):Play()
+					TweenService:Create(child, TweenInfo.new(0.15), {
+						BackgroundTransparency = 1,
+					}):Play()
 				elseif child:IsA("UIStroke") then
-					TweenService:Create(child, TweenInfo.new(0.15), { Transparency = 1 }):Play()
+					TweenService:Create(child, TweenInfo.new(0.15), {
+						Transparency = 1,
+					}):Play()
 				end
 			end
-			TweenService:Create(card, TweenInfo.new(0.15), { BackgroundTransparency = 1 }):Play()
+
+			TweenService:Create(card, TweenInfo.new(0.15), {
+				BackgroundTransparency = 1,
+			}):Play()
 		end
 
 		task.delay(0.16, function()
@@ -33,19 +71,24 @@ local function destroyBootstrapLoader()
 	end
 end
 
-destroyBootstrapLoader()
-
 local function createBootstrapLoader()
-	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
+	local player = Players.LocalPlayer
+	if not player then
+		return nil
+	end
+
+	local playerGui = player:WaitForChild("PlayerGui")
 
 	local gui = Instance.new("ScreenGui")
 	gui.Name = "CyberUI_BootstrapLoader"
 	gui.ResetOnSpawn = false
 	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	gui.DisplayOrder = 2147483647
+
 	pcall(function()
 		gui.ScreenInsets = Enum.ScreenInsets.None
 	end)
+
 	gui.Parent = playerGui
 
 	local card = Instance.new("Frame")
@@ -129,49 +172,63 @@ local function createBootstrapLoader()
 		Size = UDim2.fromScale(0.88, 1),
 	}):Play()
 
-	task.delay(8, function()
-		if sharedState.CyberUI_BootstrapLoader == gui then
-			destroyBootstrapLoader()
-		end
-	end)
-
 	sharedState.CyberUI_BootstrapLoader = gui
 	return gui
 end
 
-createBootstrapLoader()
+local function setStatus(gui: ScreenGui?, text: string)
+	if not gui then
+		return
+	end
 
-local REPO = "https://raw.githubusercontent.com/datfiete/Void-Hub/refs/heads/main/CyberUI%20-%20Kopie/src"
+	local card = gui:FindFirstChild("Card")
+	if not card then
+		return
+	end
 
-local MODULE_PATHS = {
-	"Utils/Maid",
-	"Utils/Signal",
-	"Utils/Tween",
-	"Utils/Helpers",
-	"Core/Theme",
-	"Core/Config",
-	"Core/Notifications",
-	"Elements/Toggle",
-	"Elements/Button",
-	"Elements/Slider",
-	"Elements/Dropdown",
-	"Elements/Input",
-	"Elements/Keybind",
-	"Elements/ColorPicker",
-	"Elements/Paragraph",
-	"Core/Section",
-	"Core/Tab",
-	"Core/ESPBuilder",
-	"Core/ESPWorldRenderer",
-	"Core/Window",
-}
+	local status = card:FindFirstChild("Status")
+	if status and status:IsA("TextLabel") then
+		status.Text = text
+	end
+end
 
-local sources: { [string]: string } = {
-	["init"] = game:HttpGet(REPO .. "/init.lua"),
-}
+local bootstrap = createBootstrapLoader()
+
+-- Download every module with an explicit error so a bad/missing GitHub file
+-- no longer looks like Vaxorin simply "closing".
+local sources: { [string]: string } = {}
+
+local function fetch(path: string): string
+	setStatus(bootstrap, "Loading " .. path .. "...")
+
+	local url = REPO .. "/" .. path .. ".lua"
+	local ok, result = pcall(function()
+		return game:HttpGet(url)
+	end)
+
+	if not ok then
+		error(
+			("Vaxorin failed to download module:\n%s\n\nURL:\n%s\n\nError:\n%s")
+				:format(path, url, tostring(result)),
+			2
+		)
+	end
+
+	if type(result) ~= "string" or #result == 0 then
+		error(
+			("Vaxorin received an empty response for:\n%s\n\nURL:\n%s")
+				:format(path, url),
+			2
+		)
+	end
+
+	return result
+end
+
+sources["init"] = fetch("init")
 
 for _, path in MODULE_PATHS do
-	sources[path] = game:HttpGet(REPO .. "/" .. path .. ".lua")
+	sources[path] = fetch(path)
 end
 
 local exports: { [string]: any } = {}
@@ -181,6 +238,7 @@ local function pathName(path: string): string
 	if path == "init" then
 		return "Vaxorin"
 	end
+
 	return string.match(path, "([^/]+)$") or path
 end
 
@@ -201,16 +259,19 @@ local function childPath(path: string, key: string): string
 	if path == "init" then
 		return key
 	end
+
 	return path .. "/" .. key
 end
 
 local function hasChildModule(path: string): boolean
 	local prefix = path .. "/"
+
 	for candidatePath, _ in pairs(sources) do
 		if string.sub(candidatePath, 1, #prefix) == prefix then
 			return true
 		end
 	end
+
 	return false
 end
 
@@ -234,6 +295,7 @@ local function getScriptMock(path: string): any
 			end
 
 			local nextPath = childPath(path, key)
+
 			if sources[nextPath] or hasChildModule(nextPath) then
 				return getScriptMock(nextPath)
 			end
@@ -252,21 +314,28 @@ local function requireModule(path: string): any
 
 	local source = sources[path]
 	if not source then
-		error(`Vaxorin module not found: {path}`, 2)
+		error("Vaxorin module not found: " .. path, 2)
 	end
 
 	local chunk, compileError = loadstring(source, "CyberUI/" .. path)
+
 	if not chunk then
-		error(`Vaxorin failed to compile: {path}\n{tostring(compileError)}`, 2)
+		error(
+			("Vaxorin failed to compile module:\n%s\n\n%s")
+				:format(path, tostring(compileError)),
+			2
+		)
 	end
 
 	local moduleScript = getScriptMock(path)
+
 	local function cyberRequire(target: any)
 		if typeof(target) ~= "table" then
 			error("Vaxorin require expected a module reference", 2)
 		end
 
 		local targetPath = target._cyberPath
+
 		if not targetPath then
 			for candidatePath, candidateMock in pairs(scriptMocks) do
 				if candidateMock == target then
@@ -295,9 +364,77 @@ local function requireModule(path: string): any
 	})
 
 	setfenv(chunk, env)
-	local result = chunk()
+
+	local ok, result = xpcall(function()
+		return chunk()
+	end, function(err)
+		return tostring(err) .. "\n" .. debug.traceback()
+	end)
+
+	if not ok then
+		error(
+			("Vaxorin failed while executing module:\n%s\n\n%s")
+				:format(path, tostring(result)),
+			2
+		)
+	end
+
 	exports[path] = result
 	return result
 end
 
-return requireModule("init")
+local ok, result = xpcall(function()
+	setStatus(bootstrap, "Starting Vaxorin...")
+	return requireModule("init")
+end, function(err)
+	return tostring(err) .. "\n" .. debug.traceback()
+end)
+
+if not ok then
+	setStatus(bootstrap, "Vaxorin failed to load. Check the error below.")
+
+	warn("========== VAXORIN LOAD ERROR ==========")
+	warn(tostring(result))
+	warn("========================================")
+
+	if bootstrap then
+		local card = bootstrap:FindFirstChild("Card")
+		if card then
+			local errorLabel = card:FindFirstChild("Error")
+			if not errorLabel then
+				errorLabel = Instance.new("TextLabel")
+				errorLabel.Name = "Error"
+				errorLabel.Size = UDim2.new(1, -48, 0, 28)
+				errorLabel.Position = UDim2.fromOffset(34, 72)
+				errorLabel.BackgroundTransparency = 1
+				errorLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+				errorLabel.TextSize = 11
+				errorLabel.Font = Enum.Font.Gotham
+				errorLabel.TextWrapped = true
+				errorLabel.TextXAlignment = Enum.TextXAlignment.Left
+				errorLabel.TextYAlignment = Enum.TextYAlignment.Top
+				errorLabel.Text = "See F9 console for the full error."
+				errorLabel.Parent = card
+			end
+		end
+
+		task.delay(10, function()
+			if bootstrap and bootstrap.Parent then
+				bootstrap:Destroy()
+			end
+			if sharedState.CyberUI_BootstrapLoader == bootstrap then
+				sharedState.CyberUI_BootstrapLoader = nil
+			end
+		end)
+	end
+
+	error(result, 0)
+end
+
+task.delay(0.25, function()
+	if sharedState.CyberUI_BootstrapLoader == bootstrap then
+		destroyBootstrapLoader()
+	end
+end)
+
+return result
