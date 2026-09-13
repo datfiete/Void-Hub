@@ -982,7 +982,7 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
         table.clear(self._Elements)
         table.clear(self._Order)
         self._Selected = nil
-        local definitions: { { string, any } } = {}
+        local definitions = {}
         if preset == "Minimal" then
             definitions = { { "Box", {} }, { "Name", {} }, { "HealthBar", {} } }
         elseif preset == "Classic" then
