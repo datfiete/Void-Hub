@@ -51,7 +51,7 @@ export type ESPBuilderHandle = {
 
 local DESIGN_W = 420
 local DESIGN_H = 430
-local PRESETS = { "Custom", "Minimal", "Classic", "Cyber", "Compact" }
+local PRESETS = { "Custom", "Minimal", "Classic", "Cyber", "Compact", "Full" }
 
 local DEFAULTS: { [string]: { [string]: any } } = {
     Box = { Name = "Box", X = 125, Y = 90, Width = 170, Height = 250, Color = Color3.fromRGB(161, 76, 255), Thickness = 2, Transparency = 0, Anchor = "Center" },
@@ -63,9 +63,17 @@ local DEFAULTS: { [string]: { [string]: any } } = {
     Weapon = { Name = "Weapon", X = 300, Y = 132, Width = 105, Height = 22, Text = "{weapon}", Color = Color3.fromRGB(245, 245, 248), TextSize = 11, Anchor = "Left" },
     Status = { Name = "Status", X = 300, Y = 158, Width = 105, Height = 22, Text = "{team}", Color = Color3.fromRGB(247, 185, 78), TextSize = 11, Anchor = "Left" },
     CustomText = { Name = "Custom Text", X = 300, Y = 184, Width = 105, Height = 22, Text = "{team} • {distance}", Color = Color3.fromRGB(245, 245, 248), TextSize = 11, Anchor = "Left" },
+    Team = { Name = "Team", X = 300, Y = 158, Width = 105, Height = 22, Text = "{team}", Color = Color3.fromRGB(247, 185, 78), TextSize = 11, Anchor = "Left" },
+    Class = { Name = "Class", X = 300, Y = 184, Width = 105, Height = 22, Text = "{class}", Color = Color3.fromRGB(190, 190, 210), TextSize = 11, Anchor = "Left" },
+    State = { Name = "State", X = 300, Y = 210, Width = 105, Height = 22, Text = "{state}", Color = Color3.fromRGB(190, 190, 210), TextSize = 11, Anchor = "Left" },
+    HealthPercent = { Name = "Health %", X = 145, Y = 6, Width = 130, Height = 22, Text = "{health_percent}", Color = Color3.fromRGB(76, 220, 137), TextSize = 11, Anchor = "Center" },
+    FilledBox = { Name = "Filled Box", X = 125, Y = 90, Width = 170, Height = 250, Color = Color3.fromRGB(161, 76, 255), Transparency = 0.82, Anchor = "Center" },
+    CornerBox = { Name = "Corner Box", X = 125, Y = 90, Width = 170, Height = 250, Color = Color3.fromRGB(161, 76, 255), Thickness = 2, Anchor = "Center" },
+    HeadMarker = { Name = "Head Marker", X = 198, Y = 96, Width = 24, Height = 24, Color = Color3.fromRGB(161, 76, 255), Thickness = 2, Anchor = "Center" },
+    Skeleton = { Name = "Skeleton", X = 160, Y = 105, Width = 100, Height = 215, Color = Color3.fromRGB(161, 76, 255), Thickness = 2, Anchor = "Center" },
 }
 
-local TYPE_ORDER = { "Box", "Name", "Health", "HealthBar", "Distance", "Tracer", "Weapon", "Status", "CustomText" }
+local TYPE_ORDER = { "Box", "CornerBox", "FilledBox", "Name", "Health", "HealthPercent", "HealthBar", "Distance", "Tracer", "HeadMarker", "Skeleton", "Weapon", "Team", "Class", "State", "Status", "CustomText" }
 local TYPE_LABELS = {
     Box = "Box",
     Name = "Name",
@@ -76,6 +84,29 @@ local TYPE_LABELS = {
     Weapon = "Weapon",
     Status = "Status",
     CustomText = "Custom Text",
+    Team = "Team",
+    Class = "Class",
+    State = "State",
+    HealthPercent = "Health %",
+    FilledBox = "Filled Box",
+    CornerBox = "Corner Box",
+    HeadMarker = "Head Marker",
+    Skeleton = "Skeleton",
+}
+
+local TYPE_GLYPHS = {
+    Box = "□", CornerBox = "⌗", FilledBox = "▣", Name = "T", Health = "♡", HealthPercent = "%",
+    HealthBar = "▤", Distance = "⌖", Tracer = "╱", HeadMarker = "◉", Skeleton = "⌁", Weapon = "◈",
+    Team = "◆", Class = "◇", State = "✦", Status = "✦", CustomText = "</>",
+}
+
+local TYPE_DESCRIPTIONS = {
+    Box = "Outline around the target", CornerBox = "Corner-only target outline", FilledBox = "Transparent fill over the target",
+    Name = "Display the player name", Health = "Display current health", HealthPercent = "Display health percentage",
+    HealthBar = "Vertical health bar", Distance = "Display target distance", Tracer = "Line from target to screen edge",
+    HeadMarker = "Marker over the head", Skeleton = "Draw the character skeleton", Weapon = "Display equipped weapon",
+    Team = "Display the player's team", Class = "Display the target class", State = "Display the target state",
+    Status = "Display additional target status", CustomText = "Custom text with tokens",
 }
 
 local function cloneTable(source: { [string]: any }): { [string]: any }
@@ -235,10 +266,14 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
     header.Active = true
     Helpers.Corner(header, Theme.CornerRadius)
 
+    local backButton = Helpers.CreateButton({ Name = "Back", Size = UDim2.fromOffset(42, 38), Position = UDim2.fromOffset(12, 14), Text = "‹", TextColor3 = Theme.Text, TextSize = 24, BackgroundColor3 = Theme.ElementBackground, Parent = header })
+    Helpers.Corner(backButton, 10)
+    Helpers.Stroke(backButton, Theme.Border, 1)
+
     local logo = Helpers.CreateFrame({
         Name = "Logo",
         Size = UDim2.fromOffset(38, 38),
-        Position = UDim2.fromOffset(16, 14),
+        Position = UDim2.fromOffset(62, 14),
         BackgroundColor3 = Theme.ElementBackground,
         Parent = header,
     })
@@ -258,7 +293,7 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
     Helpers.CreateLabel({
         Name = "Title",
         Size = UDim2.new(0, 340, 0, 25),
-        Position = UDim2.fromOffset(66, 9),
+        Position = UDim2.fromOffset(112, 9),
         Text = "ESP Builder",
         TextColor3 = Theme.Text,
         TextSize = 17,
@@ -268,8 +303,8 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
     Helpers.CreateLabel({
         Name = "Subtitle",
         Size = UDim2.new(0, 480, 0, 18),
-        Position = UDim2.fromOffset(66, 34),
-        Text = "Create your own ESP layout with our visual designer.",
+        Position = UDim2.fromOffset(112, 34),
+        Text = "Create and preview your ESP layout visually.",
         TextColor3 = Theme.TextMuted,
         TextSize = 9,
         Parent = header,
@@ -277,8 +312,8 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
 
     local presetButton = Helpers.CreateButton({
         Name = "Preset",
-        Size = UDim2.fromOffset(180, 42),
-        Position = UDim2.new(1, -380, 0, 12),
+        Size = UDim2.fromOffset(170, 42),
+        Position = UDim2.new(1, -590, 0, 12),
         Text = "Preset\nCustom",
         TextColor3 = Theme.Text,
         TextSize = 9,
@@ -300,13 +335,16 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
         Parent = presetButton,
     })
 
-    local saveButton = Helpers.CreateButton({ Name = "Save", Size = UDim2.fromOffset(92, 42), Position = UDim2.new(1, -290, 0, 12), Text = "▣  Save", TextColor3 = Theme.Text, TextSize = 10, Font = Theme.FontBold, BackgroundColor3 = Theme.ElementBackground, Parent = header })
+    local saveButton = Helpers.CreateButton({ Name = "Save", Size = UDim2.fromOffset(82, 42), Position = UDim2.new(1, -414, 0, 12), Text = "▣  Save", TextColor3 = Theme.Text, TextSize = 10, Font = Theme.FontBold, BackgroundColor3 = Theme.ElementBackground, Parent = header })
     Helpers.Corner(saveButton, 8)
     Helpers.Stroke(saveButton, Theme.Border, 1)
-    local exportButton = Helpers.CreateButton({ Name = "Export", Size = UDim2.fromOffset(108, 42), Position = UDim2.new(1, -192, 0, 12), Text = "⇱  Export", TextColor3 = Theme.Text, TextSize = 10, Font = Theme.FontBold, BackgroundColor3 = Theme.ElementBackground, Parent = header })
+    local importButton = Helpers.CreateButton({ Name = "Import", Size = UDim2.fromOffset(82, 42), Position = UDim2.new(1, -326, 0, 12), Text = "⇲  Import", TextColor3 = Theme.Text, TextSize = 10, Font = Theme.FontBold, BackgroundColor3 = Theme.ElementBackground, Parent = header })
+    Helpers.Corner(importButton, 8)
+    Helpers.Stroke(importButton, Theme.Border, 1)
+    local exportButton = Helpers.CreateButton({ Name = "Export", Size = UDim2.fromOffset(92, 42), Position = UDim2.new(1, -218, 0, 12), Text = "⇱  Export", TextColor3 = Theme.Text, TextSize = 10, Font = Theme.FontBold, BackgroundColor3 = Theme.ElementBackground, Parent = header })
     Helpers.Corner(exportButton, 8)
     Helpers.Stroke(exportButton, Theme.Border, 1)
-    local doneButton = Helpers.CreateButton({ Name = "Done", Size = UDim2.fromOffset(84, 42), Position = UDim2.new(1, -96, 0, 12), Text = "Done", TextColor3 = Color3.new(1, 1, 1), TextSize = 10, Font = Theme.FontBold, BackgroundColor3 = Theme.Accent, Parent = header })
+    local doneButton = Helpers.CreateButton({ Name = "Done", Size = UDim2.fromOffset(96, 42), Position = UDim2.new(1, -114, 0, 12), Text = "Done", TextColor3 = Color3.new(1, 1, 1), TextSize = 10, Font = Theme.FontBold, BackgroundColor3 = Theme.Accent, Parent = header })
     Helpers.Corner(doneButton, 8)
 
     local body = Helpers.CreateFrame({ Name = "Body", Size = UDim2.new(1, -24, 1, -130), Position = UDim2.fromOffset(12, 72), BackgroundTransparency = 1, Parent = panel })
@@ -316,7 +354,7 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
     Helpers.Corner(components, Theme.CornerRadiusSmall)
     local componentsStroke = Helpers.Stroke(components, Theme.Border, 1)
     Helpers.CreateLabel({ Name = "Title", Size = UDim2.new(1, -24, 0, 24), Position = UDim2.fromOffset(12, 9), Text = "ELEMENTS", TextColor3 = Theme.Text, TextSize = 11, Font = Theme.FontBold, Parent = components })
-    local search = Helpers.CreateTextBox({ Name = "Search", Size = UDim2.new(1, -24, 0, 34), Position = UDim2.fromOffset(12, 38), PlaceholderText = "⌕  Element suchen...", Text = "", TextColor3 = Theme.Text, PlaceholderColor3 = Theme.TextMuted, TextSize = 9, BackgroundColor3 = Theme.ElementBackground, Parent = components })
+    local search = Helpers.CreateTextBox({ Name = "Search", Size = UDim2.new(1, -24, 0, 34), Position = UDim2.fromOffset(12, 38), PlaceholderText = "⌕  Search elements...", Text = "", TextColor3 = Theme.Text, PlaceholderColor3 = Theme.TextMuted, TextSize = 9, BackgroundColor3 = Theme.ElementBackground, Parent = components })
     Helpers.Corner(search, 7)
     Helpers.Stroke(search, Theme.Border, 1)
 
@@ -332,7 +370,7 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
     componentList.Parent = components
     Helpers.ListLayout(componentList, 7)
 
-    local customAdd = Helpers.CreateButton({ Name = "CustomAdd", Size = UDim2.new(1, -24, 0, 40), Position = UDim2.new(0, 12, 1, -52), Text = "+  Eigenes Element", TextColor3 = Theme.Accent, TextSize = 10, Font = Theme.FontBold, BackgroundColor3 = Theme.AccentSoft, Parent = components })
+    local customAdd = Helpers.CreateButton({ Name = "CustomAdd", Size = UDim2.new(1, -24, 0, 40), Position = UDim2.new(0, 12, 1, -52), Text = "+  Add custom element", TextColor3 = Theme.Accent, TextSize = 10, Font = Theme.FontBold, BackgroundColor3 = Theme.AccentSoft, Parent = components })
     Helpers.Corner(customAdd, 7)
     Helpers.Stroke(customAdd, Theme.Accent, 1)
 
@@ -400,7 +438,7 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
     layers.Size = UDim2.new(0, 235, 1, 0)
     Helpers.Corner(layers, Theme.CornerRadiusSmall)
     local layersStroke = Helpers.Stroke(layers, Theme.Border, 1)
-    Helpers.CreateLabel({ Name = "Title", Size = UDim2.new(1, -24, 0, 24), Position = UDim2.fromOffset(12, 9), Text = "ELEMENT-LIST", TextColor3 = Theme.Text, TextSize = 11, Font = Theme.FontBold, Parent = layers })
+    Helpers.CreateLabel({ Name = "Title", Size = UDim2.new(1, -24, 0, 24), Position = UDim2.fromOffset(12, 9), Text = "ELEMENT LIST", TextColor3 = Theme.Text, TextSize = 11, Font = Theme.FontBold, Parent = layers })
     local layerList = Instance.new("ScrollingFrame")
     layerList.Name = "LayerList"
     layerList.Size = UDim2.new(1, -24, 1, -72)
@@ -412,7 +450,7 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
     layerList.CanvasSize = UDim2.new()
     layerList.Parent = layers
     Helpers.ListLayout(layerList, 6)
-    local addLayerButton = Helpers.CreateButton({ Name = "Add", Size = UDim2.new(1, -24, 0, 34), Position = UDim2.new(0, 12, 1, -46), Text = "+  Element hinzufügen", TextColor3 = Theme.Accent, TextSize = 9, Font = Theme.FontBold, BackgroundColor3 = Theme.AccentSoft, Parent = layers })
+    local addLayerButton = Helpers.CreateButton({ Name = "Add", Size = UDim2.new(1, -24, 0, 34), Position = UDim2.new(0, 12, 1, -46), Text = "+  Add element", TextColor3 = Theme.Accent, TextSize = 9, Font = Theme.FontBold, BackgroundColor3 = Theme.AccentSoft, Parent = layers })
     Helpers.Corner(addLayerButton, 7)
     Helpers.Stroke(addLayerButton, Theme.Accent, 1)
 
@@ -421,7 +459,7 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
     properties.Size = UDim2.new(0, 255, 1, 0)
     Helpers.Corner(properties, Theme.CornerRadiusSmall)
     local propertiesStroke = Helpers.Stroke(properties, Theme.Border, 1)
-    Helpers.CreateLabel({ Name = "Title", Size = UDim2.new(1, -24, 0, 24), Position = UDim2.fromOffset(12, 9), Text = "EIGENSCHAFTEN", TextColor3 = Theme.Text, TextSize = 11, Font = Theme.FontBold, Parent = properties })
+    Helpers.CreateLabel({ Name = "Title", Size = UDim2.new(1, -24, 0, 24), Position = UDim2.fromOffset(12, 9), Text = "PROPERTIES", TextColor3 = Theme.Text, TextSize = 11, Font = Theme.FontBold, Parent = properties })
     local propertyScroll = Instance.new("ScrollingFrame")
     propertyScroll.Name = "PropertyScroll"
     propertyScroll.Size = UDim2.new(1, -20, 1, -42)
@@ -446,12 +484,13 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
     Helpers.Corner(undoButton, 7)
     local redoButton = Helpers.CreateButton({ Name = "Redo", Size = UDim2.fromOffset(34, 30), Text = "↷", TextColor3 = Theme.TextMuted, TextSize = 16, BackgroundColor3 = Theme.ElementBackground, Parent = footer })
     Helpers.Corner(redoButton, 7)
-    local footerHint = Helpers.CreateLabel({ Name = "Hint", Size = UDim2.new(1, -520, 0, 30), Text = "Drag elements to move  •  Drag the corner handle to resize  •  Right click for options", TextColor3 = Theme.TextMuted, TextSize = 8, Parent = footer })
+    local footerHint = Helpers.CreateLabel({ Name = "Hint", Size = UDim2.new(1, -520, 0, 30), Text = "Click an element to select it  •  Drag to move  •  Drag the corner handle to resize", TextColor3 = Theme.TextMuted, TextSize = 8, Parent = footer })
     footerHint.LayoutOrder = 5
     local footerZoom = Helpers.CreateLabel({ Name = "Zoom", Size = UDim2.fromOffset(100, 30), Text = "Zoom 100%", TextColor3 = Theme.TextMuted, TextSize = 8, TextXAlignment = Enum.TextXAlignment.Right, Parent = footer })
     footerZoom.LayoutOrder = 6
 
     local previewInstances: { [string]: GuiObject } = {}
+    local previewHitboxes: { [string]: TextButton } = {}
     local selectedOverlay: Frame? = nil
     local selectedHandles: { TextButton } = {}
     local listButtons: { [string]: TextButton } = {}
@@ -562,7 +601,7 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
     end
 
     local function addColorProperty(element: ElementData)
-        makePropertyLabel("FARBE")
+        makePropertyLabel("COLOR")
         local row = Helpers.CreateFrame({ Size = UDim2.new(1, 0, 0, 32), BackgroundColor3 = Theme.ElementBackground, Parent = propertyScroll })
         Helpers.Corner(row, 6)
         Helpers.Stroke(row, Theme.Border, 1)
@@ -599,27 +638,28 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
 
         local title = Helpers.CreateLabel({ Size = UDim2.new(1, 0, 0, 38), Text = element.Name .. "\n" .. string.upper(element.Type), TextColor3 = Theme.Text, TextSize = 11, Font = Theme.FontBold, TextYAlignment = Enum.TextYAlignment.Center, Parent = propertyScroll })
         title.TextXAlignment = Enum.TextXAlignment.Left
+        makeTextProperty("ELEMENT NAME", element.Name, function(v) element.Name = v end)
         makePropertyLabel("POSITION")
         makeNumberProperty("X", element.X, function(v) element.X = v end)
         makeNumberProperty("Y", element.Y, function(v) element.Y = v end)
-        makePropertyLabel("GRÖSSE")
-        makeNumberProperty("Breite", element.Width, function(v) element.Width = v end)
-        makeNumberProperty("Höhe", element.Height, function(v) element.Height = v end)
+        makePropertyLabel("SIZE")
+        makeNumberProperty("Width", element.Width, function(v) element.Width = v end)
+        makeNumberProperty("Height", element.Height, function(v) element.Height = v end)
 
-        if element.Text ~= nil or element.Type == "Name" or element.Type == "Health" or element.Type == "Distance" or element.Type == "Weapon" or element.Type == "Status" or element.Type == "CustomText" then
+        if element.Text ~= nil or element.Type == "Name" or element.Type == "Health" or element.Type == "Distance" or element.Type == "Weapon" or element.Type == "Status" or element.Type == "Team" or element.Type == "Class" or element.Type == "State" or element.Type == "HealthPercent" or element.Type == "CustomText" then
             makeTextProperty("TEXT / FORMAT", element.Text or "", function(v) element.Text = v end)
             if element.Type == "CustomText" then
-                local hint = Helpers.CreateLabel({ Size = UDim2.new(1, 0, 0, 44), Text = "Variablen: {name}  {health}\n{maxhealth}  {health_percent}  {distance}\n{weapon}  {team}  {class}  {state}", TextColor3 = Theme.TextMuted, TextSize = 7, TextWrapped = true, Parent = propertyScroll })
+                local hint = Helpers.CreateLabel({ Size = UDim2.new(1, 0, 0, 44), Text = "Tokens: {name}  {health}  {maxhealth}\n{health_percent}  {distance}  {weapon}\n{team}  {class}  {state}", TextColor3 = Theme.TextMuted, TextSize = 7, TextWrapped = true, Parent = propertyScroll })
                 hint.LayoutOrder = 999
             end
         end
 
         makeNumberProperty("Text Size", element.TextSize or 12, function(v) element.TextSize = math.clamp(v, 6, 40) end)
-        makeChoice("ANKER", element.Anchor or "Center", { "Center", "Left", "Right", "Top", "Bottom" }, function(v) element.Anchor = v end)
+        makeChoice("ANCHOR", element.Anchor or "Center", { "Center", "Left", "Right", "Top", "Bottom" }, function(v) element.Anchor = v end)
         addColorProperty(element)
-        makeNumberProperty("Linienbreite", element.Thickness or 2, function(v) element.Thickness = math.max(1, v) end)
-        makeNumberProperty("Transparenz (0-1)", element.Transparency or 0, function(v) element.Transparency = math.clamp(v, 0, 1) end)
-        makeToggle("Sichtbar", element.Visible ~= false, function(v) element.Visible = v end)
+        makeNumberProperty("Line width", element.Thickness or 2, function(v) element.Thickness = math.max(1, v) end)
+        makeNumberProperty("Transparency (0-1)", element.Transparency or 0, function(v) element.Transparency = math.clamp(v, 0, 1) end)
+        makeToggle("Visible", element.Visible ~= false, function(v) element.Visible = v end)
 
         local duplicate = Helpers.CreateButton({ Size = UDim2.new(1, 0, 0, 30), Text = "Duplicate Element", TextColor3 = Theme.Text, TextSize = 9, BackgroundColor3 = Theme.ElementBackground, Parent = propertyScroll })
         Helpers.Corner(duplicate, 6)
@@ -689,28 +729,65 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
         end))
     end
 
+    local function createPreviewLine(parent: Instance, x1: number, y1: number, x2: number, y2: number, thickness: number, color: Color3)
+        local line = Helpers.CreateFrame({ Size = UDim2.fromOffset(math.max((Vector2.new(x2, y2) - Vector2.new(x1, y1)).Magnitude, 1), math.max(thickness, 1)), BackgroundColor3 = color, Parent = parent })
+        line.AnchorPoint = Vector2.new(0.5, 0.5)
+        line.Position = UDim2.fromOffset((x1 + x2) * 0.5, (y1 + y2) * 0.5)
+        line.Rotation = math.deg(math.atan2(y2 - y1, x2 - x1))
+        line.BorderSizePixel = 0
+        return line
+    end
+
+    local function getDesignBox()
+        for _, id in ipairs(self._Order) do
+            local candidate = self._Elements[id]
+            if candidate and candidate.Type == "Box" and candidate.Visible ~= false then
+                return candidate
+            end
+        end
+        return { X = 125, Y = 90, Width = 170, Height = 250 }
+    end
+
+    local function designPosition(element: ElementData)
+        local box = getDesignBox()
+        local sx = math.max(box.Width, 1) / 170
+        local sy = math.max(box.Height, 1) / 250
+        local centerX = box.X + box.Width * 0.5
+        local centerY = box.Y + box.Height * 0.5
+        local baseCenterX = 210
+        local baseCenterY = 215
+        local cx = centerX + ((element.X + element.Width * 0.5) - baseCenterX) * sx
+        local cy = centerY + ((element.Y + element.Height * 0.5) - baseCenterY) * sy
+        return cx - element.Width * sx * 0.5, cy - element.Height * sy * 0.5, element.Width * sx, element.Height * sy
+    end
+
     local function renderElement(element: ElementData)
         local object = previewInstances[element.Id]
-        local isText = element.Type == "Name" or element.Type == "Health" or element.Type == "Distance" or element.Type == "Weapon" or element.Type == "Status" or element.Type == "CustomText"
+        local isText = element.Type == "Name" or element.Type == "Health" or element.Type == "HealthPercent" or element.Type == "Distance" or element.Type == "Weapon" or element.Type == "Team" or element.Type == "Class" or element.Type == "State" or element.Type == "Status" or element.Type == "CustomText"
         if not object then
             if isText then
                 object = Helpers.CreateLabel({ Name = "ESP_" .. element.Id, Text = "", TextColor3 = element.Color or Theme.Text, TextSize = element.TextSize or 12, Font = Theme.FontBold, BackgroundTransparency = 1, TextStrokeTransparency = 0.6, TextXAlignment = if element.Anchor == "Left" then Enum.TextXAlignment.Left else if element.Anchor == "Right" then Enum.TextXAlignment.Right else Enum.TextXAlignment.Center, Parent = designCanvas })
             else
                 object = Helpers.CreateFrame({ Name = "ESP_" .. element.Id, BackgroundColor3 = element.Color or Theme.Accent, BackgroundTransparency = element.Transparency or 0, Parent = designCanvas })
             end
-            object.Active = true
-            object.ZIndex = if element.Type == "Box" then 5 else 8
+            object.ZIndex = 8
             previewInstances[element.Id] = object
+        end
 
+        local hitbox = previewHitboxes[element.Id]
+        if not hitbox then
+            hitbox = Helpers.CreateButton({ Name = "Hitbox_" .. element.Id, Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Parent = designCanvas })
+            hitbox.Active = true
+            previewHitboxes[element.Id] = hitbox
             local captured = element.Id
-            self._Maid:GiveTask(object.InputBegan:Connect(function(input)
+            self._Maid:GiveTask(hitbox.InputBegan:Connect(function(input)
                 if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
+                local current = self._Elements[captured]
+                if not current then return end
                 self._Selected = captured
                 refreshLayers()
                 refreshProperties()
                 updateSelection()
-                local current = self._Elements[captured]
-                if not current then return end
                 pushHistory()
                 local start = input.Position
                 local startX, startY = current.X, current.Y
@@ -725,7 +802,10 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
                     current.Y = math.clamp(startY + (changed.Position.Y - start.Y) / s, 0, DESIGN_H - current.Height)
                     render()
                     if selectedOverlay then
-                        selectedOverlay.Position = object.Position
+                        local selectedObject = previewInstances[captured]
+                        if selectedObject then
+                            selectedOverlay.Position = selectedObject.Position
+                        end
                     end
                 end)
                 endConnection = UserInputService.InputEnded:Connect(function(ended)
@@ -741,10 +821,22 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
             end))
         end
 
-        object.Position = UDim2.fromOffset(element.X, element.Y)
-        object.Size = UDim2.fromOffset(element.Width, element.Height)
+        for _, child in object:GetChildren() do
+            if child:IsA("UIStroke") or child:IsA("Frame") or child:IsA("UICorner") then
+                child:Destroy()
+            end
+        end
+
+        local previewX, previewY, previewW, previewH = designPosition(element)
+        object.Position = UDim2.fromOffset(previewX, previewY)
+        object.Size = UDim2.fromOffset(previewW, previewH)
         object.Visible = element.Visible ~= false
-        object.ZIndex = if element.Type == "Box" then 5 else 8
+        object.ZIndex = if element.Type == "FilledBox" then 4 else 8
+        hitbox.Position = object.Position
+        hitbox.Size = object.Size
+        hitbox.Visible = object.Visible
+        local orderIndex = table.find(self._Order, element.Id) or 1
+        hitbox.ZIndex = 40 + orderIndex
         local color = element.Color or Theme.Accent
 
         if isText and object:IsA("TextLabel") then
@@ -752,24 +844,60 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
             object.TextColor3 = color
             object.TextSize = element.TextSize or 12
             object.TextXAlignment = if element.Anchor == "Left" then Enum.TextXAlignment.Left else if element.Anchor == "Right" then Enum.TextXAlignment.Right else Enum.TextXAlignment.Center
+            object.TextYAlignment = Enum.TextYAlignment.Center
+            object.TextStrokeTransparency = math.clamp((element.Transparency or 0) + 0.35, 0, 1)
         elseif object:IsA("Frame") then
             object.BackgroundColor3 = color
             object.BackgroundTransparency = element.Transparency or 0
             if element.Type == "Box" then
                 object.BackgroundTransparency = 1
-                local stroke = object:FindFirstChild("ESPStroke")
-                if not stroke then
-                    stroke = Helpers.Stroke(object, color, element.Thickness or 2)
-                    stroke.Name = "ESPStroke"
+                local stroke = Helpers.Stroke(object, color, element.Thickness or 2)
+                stroke.Name = "ESPStroke"
+            elseif element.Type == "CornerBox" then
+                object.BackgroundTransparency = 1
+                local t = math.max(element.Thickness or 2, 1)
+                local len = math.max(math.min(element.Width, element.Height) * 0.22, 8)
+                local parts = {
+                    {0, 0, len, t}, {0, 0, t, len}, {element.Width-len, 0, len, t}, {element.Width-t, 0, t, len},
+                    {0, element.Height-t, len, t}, {0, element.Height-len, t, len}, {element.Width-len, element.Height-t, len, t}, {element.Width-t, element.Height-len, t, len},
+                }
+                for i, part in ipairs(parts) do
+                    local f = Helpers.CreateFrame({ Name = "Corner" .. tostring(i), Size = UDim2.fromOffset(part[3], part[4]), Position = UDim2.fromOffset(part[1], part[2]), BackgroundColor3 = color, Parent = object })
+                    f.ZIndex = 9
                 end
-                stroke.Color = color
-                stroke.Thickness = element.Thickness or 2
+            elseif element.Type == "FilledBox" then
+                object.BackgroundTransparency = math.clamp(element.Transparency or 0.82, 0, 1)
+            elseif element.Type == "HeadMarker" then
+                object.BackgroundTransparency = 1
+                Helpers.Corner(object, 1)
+                local stroke = Helpers.Stroke(object, color, element.Thickness or 2)
+                stroke.Name = "MarkerStroke"
+            elseif element.Type == "Skeleton" then
+                object.BackgroundTransparency = 1
+                local t = math.max(element.Thickness or 2, 1)
+                local x = element.Width * 0.5
+                local points = {
+                    {x, 8, x, 48}, {x, 48, x, 112}, {x, 60, 18, 82}, {x, 60, element.Width-18, 82},
+                    {18, 82, 12, 142}, {element.Width-18, 82, element.Width-12, 142},
+                    {x, 112, x-18, 174}, {x, 112, x+18, 174}, {x-18, 174, x-20, element.Height-4}, {x+18, 174, x+20, element.Height-4},
+                }
+                for i, p in ipairs(points) do
+                    local f = createPreviewLine(object, p[1], p[2], p[3], p[4], t, color)
+                    f.ZIndex = 9
+                    f.Name = "Bone" .. tostring(i)
+                end
             elseif element.Type == "HealthBar" then
+                object.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+                object.BackgroundTransparency = 0.25
                 local ratio = math.clamp((tonumber(self._Sample.Health) or 0) / math.max(tonumber(self._Sample.MaxHealth) or 100, 1), 0, 1)
-                object.Size = UDim2.fromOffset(element.Width, math.max(2, element.Height * ratio))
-                object.Position = UDim2.fromOffset(element.X, element.Y + element.Height * (1 - ratio))
+                local fill = Helpers.CreateFrame({ Name = "Fill", Size = UDim2.new(1, 0, ratio, 0), Position = UDim2.new(0, 0, 1 - ratio, 0), BackgroundColor3 = color, Parent = object })
+                fill.ZIndex = 9
             elseif element.Type == "Tracer" then
-                object.BackgroundTransparency = element.Transparency or 0.1
+                object.BackgroundTransparency = 1
+                local centerX = element.Width * 0.5
+                local line = createPreviewLine(object, centerX, 0, centerX, element.Height, math.max(element.Thickness or element.Width or 2, 1), color)
+                line.Name = "TracerLine"
+                line.ZIndex = 9
             end
         end
     end
@@ -786,6 +914,11 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
             if not self._Elements[id] then
                 object:Destroy()
                 previewInstances[id] = nil
+                local hitbox = previewHitboxes[id]
+                if hitbox then
+                    hitbox:Destroy()
+                    previewHitboxes[id] = nil
+                end
             end
         end
         if selectedOverlay then
@@ -813,9 +946,9 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
                 local button = Helpers.CreateButton({ Size = UDim2.new(1, -2, 0, 48), Text = "", BackgroundColor3 = Theme.ElementBackground, Parent = componentList })
                 Helpers.Corner(button, 7)
                 Helpers.Stroke(button, Theme.Border, 1)
-                local glyph = Helpers.CreateLabel({ Size = UDim2.fromOffset(30, 48), Position = UDim2.fromOffset(8, 0), Text = if elementType == "Box" then "□" else if elementType == "Name" then "T" else if elementType == "Health" then "♡" else if elementType == "Distance" then "⌖" else if elementType == "Tracer" then "╱" else if elementType == "HealthBar" then "▤" else if elementType == "Weapon" then "◈" else if elementType == "Status" then "✦" else "</>", TextColor3 = Theme.Accent, TextSize = 16, Font = Theme.FontBold, TextXAlignment = Enum.TextXAlignment.Center, Parent = button })
+                local glyph = Helpers.CreateLabel({ Size = UDim2.fromOffset(30, 48), Position = UDim2.fromOffset(8, 0), Text = TYPE_GLYPHS[elementType] or "•", TextColor3 = Theme.Accent, TextSize = 16, Font = Theme.FontBold, TextXAlignment = Enum.TextXAlignment.Center, Parent = button })
                 Helpers.CreateLabel({ Size = UDim2.new(1, -50, 0, 20), Position = UDim2.fromOffset(46, 5), Text = label, TextColor3 = Theme.Text, TextSize = 9, Font = Theme.FontBold, Parent = button })
-                Helpers.CreateLabel({ Size = UDim2.new(1, -50, 0, 16), Position = UDim2.fromOffset(46, 25), Text = if elementType == "Box" then "Umrandung um das Ziel" else if elementType == "Name" then "Spielername anzeigen" else if elementType == "Health" then "Lebenspunkte anzeigen" else if elementType == "Distance" then "Entfernung anzeigen" else if elementType == "HealthBar" then "Health Bar statt Text" else if elementType == "Tracer" then "Linie zum Ziel" else if elementType == "CustomText" then "Eigener Text mit Variablen" else "Zusätzliche Zielinformation", TextColor3 = Theme.TextMuted, TextSize = 7, Parent = button })
+                Helpers.CreateLabel({ Size = UDim2.new(1, -50, 0, 16), Position = UDim2.fromOffset(46, 25), Text = TYPE_DESCRIPTIONS[elementType] or "Additional target information", TextColor3 = Theme.TextMuted, TextSize = 7, Parent = button })
                 componentButtons[elementType] = button
                 self._Maid:GiveTask(button.MouseButton1Click:Connect(function() self:AddElement(elementType) end))
             end
@@ -991,6 +1124,12 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
             definitions = { { "Box", { Color = Theme.Accent } }, { "Name", {} }, { "Health", {} }, { "Distance", {} }, { "Tracer", {} }, { "Status", {} } }
         elseif preset == "Compact" then
             definitions = { { "Box", { X = 145, Y = 100, Width = 130, Height = 205 } }, { "Name", { X = 145, Y = 76, Width = 130 } }, { "Health", { X = 145, Y = 310, Width = 130 } }, { "Distance", { X = 145, Y = 334, Width = 130 } } }
+        elseif preset == "Full" then
+            definitions = {
+                { "Box", {} }, { "CornerBox", {} }, { "Name", {} }, { "Health", {} },
+                { "HealthBar", {} }, { "Distance", {} }, { "HeadMarker", {} }, { "Skeleton", {} },
+                { "Tracer", {} }, { "Team", {} }, { "Weapon", {} }, { "State", {} },
+            }
         end
         self._Preset = preset
         for _, definition in definitions do self:AddElement(definition[1], definition[2]) end
@@ -1011,9 +1150,26 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
         presetIndex = presetIndex % #PRESETS + 1
         self:SetPreset(PRESETS[presetIndex])
     end))
+    self._Maid:GiveTask(backButton.MouseButton1Click:Connect(function()
+        if type(data.OnBack) == "function" then
+            pcall(data.OnBack, self:GetLayout())
+        else
+            self:Close()
+        end
+    end))
     self._Maid:GiveTask(saveButton.MouseButton1Click:Connect(function()
         local layout = self:GetLayout()
         if type(data.OnSave) == "function" then pcall(data.OnSave, layout) end
+    end))
+    self._Maid:GiveTask(importButton.MouseButton1Click:Connect(function()
+        if not getclipboard then return end
+        local ok, raw = pcall(getclipboard)
+        if not ok or type(raw) ~= "string" or raw == "" then return end
+        local decoded
+        local decodeOk = pcall(function() decoded = game:GetService("HttpService"):JSONDecode(raw) end)
+        if decodeOk and type(decoded) == "table" and type(decoded.Elements) == "table" then
+            self:SetLayout(decoded)
+        end
     end))
     self._Maid:GiveTask(exportButton.MouseButton1Click:Connect(function() self:Export() end))
     self._Maid:GiveTask(doneButton.MouseButton1Click:Connect(function() self:Close() end))
@@ -1108,6 +1264,8 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
         properties.BackgroundColor3 = Theme.Background
         propertiesStroke.Color = Theme.Border
         doneButton.BackgroundColor3 = Theme.Accent
+        backButton.BackgroundColor3 = Theme.ElementBackground
+        importButton.BackgroundColor3 = Theme.ElementBackground
         refreshComponents()
         refreshLayers()
         refreshProperties()

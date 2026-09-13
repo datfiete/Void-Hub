@@ -1,3 +1,4 @@
+
 -- Vaxorin World ESP Renderer
 -- Designed for experiences/projects that own the rendering context.
 -- Consumes the layout produced by Core/ESPBuilder and binds it to real players.
@@ -22,6 +23,14 @@ local DEFAULT_LAYOUT = {
         { Id = "tracer", Type = "Tracer", Name = "Tracer", X = 210, Y = 385, Width = 2, Height = 42, Color = { R = 161, G = 76, B = 255 }, Thickness = 2, Visible = true },
         { Id = "weapon", Type = "Weapon", Name = "Weapon", X = 300, Y = 132, Width = 105, Height = 22, Text = "{weapon}", Color = { R = 245, G = 245, B = 248 }, TextSize = 11, Anchor = "Left", Visible = true },
         { Id = "status", Type = "Status", Name = "Status", X = 300, Y = 158, Width = 105, Height = 22, Text = "{team}", Color = { R = 247, G = 185, B = 78 }, TextSize = 11, Anchor = "Left", Visible = true },
+        { Id = "team", Type = "Team", Name = "Team", X = 300, Y = 158, Width = 105, Height = 22, Text = "{team}", Color = { R = 247, G = 185, B = 78 }, TextSize = 11, Anchor = "Left", Visible = true },
+        { Id = "class", Type = "Class", Name = "Class", X = 300, Y = 184, Width = 105, Height = 22, Text = "{class}", Color = { R = 190, G = 190, B = 210 }, TextSize = 11, Anchor = "Left", Visible = true },
+        { Id = "state", Type = "State", Name = "State", X = 300, Y = 210, Width = 105, Height = 22, Text = "{state}", Color = { R = 190, G = 190, B = 210 }, TextSize = 11, Anchor = "Left", Visible = true },
+        { Id = "health_percent", Type = "HealthPercent", Name = "Health %", X = 145, Y = 6, Width = 130, Height = 22, Text = "{health_percent}", Color = { R = 76, G = 220, B = 137 }, TextSize = 11, Anchor = "Center", Visible = true },
+        { Id = "filled_box", Type = "FilledBox", Name = "Filled Box", X = 125, Y = 90, Width = 170, Height = 250, Color = { R = 161, G = 76, B = 255 }, Transparency = 0.82, Visible = true },
+        { Id = "corner_box", Type = "CornerBox", Name = "Corner Box", X = 125, Y = 90, Width = 170, Height = 250, Color = { R = 161, G = 76, B = 255 }, Thickness = 2, Visible = true },
+        { Id = "head_marker", Type = "HeadMarker", Name = "Head Marker", X = 198, Y = 96, Width = 24, Height = 24, Color = { R = 161, G = 76, B = 255 }, Thickness = 2, Visible = true },
+        { Id = "skeleton", Type = "Skeleton", Name = "Skeleton", X = 160, Y = 105, Width = 100, Height = 215, Color = { R = 161, G = 76, B = 255 }, Thickness = 2, Visible = true },
     },
 }
 
@@ -91,27 +100,21 @@ end
 local function projectBounds(camera, cf, size)
     local half = size * 0.5
     local points = {
-        cf * Vector3.new(-half.X, -half.Y, -half.Z),
-        cf * Vector3.new(-half.X, -half.Y, half.Z),
-        cf * Vector3.new(-half.X, half.Y, -half.Z),
-        cf * Vector3.new(-half.X, half.Y, half.Z),
-        cf * Vector3.new(half.X, -half.Y, -half.Z),
-        cf * Vector3.new(half.X, -half.Y, half.Z),
-        cf * Vector3.new(half.X, half.Y, -half.Z),
-        cf * Vector3.new(half.X, half.Y, half.Z),
+        cf * Vector3.new(-half.X, -half.Y, -half.Z), cf * Vector3.new(-half.X, -half.Y, half.Z),
+        cf * Vector3.new(-half.X, half.Y, -half.Z), cf * Vector3.new(-half.X, half.Y, half.Z),
+        cf * Vector3.new(half.X, -half.Y, -half.Z), cf * Vector3.new(half.X, -half.Y, half.Z),
+        cf * Vector3.new(half.X, half.Y, -half.Z), cf * Vector3.new(half.X, half.Y, half.Z),
     }
-
     local minX = math.huge
     local minY = math.huge
     local maxX = -math.huge
     local maxY = -math.huge
     local nearestDepth = math.huge
-    local anyVisible = false
-
+    local anyFront = false
     for _, point in ipairs(points) do
-        local screen, visible = camera:WorldToViewportPoint(point)
+        local screen = camera:WorldToViewportPoint(point)
         if screen.Z > 0 then
-            anyVisible = anyVisible or visible
+            anyFront = true
             minX = math.min(minX, screen.X)
             minY = math.min(minY, screen.Y)
             maxX = math.max(maxX, screen.X)
@@ -119,11 +122,9 @@ local function projectBounds(camera, cf, size)
             nearestDepth = math.min(nearestDepth, screen.Z)
         end
     end
-
-    if not anyVisible or nearestDepth == math.huge then
+    if not anyFront or nearestDepth == math.huge then
         return nil
     end
-
     return minX, minY, maxX, maxY, nearestDepth
 end
 
@@ -153,7 +154,7 @@ function ESPWorldRenderer.new(options)
         _PlayerMaids = {},
         _Layout = copy(data.Layout or DEFAULT_LAYOUT),
         _Enabled = data.Enabled ~= false,
-        _MaxDistance = math.max(tonumber(data.MaxDistance) or 1000, 0),
+        _MaxDistance = math.max(tonumber(data.MaxDistance) or 5000, 0),
         _TeamCheck = data.TeamCheck == true,
         _VisibleCheck = data.VisibleCheck == true,
         _IgnoreLocalPlayer = data.IgnoreLocalPlayer ~= false,
@@ -257,50 +258,57 @@ function ESPWorldRenderer:_destroyChildren(root)
     end
 end
 
-function ESPWorldRenderer:_renderElement(root, element, box, screenWidth, screenHeight, sample)
-    if element.Visible == false then
-        return
-    end
+function ESPWorldRenderer:_renderElement(root, element, box, screenWidth, screenHeight, sample, character)
+    if element.Visible == false then return end
 
     local design = self._Layout.Canvas or { Width = 420, Height = 430 }
     local designW = math.max(tonumber(design.Width) or 420, 1)
     local designH = math.max(tonumber(design.Height) or 430, 1)
     local boxElement = box.design
-
-    local sx = box.w / math.max(boxElement.Width, 1)
-    local sy = box.h / math.max(boxElement.Height, 1)
-    local relativeX = (tonumber(element.X) or 0) - boxElement.X
-    local relativeY = (tonumber(element.Y) or 0) - boxElement.Y
-
-    local x = box.x + relativeX * sx
-    local y = box.y + relativeY * sy
+    local refW = math.max(tonumber(boxElement.Width) or 170, 1)
+    local refH = math.max(tonumber(boxElement.Height) or 250, 1)
+    local sx = box.w / refW
+    local sy = box.h / refH
+    local centerX = box.x + box.w * 0.5
+    local centerY = box.y + box.h * 0.5
+    local refCenterX = (tonumber(boxElement.X) or 125) + refW * 0.5
+    local refCenterY = (tonumber(boxElement.Y) or 90) + refH * 0.5
+    local x = centerX + ((tonumber(element.X) or 0) + (tonumber(element.Width) or 20) * 0.5 - refCenterX) * sx - (tonumber(element.Width) or 20) * sx * 0.5
+    local y = centerY + ((tonumber(element.Y) or 0) + (tonumber(element.Height) or 20) * 0.5 - refCenterY) * sy - (tonumber(element.Height) or 20) * sy * 0.5
     local w = math.max((tonumber(element.Width) or 20) * sx, 1)
     local h = math.max((tonumber(element.Height) or 20) * sy, 1)
+    local color = colorFrom(element.Color, Color3.fromRGB(161, 76, 255))
+
+    local function line(parent, x1, y1, x2, y2, thickness, lineColor)
+        local length = math.max((Vector2.new(x2, y2) - Vector2.new(x1, y1)).Magnitude, 1)
+        local frame = Instance.new("Frame")
+        frame.AnchorPoint = Vector2.new(0.5, 0.5)
+        frame.Position = UDim2.fromOffset((x1 + x2) * 0.5, (y1 + y2) * 0.5)
+        frame.Size = UDim2.fromOffset(length, math.max(thickness, 1))
+        frame.Rotation = math.deg(math.atan2(y2 - y1, x2 - x1))
+        frame.BackgroundColor3 = lineColor
+        frame.BackgroundTransparency = math.clamp(tonumber(element.Transparency) or 0, 0, 1)
+        frame.BorderSizePixel = 0
+        frame.ZIndex = 6
+        frame.Parent = parent
+    end
 
     if element.Type == "Tracer" then
-        local tracer = Instance.new("Frame")
-        tracer.Name = element.Id or "Tracer"
-        tracer.AnchorPoint = Vector2.new(0.5, 0)
-        tracer.Position = UDim2.fromOffset(box.x + box.w * 0.5, box.y + box.h)
-        tracer.Size = UDim2.fromOffset(math.max(tonumber(element.Width) or 2, 1), math.max(screenHeight - (box.y + box.h), 0))
-        tracer.BackgroundColor3 = colorFrom(element.Color, Color3.fromRGB(161, 76, 255))
-        tracer.BackgroundTransparency = math.clamp(tonumber(element.Transparency) or 0, 0, 1)
-        tracer.BorderSizePixel = 0
-        tracer.ZIndex = 1
-        tracer.Parent = root
+        local startX = centerX + ((tonumber(element.X) or 210) - refCenterX) * sx
+        local startY = centerY + ((tonumber(element.Y) or 385) - refCenterY) * sy
+        line(root, startX, startY, startX, screenHeight, math.max(tonumber(element.Width) or 2, 1), color)
         return
     end
 
     if element.Type == "Box" then
         local frame = Instance.new("Frame")
-        frame.Name = element.Id or "Box"
         frame.Position = UDim2.fromOffset(box.x, box.y)
         frame.Size = UDim2.fromOffset(box.w, box.h)
         frame.BackgroundTransparency = 1
         frame.BorderSizePixel = 0
         frame.ZIndex = 2
         local stroke = Instance.new("UIStroke")
-        stroke.Color = colorFrom(element.Color, Color3.fromRGB(161, 76, 255))
+        stroke.Color = color
         stroke.Thickness = math.max(tonumber(element.Thickness) or 2, 1)
         stroke.Transparency = math.clamp(tonumber(element.Transparency) or 0, 0, 1)
         stroke.Parent = frame
@@ -308,9 +316,48 @@ function ESPWorldRenderer:_renderElement(root, element, box, screenWidth, screen
         return
     end
 
+    if element.Type == "FilledBox" then
+        local frame = Instance.new("Frame")
+        frame.Position = UDim2.fromOffset(box.x, box.y)
+        frame.Size = UDim2.fromOffset(box.w, box.h)
+        frame.BackgroundColor3 = color
+        frame.BackgroundTransparency = math.clamp(tonumber(element.Transparency) or 0.82, 0, 1)
+        frame.BorderSizePixel = 0
+        frame.ZIndex = 1
+        frame.Parent = root
+        return
+    end
+
+    if element.Type == "CornerBox" then
+        local frame = Instance.new("Frame")
+        frame.Position = UDim2.fromOffset(box.x, box.y)
+        frame.Size = UDim2.fromOffset(box.w, box.h)
+        frame.BackgroundTransparency = 1
+        frame.BorderSizePixel = 0
+        frame.ZIndex = 2
+        local t = math.max(tonumber(element.Thickness) or 2, 1)
+        local len = math.max(math.min(box.w, box.h) * 0.22, 8)
+        local parts = {
+            {0,0,len,t},{0,0,t,len},{box.w-len,0,len,t},{box.w-t,0,t,len},
+            {0,box.h-t,len,t},{0,box.h-len,t,len},{box.w-len,box.h-t,len,t},{box.w-t,box.h-len,t,len},
+        }
+        for i, part in ipairs(parts) do
+            local corner = Instance.new("Frame")
+            corner.Name = "Corner" .. tostring(i)
+            corner.Position = UDim2.fromOffset(part[1], part[2])
+            corner.Size = UDim2.fromOffset(part[3], part[4])
+            corner.BackgroundColor3 = color
+            corner.BackgroundTransparency = math.clamp(tonumber(element.Transparency) or 0, 0, 1)
+            corner.BorderSizePixel = 0
+            corner.ZIndex = 3
+            corner.Parent = frame
+        end
+        frame.Parent = root
+        return
+    end
+
     if element.Type == "HealthBar" then
         local bg = Instance.new("Frame")
-        bg.Name = element.Id or "HealthBar"
         bg.Position = UDim2.fromOffset(x, y)
         bg.Size = UDim2.fromOffset(w, h)
         bg.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
@@ -318,13 +365,13 @@ function ESPWorldRenderer:_renderElement(root, element, box, screenWidth, screen
         bg.BorderSizePixel = 0
         bg.ZIndex = 3
         bg.Parent = root
-
+        local ratio = math.clamp((tonumber(sample.Health) or 0) / math.max(tonumber(sample.MaxHealth) or 100, 1), 0, 1)
         local fill = Instance.new("Frame")
         fill.Name = "Fill"
         fill.AnchorPoint = Vector2.new(0, 1)
         fill.Position = UDim2.fromScale(0, 1)
-        fill.Size = UDim2.fromScale(1, math.clamp((tonumber(sample.Health) or 0) / math.max(tonumber(sample.MaxHealth) or 100, 1), 0, 1))
-        fill.BackgroundColor3 = colorFrom(element.Color, Color3.fromRGB(76, 220, 137))
+        fill.Size = UDim2.fromScale(1, ratio)
+        fill.BackgroundColor3 = color
         fill.BackgroundTransparency = math.clamp(tonumber(element.Transparency) or 0, 0, 1)
         fill.BorderSizePixel = 0
         fill.ZIndex = 4
@@ -332,21 +379,82 @@ function ESPWorldRenderer:_renderElement(root, element, box, screenWidth, screen
         return
     end
 
+    if element.Type == "HeadMarker" then
+        local head = character and (character:FindFirstChild("Head") or character:FindFirstChild("UpperTorso"))
+        if head and head:IsA("BasePart") then
+            local screen, visible = workspace.CurrentCamera:WorldToViewportPoint(head.Position)
+            if screen.Z > 0 then
+                local marker = Instance.new("Frame")
+                marker.AnchorPoint = Vector2.new(0.5, 0.5)
+                marker.Position = UDim2.fromOffset(screen.X, screen.Y)
+                marker.Size = UDim2.fromOffset(math.max(w, 8), math.max(h, 8))
+                marker.BackgroundTransparency = 1
+                marker.BorderSizePixel = 0
+                marker.ZIndex = 6
+                local corner = Instance.new("UICorner")
+                corner.CornerRadius = UDim.new(1, 0)
+                corner.Parent = marker
+                local stroke = Instance.new("UIStroke")
+                stroke.Color = color
+                stroke.Thickness = math.max(tonumber(element.Thickness) or 2, 1)
+                stroke.Transparency = math.clamp(tonumber(element.Transparency) or 0, 0, 1)
+                stroke.Parent = marker
+                marker.Parent = root
+            end
+        end
+        return
+    end
+
+    if element.Type == "Skeleton" then
+        local function point(names)
+            local part = nil
+            for _, name in ipairs(names) do
+                local candidate = character and character:FindFirstChild(name)
+                if candidate and candidate:IsA("BasePart") then
+                    part = candidate
+                    break
+                end
+            end
+            if part then
+                local screen = workspace.CurrentCamera:WorldToViewportPoint(part.Position)
+                if screen.Z > 0 then return screen.X, screen.Y end
+            end
+            return nil
+        end
+        local pairsToDraw = {
+            {{"Head"}, {"UpperTorso", "Torso"}},
+            {{"UpperTorso", "Torso"}, {"LowerTorso", "Torso"}},
+            {{"UpperTorso", "Torso"}, {"LeftUpperArm", "Left Arm"}},
+            {{"LeftUpperArm", "Left Arm"}, {"LeftLowerArm", "Left Arm"}},
+            {{"LeftLowerArm", "Left Arm"}, {"LeftHand", "Left Arm"}},
+            {{"UpperTorso", "Torso"}, {"RightUpperArm", "Right Arm"}},
+            {{"RightUpperArm", "Right Arm"}, {"RightLowerArm", "Right Arm"}},
+            {{"RightLowerArm", "Right Arm"}, {"RightHand", "Right Arm"}},
+            {{"LowerTorso", "Torso"}, {"LeftUpperLeg", "Left Leg"}},
+            {{"LeftUpperLeg", "Left Leg"}, {"LeftLowerLeg", "Left Leg"}},
+            {{"LeftLowerLeg", "Left Leg"}, {"LeftFoot", "Left Leg"}},
+            {{"LowerTorso", "Torso"}, {"RightUpperLeg", "Right Leg"}},
+            {{"RightUpperLeg", "Right Leg"}, {"RightLowerLeg", "Right Leg"}},
+            {{"RightLowerLeg", "Right Leg"}, {"RightFoot", "Right Leg"}},
+        }
+        for _, pair in ipairs(pairsToDraw) do
+            local x1, y1 = point(pair[1])
+            local x2, y2 = point(pair[2])
+            if x1 and x2 then line(root, x1, y1, x2, y2, math.max(tonumber(element.Thickness) or 2, 1), color) end
+        end
+        return
+    end
+
     local label = Instance.new("TextLabel")
-    label.Name = element.Id or element.Type or "ESPElement"
     label.Position = UDim2.fromOffset(x, y)
     label.Size = UDim2.fromOffset(w, h)
     label.BackgroundTransparency = 1
     label.Text = replaceTokens(tostring(element.Text or element.Name or element.Type or ""), sample)
-    label.TextColor3 = colorFrom(element.Color, Color3.new(1, 1, 1))
+    label.TextColor3 = color
     label.TextSize = math.clamp(tonumber(element.TextSize) or 12, 6, 40)
     label.Font = Enum.Font.GothamMedium
     label.TextXAlignment = Enum.TextXAlignment.Center
-    if element.Anchor == "Left" then
-        label.TextXAlignment = Enum.TextXAlignment.Left
-    elseif element.Anchor == "Right" then
-        label.TextXAlignment = Enum.TextXAlignment.Right
-    end
+    if element.Anchor == "Left" then label.TextXAlignment = Enum.TextXAlignment.Left elseif element.Anchor == "Right" then label.TextXAlignment = Enum.TextXAlignment.Right end
     label.TextYAlignment = Enum.TextYAlignment.Center
     label.TextStrokeTransparency = 0.5
     label.TextTransparency = math.clamp(tonumber(element.Transparency) or 0, 0, 1)
@@ -409,8 +517,6 @@ function ESPWorldRenderer:_render()
                 local minX, minY, maxX, maxY = projectBounds(camera, cf, size)
                 if not minX then
                     shouldRender = false
-                elseif maxX < 0 or minX > viewport.X or maxY < 0 or minY > viewport.Y then
-                    shouldRender = false
                 else
                     local boxWidth = math.max(maxX - minX, 2)
                     local boxHeight = math.max(maxY - minY, 2)
@@ -430,7 +536,7 @@ function ESPWorldRenderer:_render()
                     rootGui.Visible = true
                     local box = { x = minX, y = minY, w = boxWidth, h = boxHeight, design = boxDesign }
                     for _, element in ipairs(layoutElements) do
-                        self:_renderElement(rootGui, element, box, viewport.X, viewport.Y, sample)
+                        self:_renderElement(rootGui, element, box, viewport.X, viewport.Y, sample, character)
                     end
                 end
             end
@@ -460,6 +566,10 @@ end
 
 function ESPWorldRenderer:SetMaxDistance(distance)
     self._MaxDistance = math.max(tonumber(distance) or self._MaxDistance, 0)
+end
+
+function ESPWorldRenderer:GetMaxDistance()
+    return self._MaxDistance
 end
 
 function ESPWorldRenderer:Clear()
