@@ -2525,83 +2525,29 @@ function Window:OpenDeveloperWindow(options: any?): DeveloperPanelHandle
 	return self:CreateDeveloperWindow(options)
 end
 
--- Opens the visual Custom ESP Designer. The returned layout is renderer-agnostic
--- and can be consumed by a project-specific ESP/overlay renderer.
--- Creates the dedicated ESP navigation item. Unlike a normal tab, this tab
--- launches the visual ESP Studio instead of putting old-style toggles into a
--- ScrollingFrame.
-function Window:_ensureESPDesignerTab()
-	if self._ESPTab then
-		return self._ESPTab
-	end
 
-	-- Options is intentionally the last normal navigation item. Insert the ESP
-	-- tab immediately before it so the order stays: user tabs -> ESP -> Options.
-	local tab = Tab.new(self, "🎨 ESP Designer")
-	self._ESPTab = tab
-
-	if self._OptionsTab then
-		local optionsIndex = table.find(self._Tabs, self._OptionsTab)
-		if optionsIndex then
-			table.insert(self._Tabs, optionsIndex, tab)
-		else
-			table.insert(self._Tabs, tab)
-		end
-	else
-		table.insert(self._Tabs, tab)
-	end
-
-	-- The button already calls Window:_selectTab(). This extra connection only
-	-- makes the intent explicit and also handles a builder that was created
-	-- after the tab itself.
-	self._Maid:GiveTask(tab.Button.MouseButton1Click:Connect(function()
-		if self._ESPBuilder and self._ESPBuilder.Open then
-			pcall(function() self._ESPBuilder:Open() end)
-		end
-	end))
-
-	return tab
-end
 
 function Window:CreateESPBuilder(options: any?)
-	local data = (typeof(options) == "table") and options or {}
+    local data = (typeof(options) == "table") and options or {}
 
-	if self._ESPBuilder then
-		if self._ESPBuilderHardClose then
-			pcall(self._ESPBuilderHardClose)
-		else
-			pcall(function() self._ESPBuilder:Close() end)
-		end
-		self._ESPBuilder = nil
-		self._ESPBuilderHardClose = nil
-	end
+    if self._ESPBuilder then
+        pcall(function()
+            if self._ESPBuilder.Gui then
+                self._ESPBuilder.Gui:Destroy()
+            end
+        end)
 
-	local tab = self:_ensureESPDesignerTab()
-	data.Parent = self._TopGuiParent or self.Gui.Parent
-	data.SavedLayouts = self._ESPSavedLayouts
+        self._ESPBuilder = nil
+        self._ESPBuilderHardClose = nil
+    end
 
-	local builder = ESPBuilder.new(data)
-	self._ESPBuilder = builder
+    data.Parent = self._TopGuiParent or self.Gui.Parent
+    data.SavedLayouts = self._ESPSavedLayouts
 
-	-- ESPBuilder:Close() destroys its ScreenGui. For a navigation tab we want
-	-- Done/close to behave like closing a panel: hide it, then allow the ESP tab
-	-- to reopen it without rebuilding the whole UI. Keep the original Close for
-	-- Window:Destroy().
-	local originalClose = builder.Close
-	self._ESPBuilderHardClose = function()
-		pcall(function() originalClose(builder) end)
-	end
-	builder.Close = function()
-		if builder.Gui then
-			builder.Gui.Enabled = false
-		end
-	end
+    local builder = ESPBuilder.new(data)
+    self._ESPBuilder = builder
 
-	-- The designer owns the active visual surface. Hide the ordinary empty tab
-	-- page while it is open.
-	tab.Page.Visible = false
-
-	return builder
+    return builder
 end
 
 function Window:CreateESPWorldRenderer(options: any?)

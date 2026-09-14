@@ -1356,17 +1356,15 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
     end))
 
     function self:Close()
-        modal.Visible = false
-        self._Maid:DoCleaning()
-        self._PropertyMaid:DoCleaning()
-        self._SelectionMaid:DoCleaning()
-        self._Changed:Destroy()
-        if gui.Parent then gui:Destroy() end
+        if gui and gui.Parent then
+            gui.Enabled = false
+        end
     end
 
     function self:Open()
-        if not gui.Parent then gui.Parent = parent end
-        gui.Enabled = true
+        if gui and gui.Parent then
+            gui.Enabled = true
+        end
     end
 
     local function refreshTheme()
