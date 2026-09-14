@@ -78,3 +78,36 @@ else
         "Buso"
     )
 end
+
+
+
+local Vaxorin = loadstring(game:HttpGet(
+    "https://raw.githubusercontent.com/datfiete/Void-Hub/main/CyberUI%20-%20Kopie/load.lua"
+))()
+
+local window = Vaxorin:CreateWindow({
+    Title = "My Game",
+    ToggleKey = Enum.KeyCode.RightControl,
+})
+
+-- ESP tab
+window:CreateTab("ESP")
+
+-- ESP renderer
+local esp = window:CreateESPWorldRenderer({
+    Enabled = false,
+    MaxDistance = 5000,
+    TeamCheck = false,
+    VisibleCheck = false,
+    IgnoreLocalPlayer = true,
+})
+
+-- This creates the actual clickable UI toggle
+window:CreateToggle({
+    Name = "Player ESP",
+    Default = false,
+
+    Callback = function(enabled)
+        esp:SetEnabled(enabled)
+    end,
+})

@@ -1935,68 +1935,74 @@ function Window:SetBackgroundOverlayTransparency(value: number)
 end
 
 function Window:_selectTab(tab: any)
-	if self._ActiveTab == tab then
-		if self._ESPTab == tab and self._ESPBuilder and self._ESPBuilder.Open then
-			pcall(function() self._ESPBuilder:Open() end)
-		end
-		return
-	end
+    if not tab then
+        return
+    end
 
-	local previousTab = self._ActiveTab
+    if self._ActiveTab == tab then
+        return
+    end
 
-	-- The ESP Designer is a separate full-size studio surface, not a normal
-	-- ScrollingFrame page. Hide it whenever the user switches to another tab.
-	if previousTab == self._ESPTab and self._ESPBuilder and self._ESPBuilder.Gui then
-		self._ESPBuilder.Gui.Enabled = false
-	end
+    local previousTab = self._ActiveTab
 
-	for _, existingTab in self._Tabs do
-		if existingTab and existingTab.SetActive then
-			existingTab:SetActive(existingTab == tab)
-		end
-	end
+    -- Update sidebar state.
+    for _, existingTab in self._Tabs do
+        if existingTab and existingTab.SetActive then
+            existingTab:SetActive(existingTab == tab)
+        end
+    end
 
-	self._ActiveTab = tab
+    self._ActiveTab = tab
 
-	local direction = 1
-	if previousTab then
-		local prevIndex, newIndex
-		for i, t in self._Tabs do
-			if t == previousTab then
-				prevIndex = i
-			end
-			if t == tab then
-				newIndex = i
-			end
-		end
-		if prevIndex and newIndex and newIndex < prevIndex then
-			direction = -1
-		end
-	end
+    -- Determine slide direction.
+    local direction = 1
 
-	local newPage = tab.Page
-	local oldPage = previousTab and previousTab.Page
+    if previousTab then
+        local prevIndex
+        local newIndex
 
-	if tab == self._ESPTab then
-		-- Keep the normal tab page empty/hidden; the visual ESP Studio owns the
-		-- entire content area while this tab is active.
-		newPage.Visible = false
-		if self._ESPBuilder and self._ESPBuilder.Open then
-			pcall(function() self._ESPBuilder:Open() end)
-		end
-		return
-	end
+        for i, existingTab in self._Tabs do
+            if existingTab == previousTab then
+                prevIndex = i
+            end
 
-	if oldPage and oldPage ~= newPage then
-		oldPage.Visible = false
-		oldPage.Position = UDim2.fromOffset(0, 0)
-	end
+            if existingTab == tab then
+                newIndex = i
+            end
+        end
 
-	local slideDistance = self.Pages.AbsoluteSize.X * 0.25
+        if prevIndex and newIndex and newIndex < prevIndex then
+            direction = -1
+        end
+    end
 
-	newPage.Visible = true
-	newPage.Position = UDim2.fromOffset(slideDistance * direction, 0)
-	Tween.Play(newPage, { Position = UDim2.fromOffset(0, 0) }, { Time = 0.2 })
+    local newPage = tab.Page
+    local oldPage = previousTab and previousTab.Page
+
+    -- IMPORTANT:
+    -- Hide EVERY page first.
+    for _, page in self.Pages:GetChildren() do
+        if page:IsA("ScrollingFrame") then
+            page.Visible = false
+            page.Position = UDim2.fromOffset(0, 0)
+        end
+    end
+
+    -- Now show only the selected page.
+    local slideDistance = math.max(self.Pages.AbsoluteSize.X * 0.25, 80)
+
+    newPage.Visible = true
+    newPage.Position = UDim2.fromOffset(slideDistance * direction, 0)
+
+    Tween.Play(
+        newPage,
+        {
+            Position = UDim2.fromOffset(0, 0),
+        },
+        {
+            Time = 0.2,
+        }
+    )
 end
 
 function Window:CreateTab(name: string)
