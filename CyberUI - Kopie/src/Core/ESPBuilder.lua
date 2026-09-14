@@ -241,6 +241,7 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
     gui.DisplayOrder = 1001
     gui.Parent = parent
     self.Gui = gui
+    gui.Enabled = false
 
     local width = math.clamp(tonumber(data.Width) or 1380, 1180, 1600)
     local height = math.clamp(tonumber(data.Height) or 760, 620, 900)

@@ -2532,19 +2532,17 @@ function Window:CreateESPBuilder(options: any?)
 
     if self._ESPBuilder then
         pcall(function()
-            if self._ESPBuilder.Gui then
-                self._ESPBuilder.Gui:Destroy()
-            end
+            self._ESPBuilder:Close()
         end)
 
         self._ESPBuilder = nil
-        self._ESPBuilderHardClose = nil
     end
 
     data.Parent = self._TopGuiParent or self.Gui.Parent
     data.SavedLayouts = self._ESPSavedLayouts
 
     local builder = ESPBuilder.new(data)
+
     self._ESPBuilder = builder
 
     return builder
