@@ -255,7 +255,9 @@ local function displayText(element: ElementData, sample: { [string]: any }): str
         ["{state}"] = tostring(sample.State or "Normal"),
     }
     for key, value in replacements do
-        text = string.gsub(text, key, value)
+        text = string.gsub(text, key, function()
+            return value
+        end)
     end
     return text
 end
