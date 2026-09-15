@@ -15,6 +15,8 @@ local MODULE_PATHS = {
 	"Utils/Tween",
 	"Utils/Helpers",
 
+	"Assets/Icons",
+
 	"Core/Theme",
 	"Core/Config",
 	"Core/Notifications",
