@@ -74,7 +74,9 @@ local function replaceTokens(text, sample)
         ["{state}"] = tostring(sample.State or "Normal"),
     }
     for token, replacement in pairs(replacements) do
-        text = string.gsub(text, token, replacement)
+        text = string.gsub(text, token, function()
+            return replacement
+        end)
     end
     return text
 end
