@@ -25,26 +25,51 @@ local function cleanDisplayName(name: string): string
     return cleaned ~= "" and cleaned or name
 end
 
+local function normalizeIconKey(raw: string): string
+    local key = string.lower(raw)
+    key = key:gsub("^%s+", ""):gsub("%s+$", "")
+    key = key:gsub("%%", " percent")
+    key = key:gsub("[%s%-]+", "_")
+    key = key:gsub("[^%w_]", "")
+    key = key:gsub("_+", "_")
+    key = key:gsub("^_", ""):gsub("_$", "")
+    return key
+end
+
 local function getIconAsset(name: string): string?
     local visible = cleanDisplayName(name)
-    local key = string.lower(visible):gsub("^%s+", ""):gsub("%s+$", "")
+    local key = normalizeIconKey(visible)
 
     -- Direct category/key syntax is supported:
-    -- "Navigation.home", "ESP.box", etc.
+    -- "Navigation.home", "ESP.box", "esp.corner_box", etc.
     local category, iconName = key:match("^([%w_]+)%.([%w_]+)$")
-    if category and iconName and Icons[category] then
-        return Icons[category][iconName]
-    end
-
-    -- Navigation tabs use the Navigation icon group.
-    if Icons.Navigation then
-        local navigationIcon = Icons.Navigation[key]
-        if navigationIcon then
-            return navigationIcon
+    if category and iconName then
+        local group = Icons[category] or Icons[string.upper(category:sub(1, 1)) .. category:sub(2)]
+        -- Also try exact case-sensitive category names used in Icons.lua
+        if not group then
+            for groupName, candidate in pairs(Icons) do
+                if type(candidate) == "table" and string.lower(groupName) == category then
+                    group = candidate
+                    break
+                end
+            end
+        end
+        if group and group[iconName] then
+            return group[iconName]
         end
     end
 
-    -- Also accept an exact key from any icon category.
+    -- Navigation tabs use the Navigation icon group first.
+    if Icons.Navigation and Icons.Navigation[key] then
+        return Icons.Navigation[key]
+    end
+
+    -- ESP feature names (box, skeleton, tracer, …) resolve from the ESP group.
+    if Icons.ESP and Icons.ESP[key] then
+        return Icons.ESP[key]
+    end
+
+    -- Fallback: any category that contains the key.
     for _, group in pairs(Icons) do
         if type(group) == "table" and group[key] then
             return group[key]
