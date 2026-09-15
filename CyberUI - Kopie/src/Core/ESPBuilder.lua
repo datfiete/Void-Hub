@@ -8,6 +8,7 @@
 local Theme = require(script.Parent.Theme)
 local Maid = require(script.Parent.Parent.Utils.Maid)
 local Helpers = require(script.Parent.Parent.Utils.Helpers)
+local Icons = require(script.Parent.Parent.Assets.Icons)
 
 local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
@@ -99,6 +100,69 @@ local TYPE_GLYPHS = {
     HealthBar = "BAR", Distance = "DIST", Tracer = "LINE", HeadMarker = "HEAD", Skeleton = "SKEL", Weapon = "ITEM",
     Team = "TEAM", Class = "CLASS", State = "STATE", Status = "STATUS", CustomText = "TEXT",
 }
+
+-- Maps ESPBuilder element types → Icons.ESP asset keys.
+local TYPE_ICON_KEYS: { [string]: string } = {
+    Box = "box",
+    CornerBox = "corner_box",
+    FilledBox = "filled_box",
+    Name = "name",
+    Health = "health",
+    HealthPercent = "health_percent",
+    HealthBar = "health_bar",
+    Distance = "distance",
+    Tracer = "tracer",
+    HeadMarker = "head_marker",
+    Skeleton = "skeleton",
+    Weapon = "weapon",
+    Team = "team",
+    Class = "class",
+    State = "state",
+    Status = "status",
+    CustomText = "custom_text",
+}
+
+local function getTypeIcon(elementType: string): string?
+    local key = TYPE_ICON_KEYS[elementType]
+    if not key then
+        return nil
+    end
+    local group = Icons.ESP
+    if type(group) == "table" then
+        return group[key]
+    end
+    return nil
+end
+
+local function createIconLabel(props: {
+    Size: UDim2?,
+    Position: UDim2?,
+    AnchorPoint: Vector2?,
+    Image: string?,
+    ImageColor3: Color3?,
+    ImageTransparency: number?,
+    ZIndex: number?,
+    Parent: Instance?,
+}): ImageLabel
+    local icon = Instance.new("ImageLabel")
+    icon.Name = "Icon"
+    icon.BackgroundTransparency = 1
+    icon.BorderSizePixel = 0
+    icon.Size = props.Size or UDim2.fromOffset(20, 20)
+    icon.Position = props.Position or UDim2.fromOffset(0, 0)
+    if props.AnchorPoint then
+        icon.AnchorPoint = props.AnchorPoint
+    end
+    icon.Image = props.Image or ""
+    icon.ImageColor3 = props.ImageColor3 or Theme.Text
+    icon.ImageTransparency = props.ImageTransparency or 0
+    icon.ScaleType = Enum.ScaleType.Fit
+    icon.ZIndex = props.ZIndex or 1
+    if props.Parent then
+        icon.Parent = props.Parent
+    end
+    return icon
+end
 
 local TYPE_DESCRIPTIONS = {
     Box = "Outline around the target", CornerBox = "Corner-only target outline", FilledBox = "Transparent fill over the target",
@@ -268,9 +332,26 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
     header.Active = true
     Helpers.Corner(header, Theme.CornerRadius)
 
-    local backButton = Helpers.CreateButton({ Name = "Back", Size = UDim2.fromOffset(42, 38), Position = UDim2.fromOffset(12, 14), Text = "BACK", TextColor3 = Theme.Text, TextSize = 24, BackgroundColor3 = Theme.ElementBackground, Parent = header })
+    local backButton = Helpers.CreateButton({ Name = "Back", Size = UDim2.fromOffset(42, 38), Position = UDim2.fromOffset(12, 14), Text = "", TextColor3 = Theme.Text, TextSize = 24, BackgroundColor3 = Theme.ElementBackground, Parent = header })
     Helpers.Corner(backButton, 10)
     Helpers.Stroke(backButton, Theme.Border, 1)
+    do
+        local backIcon = Icons.Navigation and Icons.Navigation.back
+        if backIcon and backIcon ~= "" then
+            createIconLabel({
+                Size = UDim2.fromOffset(20, 20),
+                Position = UDim2.new(0.5, 0, 0.5, 0),
+                AnchorPoint = Vector2.new(0.5, 0.5),
+                Image = backIcon,
+                ImageColor3 = Theme.Text,
+                Parent = backButton,
+            })
+        else
+            backButton.Text = "←"
+            backButton.TextSize = 18
+            backButton.Font = Theme.FontBold
+        end
+    end
 
     local logo = Helpers.CreateFrame({
         Name = "Logo",
@@ -337,15 +418,51 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
         Parent = presetButton,
     })
 
-    local saveButton = Helpers.CreateButton({ Name = "Save", Size = UDim2.fromOffset(82, 42), Position = UDim2.new(1, -414, 0, 12), Text = "SAVE", TextColor3 = Theme.Text, TextSize = 10, Font = Theme.FontBold, BackgroundColor3 = Theme.ElementBackground, Parent = header })
+    local function decorateHeaderAction(button: TextButton, iconKey: string, label: string)
+        button.Text = ""
+        local nav = Icons.Navigation
+        local asset = if type(nav) == "table" then nav[iconKey] else nil
+        if asset and asset ~= "" then
+            createIconLabel({
+                Size = UDim2.fromOffset(16, 16),
+                Position = UDim2.fromOffset(10, 13),
+                Image = asset,
+                ImageColor3 = Theme.Text,
+                Parent = button,
+            })
+            Helpers.CreateLabel({
+                Size = UDim2.new(1, -30, 1, 0),
+                Position = UDim2.fromOffset(28, 0),
+                Text = label,
+                TextColor3 = Theme.Text,
+                TextSize = 10,
+                Font = Theme.FontBold,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                Parent = button,
+            })
+        else
+            button.Text = label
+            button.TextSize = 10
+            button.Font = Theme.FontBold
+            button.TextColor3 = Theme.Text
+        end
+    end
+
+    local saveButton = Helpers.CreateButton({ Name = "Save", Size = UDim2.fromOffset(82, 42), Position = UDim2.new(1, -414, 0, 12), Text = "", TextColor3 = Theme.Text, TextSize = 10, Font = Theme.FontBold, BackgroundColor3 = Theme.ElementBackground, Parent = header })
     Helpers.Corner(saveButton, 8)
     Helpers.Stroke(saveButton, Theme.Border, 1)
-    local importButton = Helpers.CreateButton({ Name = "Import", Size = UDim2.fromOffset(82, 42), Position = UDim2.new(1, -326, 0, 12), Text = "IMPORT", TextColor3 = Theme.Text, TextSize = 10, Font = Theme.FontBold, BackgroundColor3 = Theme.ElementBackground, Parent = header })
+    decorateHeaderAction(saveButton, "save", "SAVE")
+
+    local importButton = Helpers.CreateButton({ Name = "Import", Size = UDim2.fromOffset(82, 42), Position = UDim2.new(1, -326, 0, 12), Text = "", TextColor3 = Theme.Text, TextSize = 10, Font = Theme.FontBold, BackgroundColor3 = Theme.ElementBackground, Parent = header })
     Helpers.Corner(importButton, 8)
     Helpers.Stroke(importButton, Theme.Border, 1)
-    local exportButton = Helpers.CreateButton({ Name = "Export", Size = UDim2.fromOffset(92, 42), Position = UDim2.new(1, -218, 0, 12), Text = "EXPORT", TextColor3 = Theme.Text, TextSize = 10, Font = Theme.FontBold, BackgroundColor3 = Theme.ElementBackground, Parent = header })
+    decorateHeaderAction(importButton, "import", "IMPORT")
+
+    local exportButton = Helpers.CreateButton({ Name = "Export", Size = UDim2.fromOffset(92, 42), Position = UDim2.new(1, -218, 0, 12), Text = "", TextColor3 = Theme.Text, TextSize = 10, Font = Theme.FontBold, BackgroundColor3 = Theme.ElementBackground, Parent = header })
     Helpers.Corner(exportButton, 8)
     Helpers.Stroke(exportButton, Theme.Border, 1)
+    decorateHeaderAction(exportButton, "export", "EXPORT")
+
     local doneButton = Helpers.CreateButton({ Name = "Done", Size = UDim2.fromOffset(96, 42), Position = UDim2.new(1, -114, 0, 12), Text = "Done", TextColor3 = Color3.new(1, 1, 1), TextSize = 10, Font = Theme.FontBold, BackgroundColor3 = Theme.Accent, Parent = header })
     Helpers.Corner(doneButton, 8)
 
@@ -1064,7 +1181,29 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
                 local button = Helpers.CreateButton({ Size = UDim2.new(1, -2, 0, 48), Text = "", BackgroundColor3 = Theme.ElementBackground, Parent = componentList })
                 Helpers.Corner(button, 7)
                 Helpers.Stroke(button, Theme.Border, 1)
-                local glyph = Helpers.CreateLabel({ Size = UDim2.fromOffset(30, 48), Position = UDim2.fromOffset(8, 0), Text = TYPE_GLYPHS[elementType] or "EL", TextColor3 = Theme.Accent, TextSize = 16, Font = Theme.FontBold, TextXAlignment = Enum.TextXAlignment.Center, Parent = button })
+
+                local iconAsset = getTypeIcon(elementType)
+                if iconAsset and iconAsset ~= "" then
+                    createIconLabel({
+                        Size = UDim2.fromOffset(22, 22),
+                        Position = UDim2.fromOffset(12, 13),
+                        Image = iconAsset,
+                        ImageColor3 = Theme.Accent,
+                        Parent = button,
+                    })
+                else
+                    Helpers.CreateLabel({
+                        Size = UDim2.fromOffset(30, 48),
+                        Position = UDim2.fromOffset(8, 0),
+                        Text = TYPE_GLYPHS[elementType] or "EL",
+                        TextColor3 = Theme.Accent,
+                        TextSize = 16,
+                        Font = Theme.FontBold,
+                        TextXAlignment = Enum.TextXAlignment.Center,
+                        Parent = button,
+                    })
+                end
+
                 Helpers.CreateLabel({ Size = UDim2.new(1, -50, 0, 20), Position = UDim2.fromOffset(46, 5), Text = label, TextColor3 = Theme.Text, TextSize = 9, Font = Theme.FontBold, Parent = button })
                 Helpers.CreateLabel({ Size = UDim2.new(1, -50, 0, 16), Position = UDim2.fromOffset(46, 25), Text = TYPE_DESCRIPTIONS[elementType] or "Additional target information", TextColor3 = Theme.TextMuted, TextSize = 7, Parent = button })
                 componentButtons[elementType] = button
@@ -1086,8 +1225,22 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
                 Helpers.Corner(row, 7)
                 Helpers.Stroke(row, if self._Selected == id then Theme.Accent else Theme.Border, 1)
                 local eye = Helpers.CreateButton({ Size = UDim2.fromOffset(28, 42), Position = UDim2.fromOffset(2, 2), Text = if element.Visible ~= false then "ON" else "OFF", TextColor3 = if element.Visible ~= false then Theme.Accent else Theme.TextMuted, TextSize = 13, BackgroundTransparency = 1, Parent = row })
-                local name = Helpers.CreateLabel({ Size = UDim2.new(1, -74, 0, 20), Position = UDim2.fromOffset(34, 5), Text = element.Name, TextColor3 = Theme.Text, TextSize = 9, Font = Theme.FontBold, Parent = row })
-                local typeLabel = Helpers.CreateLabel({ Size = UDim2.new(1, -74, 0, 15), Position = UDim2.fromOffset(34, 24), Text = TYPE_LABELS[element.Type] or element.Type, TextColor3 = Theme.TextMuted, TextSize = 7, Parent = row })
+
+                local layerIconAsset = getTypeIcon(element.Type)
+                local textOffset = 34
+                if layerIconAsset and layerIconAsset ~= "" then
+                    createIconLabel({
+                        Size = UDim2.fromOffset(16, 16),
+                        Position = UDim2.fromOffset(32, 15),
+                        Image = layerIconAsset,
+                        ImageColor3 = if self._Selected == id then Theme.Accent else Theme.TextMuted,
+                        Parent = row,
+                    })
+                    textOffset = 54
+                end
+
+                local name = Helpers.CreateLabel({ Size = UDim2.new(1, -(textOffset + 40), 0, 20), Position = UDim2.fromOffset(textOffset, 5), Text = element.Name, TextColor3 = Theme.Text, TextSize = 9, Font = Theme.FontBold, Parent = row })
+                local typeLabel = Helpers.CreateLabel({ Size = UDim2.new(1, -(textOffset + 40), 0, 15), Position = UDim2.fromOffset(textOffset, 24), Text = TYPE_LABELS[element.Type] or element.Type, TextColor3 = Theme.TextMuted, TextSize = 7, Parent = row })
                 local move = Helpers.CreateLabel({ Size = UDim2.fromOffset(30, 42), Position = UDim2.new(1, -34, 0, 2), Text = "DRAG", TextColor3 = Theme.TextMuted, TextSize = 16, TextXAlignment = Enum.TextXAlignment.Center, Parent = row })
                 listButtons[id] = row
                 local captured = id
