@@ -1739,11 +1739,6 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	self._Minimized = false
 	self._StartupComplete = false
 	self._OptionsTab = nil
-	self._ESPTab = nil
-	self._ESPBuilder = nil
-	self._ESPBuilderHardClose = nil
-	self._ESPSavedLayouts = {}
-	self._ESPWorldRenderer = nil
 	self.RefreshTheme = refreshWindowTheme
 	self._InfoBar = infoBar
 	self._InfoRefs = infoRefs
@@ -1935,89 +1930,54 @@ function Window:SetBackgroundOverlayTransparency(value: number)
 end
 
 function Window:_selectTab(tab: any)
-    if not tab then
-        return
-    end
+	if self._ActiveTab == tab then
+		return
+	end
 
-    if self._ActiveTab == tab then
-        return
-    end
+	local previousTab = self._ActiveTab
 
-    local previousTab = self._ActiveTab
+	for _, existingTab in self._Tabs do
+		if existingTab and existingTab.SetActive then
+			existingTab:SetActive(existingTab == tab)
+		end
+	end
 
-    -- Update sidebar state.
-    for _, existingTab in self._Tabs do
-        if existingTab and existingTab.SetActive then
-            existingTab:SetActive(existingTab == tab)
-        end
-    end
+	self._ActiveTab = tab
 
-    self._ActiveTab = tab
+	local direction = 1
+	if previousTab then
+		local prevIndex, newIndex
+		for i, t in self._Tabs do
+			if t == previousTab then
+				prevIndex = i
+			end
+			if t == tab then
+				newIndex = i
+			end
+		end
+		if prevIndex and newIndex and newIndex < prevIndex then
+			direction = -1
+		end
+	end
 
-    -- Determine slide direction.
-    local direction = 1
+	local newPage = tab.Page
+	local oldPage = previousTab and previousTab.Page
 
-    if previousTab then
-        local prevIndex
-        local newIndex
+	if oldPage and oldPage ~= newPage then
+		oldPage.Visible = false
+		oldPage.Position = UDim2.fromOffset(0, 0)
+	end
 
-        for i, existingTab in self._Tabs do
-            if existingTab == previousTab then
-                prevIndex = i
-            end
+	local slideDistance = self.Pages.AbsoluteSize.X * 0.25
 
-            if existingTab == tab then
-                newIndex = i
-            end
-        end
-
-        if prevIndex and newIndex and newIndex < prevIndex then
-            direction = -1
-        end
-    end
-
-    local newPage = tab.Page
-    local oldPage = previousTab and previousTab.Page
-
-    -- IMPORTANT:
-    -- Hide EVERY page first.
-    for _, page in self.Pages:GetChildren() do
-        if page:IsA("ScrollingFrame") then
-            page.Visible = false
-            page.Position = UDim2.fromOffset(0, 0)
-        end
-    end
-
-    -- Now show only the selected page.
-    local slideDistance = math.max(self.Pages.AbsoluteSize.X * 0.25, 80)
-
-    newPage.Visible = true
-    newPage.Position = UDim2.fromOffset(slideDistance * direction, 0)
-
-    Tween.Play(
-        newPage,
-        {
-            Position = UDim2.fromOffset(0, 0),
-        },
-        {
-            Time = 0.2,
-        }
-    )
+	newPage.Visible = true
+	newPage.Position = UDim2.fromOffset(slideDistance * direction, 0)
+	Tween.Play(newPage, { Position = UDim2.fromOffset(0, 0) }, { Time = 0.2 })
 end
 
 function Window:CreateTab(name: string)
 	local tab = Tab.new(self, name)
-
-	if self._OptionsTab then
-		local optionsIndex = table.find(self._Tabs, self._OptionsTab)
-		if optionsIndex then
-			table.insert(self._Tabs, optionsIndex, tab)
-		else
-			table.insert(self._Tabs, tab)
-		end
-	else
-		table.insert(self._Tabs, tab)
-	end
+	table.insert(self._Tabs, tab)
 
 	if not self._OptionsTab then
 		self:_createOptionsTab()
@@ -2525,57 +2485,29 @@ function Window:OpenDeveloperWindow(options: any?): DeveloperPanelHandle
 	return self:CreateDeveloperWindow(options)
 end
 
-
-
+-- Opens the visual Custom ESP Designer. The returned layout is renderer-agnostic
+-- and can be consumed by a project-specific ESP/overlay renderer.
 function Window:CreateESPBuilder(options: any?)
-    local data = (typeof(options) == "table") and options or {}
-
-    if self._ESPBuilder then
-        pcall(function()
-            self._ESPBuilder:Close()
-        end)
-
-        self._ESPBuilder = nil
-    end
-
-    data.Parent = self._TopGuiParent or self.Gui.Parent
-    data.SavedLayouts = self._ESPSavedLayouts
-
-    local builder = ESPBuilder.new(data)
-
-    self._ESPBuilder = builder
-
-    return builder
+	local data = (typeof(options) == "table") and options or {}
+	if self._ESPBuilder then
+		pcall(function() self._ESPBuilder:Close() end)
+		self._ESPBuilder = nil
+	end
+	data.Parent = self._TopGuiParent or self.Gui.Parent
+	local builder = ESPBuilder.new(data)
+	self._ESPBuilder = builder
+	return builder
 end
 
 function Window:CreateESPWorldRenderer(options: any?)
 	local data = (typeof(options) == "table") and options or {}
-
 	if self._ESPWorldRenderer then
 		pcall(function() self._ESPWorldRenderer:Destroy() end)
 		self._ESPWorldRenderer = nil
 	end
-
 	data.Parent = self._TopGuiParent or self.Gui.Parent
-
-	-- The world renderer and the visual designer are a single workflow: the
-	-- designer edits the exact layout consumed by the renderer. Set
-	-- Builder=false to opt out and use a renderer without the designer.
-	local useBuilder = data.Builder ~= false
-	local builder = nil
-	if useBuilder then
-		local builderData = {}
-		for key, value in pairs(data) do
-			builderData[key] = value
-		end
-		builderData.Builder = nil
-		builder = self:CreateESPBuilder(builderData)
-		data.Builder = builder
-	end
-
 	local renderer = ESPWorldRenderer.new(data)
 	self._ESPWorldRenderer = renderer
-
 	return renderer
 end
 
@@ -2748,15 +2680,9 @@ function Window:Destroy()
 		self._DeveloperGui = nil
 	end
 	if self._ESPBuilder then
-		if self._ESPBuilderHardClose then
-			pcall(self._ESPBuilderHardClose)
-		else
-			pcall(function() self._ESPBuilder:Close() end)
-		end
+		pcall(function() self._ESPBuilder:Close() end)
 		self._ESPBuilder = nil
-		self._ESPBuilderHardClose = nil
 	end
-	self._ESPTab = nil
 	if self._ESPWorldRenderer then
 		pcall(function() self._ESPWorldRenderer:Destroy() end)
 		self._ESPWorldRenderer = nil

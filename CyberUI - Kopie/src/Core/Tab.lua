@@ -9,20 +9,7 @@ local Tween = require(script.Parent.Parent.Utils.Tween)
 local Tab = {}
 Tab.__index = Tab
 
-local iconMap = {
-    ["main"] = "M",
-    ["home"] = "M",
-    ["player"] = "P",
-    ["combat"] = "C",
-    ["visuals"] = "V",
-    ["world"] = "W",
-    ["misc"] = "X",
-    ["settings"] = "S",
-    ["options"] = "O",
-    ["farm"] = "F",
-    ["aim assist"] = "A",
-}
-
+local Icons = require(script.Parent.Parent.Assets.Icons)
 
 local function cleanDisplayName(name: string): string
     local cleaned = name
@@ -38,11 +25,35 @@ local function cleanDisplayName(name: string): string
     return cleaned ~= "" and cleaned or name
 end
 
-local function getIcon(name: string): string
+local function getIconAsset(name: string): string?
     local visible = cleanDisplayName(name)
-    local key = string.lower(visible):gsub("^[%s%p]+", ""):gsub("[%s%p]+$", "")
-    return iconMap[key] or string.upper(string.sub(visible, 1, 1))
+    local key = string.lower(visible):gsub("^%s+", ""):gsub("%s+$", "")
+
+    -- Direct category/key syntax is supported:
+    -- "Navigation.home", "ESP.box", etc.
+    local category, iconName = key:match("^([%w_]+)%.([%w_]+)$")
+    if category and iconName and Icons[category] then
+        return Icons[category][iconName]
+    end
+
+    -- Navigation tabs use the Navigation icon group.
+    if Icons.Navigation then
+        local navigationIcon = Icons.Navigation[key]
+        if navigationIcon then
+            return navigationIcon
+        end
+    end
+
+    -- Also accept an exact key from any icon category.
+    for _, group in pairs(Icons) do
+        if type(group) == "table" and group[key] then
+            return group[key]
+        end
+    end
+
+    return nil
 end
+
 
 export type TabHandle = {
     CreateSection: (self: TabHandle, name: string?) -> any,
@@ -132,16 +143,17 @@ function Tab.new(window: any, name: string): TabHandle
     indicator.Parent = button
     Helpers.Corner(indicator, 2)
 
-    local icon = Instance.new("TextLabel")
+    local icon = Instance.new("ImageLabel")
     icon.Name = "Icon"
-    icon.Size = UDim2.fromOffset(24, 40)
-    icon.Position = UDim2.fromOffset(11, 0)
+    icon.Size = UDim2.fromOffset(22, 22)
+    icon.Position = UDim2.new(0, 12, 0.5, 0)
+    icon.AnchorPoint = Vector2.new(0, 0.5)
     icon.BackgroundTransparency = 1
-    icon.Text = getIcon(name)
-    icon.Font = Theme.FontBold
-    icon.TextSize = 16
-    icon.TextColor3 = theme.TextMuted
-    icon.TextXAlignment = Enum.TextXAlignment.Center
+    icon.BorderSizePixel = 0
+    icon.Image = getIconAsset(name) or ""
+    icon.ImageColor3 = theme.TextMuted
+    icon.ImageTransparency = if icon.Image == "" then 1 else 0
+    icon.ScaleType = Enum.ScaleType.Fit
     icon.ZIndex = 4
     icon.Parent = button
 
@@ -162,7 +174,7 @@ function Tab.new(window: any, name: string): TabHandle
     button.MouseEnter:Connect(function()
         if window._ActiveTab ~= self then
             Tween.Play(hoverFill, { BackgroundTransparency = 0.82 }, { Time = 0.12 })
-            Tween.Play(icon, { TextColor3 = theme.Text }, { Time = 0.12 })
+            Tween.Play(icon, { ImageColor3 = theme.Text, ImageTransparency = 0 }, { Time = 0.12 })
             Tween.Play(label, { TextColor3 = theme.Text }, { Time = 0.12 })
         end
     end)
@@ -170,7 +182,7 @@ function Tab.new(window: any, name: string): TabHandle
     button.MouseLeave:Connect(function()
         if window._ActiveTab ~= self then
             Tween.Play(hoverFill, { BackgroundTransparency = 1 }, { Time = 0.14 })
-            Tween.Play(icon, { TextColor3 = theme.TextMuted }, { Time = 0.12 })
+            Tween.Play(icon, { ImageColor3 = theme.TextMuted, ImageTransparency = if icon.Image == "" then 1 else 0 }, { Time = 0.12 })
             Tween.Play(label, { TextColor3 = theme.TextMuted }, { Time = 0.12 })
         end
     end)
@@ -322,9 +334,9 @@ function Tab:SetActive(active: boolean)
         self._ActiveGlowImage.ImageTransparency = if active then 0.94 else 1
     end
 
-    self._Icon.TextColor3 = if active then theme.Text else theme.TextMuted
+    self._Icon.ImageColor3 = if active then theme.Text else theme.TextMuted
+    self._Icon.ImageTransparency = if self._Icon.Image == "" then 1 else 0
     self._Label.TextColor3 = if active then theme.Text else theme.TextMuted
-    self._Icon.TextSize = if active then 17 else 16
 end
 
 function Tab:RefreshTheme()
