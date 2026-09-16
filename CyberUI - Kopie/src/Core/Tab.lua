@@ -38,11 +38,13 @@ end
 
 local function getIconAsset(name: string): string?
     local visible = cleanDisplayName(name)
-    local key = normalizeIconKey(visible)
 
-    -- Direct category/key syntax is supported:
-    -- "Navigation.home", "ESP.box", "esp.corner_box", etc.
-    local category, iconName = key:match("^([%w_]+)%.([%w_]+)$")
+    -- Direct category/key syntax is supported before normalization so the
+    -- separator is not stripped: "Navigation.home", "ESP.box", etc.
+    local rawCategory, rawIconName = visible:match("^%s*([%w_]+)%s*%.%s*([%w_]+)%s*$")
+    local category = rawCategory and normalizeIconKey(rawCategory) or nil
+    local iconName = rawIconName and normalizeIconKey(rawIconName) or nil
+    local key = normalizeIconKey(visible)
     if category and iconName then
         local group = Icons[category] or Icons[string.upper(category:sub(1, 1)) .. category:sub(2)]
         -- Also try exact case-sensitive category names used in Icons.lua
@@ -67,6 +69,21 @@ local function getIconAsset(name: string): string?
     -- ESP feature names (box, skeleton, tracer, …) resolve from the ESP group.
     if Icons.ESP and Icons.ESP[key] then
         return Icons.ESP[key]
+    end
+
+    -- Some UI element names intentionally share the closest available icon.
+    local espAliases = {
+        health_percent = "health",
+        head_marker = "head",
+        status = "team",
+        custom_text = "name",
+        state = "class",
+    }
+    if Icons.ESP then
+        local alias = espAliases[key]
+        if alias and Icons.ESP[alias] then
+            return Icons.ESP[alias]
+        end
     end
 
     -- Fallback: any category that contains the key.

@@ -108,18 +108,18 @@ local TYPE_ICON_KEYS: { [string]: string } = {
     FilledBox = "filled_box",
     Name = "name",
     Health = "health",
-    HealthPercent = "health_percent",
+    HealthPercent = "health",
     HealthBar = "health_bar",
     Distance = "distance",
     Tracer = "tracer",
-    HeadMarker = "head_marker",
+    HeadMarker = "head",
     Skeleton = "skeleton",
     Weapon = "weapon",
     Team = "team",
     Class = "class",
-    State = "state",
-    Status = "status",
-    CustomText = "custom_text",
+    State = "class",
+    Status = "team",
+    CustomText = "name",
 }
 
 local function getTypeIcon(elementType: string): string?
@@ -162,6 +162,22 @@ local function createIconLabel(props: {
         icon.Parent = props.Parent
     end
     return icon
+end
+
+local function addUiIcon(parent: Instance, groupName: string, key: string, size: number, x: number, y: number, zIndex: number?)
+    local group = Icons[groupName]
+    local asset = if type(group) == "table" then group[key] else nil
+    if not asset or asset == "" then
+        return nil
+    end
+    return createIconLabel({
+        Size = UDim2.fromOffset(size, size),
+        Position = UDim2.fromOffset(x, y),
+        Image = asset,
+        ImageColor3 = Theme.Text,
+        ZIndex = zIndex or 2,
+        Parent = parent,
+    })
 end
 
 local TYPE_DESCRIPTIONS = {
@@ -409,6 +425,7 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
     })
     Helpers.Corner(presetButton, 8)
     Helpers.Stroke(presetButton, Theme.Border, 1)
+    addUiIcon(presetButton, "Editor", "presets", 16, 10, 13, 3)
     local presetChevron = Helpers.CreateLabel({
         Name = "Chevron",
         Size = UDim2.fromOffset(25, 42),
@@ -494,6 +511,7 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
     local customAdd = Helpers.CreateButton({ Name = "CustomAdd", Size = UDim2.new(1, -24, 0, 40), Position = UDim2.new(0, 12, 1, -52), Text = "+  Add custom element", TextColor3 = Theme.Accent, TextSize = 10, Font = Theme.FontBold, BackgroundColor3 = Theme.AccentSoft, Parent = components })
     Helpers.Corner(customAdd, 7)
     Helpers.Stroke(customAdd, Theme.Accent, 1)
+    addUiIcon(customAdd, "Actions", "add_element", 16, 12, 12, 3)
 
     -- Center: live designer.
     local preview = Helpers.CreateFrame({ Name = "Preview", Size = UDim2.new(1, -770, 1, 0), Position = UDim2.fromOffset(258, 0), BackgroundColor3 = Theme.Background, Parent = body })
@@ -509,9 +527,13 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
 
     local zoomOut = Helpers.CreateButton({ Name = "ZoomOut", Size = UDim2.fromOffset(32, 32), Position = UDim2.new(1, -106, 0, 38), Text = "-", TextColor3 = Theme.TextMuted, TextSize = 16, BackgroundColor3 = Theme.ElementBackground, Parent = preview })
     Helpers.Corner(zoomOut, 7)
+    zoomOut.Text = ""
+    addUiIcon(zoomOut, "Transform", "zoom_out", 16, 8, 8, 3)
     local zoomLabel = Helpers.CreateLabel({ Name = "Zoom", Size = UDim2.fromOffset(52, 32), Position = UDim2.new(1, -72, 0, 38), Text = "100%", TextColor3 = Theme.Text, TextSize = 9, Font = Theme.FontBold, TextXAlignment = Enum.TextXAlignment.Center, Parent = preview })
     local zoomIn = Helpers.CreateButton({ Name = "ZoomIn", Size = UDim2.fromOffset(32, 32), Position = UDim2.new(1, -32, 0, 38), Text = "+", TextColor3 = Theme.TextMuted, TextSize = 16, BackgroundColor3 = Theme.ElementBackground, Parent = preview })
     Helpers.Corner(zoomIn, 7)
+    zoomIn.Text = ""
+    addUiIcon(zoomIn, "Transform", "zoom_in", 16, 8, 8, 3)
 
     local canvasHost = Helpers.CreateFrame({ Name = "CanvasHost", Size = UDim2.new(1, -24, 1, -82), Position = UDim2.fromOffset(12, 76), BackgroundColor3 = Theme.Secondary, Parent = preview })
     Helpers.Corner(canvasHost, Theme.CornerRadiusSmall)
@@ -574,6 +596,7 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
     local addLayerButton = Helpers.CreateButton({ Name = "Add", Size = UDim2.new(1, -24, 0, 34), Position = UDim2.new(0, 12, 1, -46), Text = "+  Add element", TextColor3 = Theme.Accent, TextSize = 9, Font = Theme.FontBold, BackgroundColor3 = Theme.AccentSoft, Parent = layers })
     Helpers.Corner(addLayerButton, 7)
     Helpers.Stroke(addLayerButton, Theme.Accent, 1)
+    addUiIcon(addLayerButton, "Actions", "add_element", 16, 12, 9, 3)
 
     -- Far right: properties.
     local properties = Helpers.CreateFrame({ Name = "Properties", Size = UDim2.fromOffset(255, 1), Position = UDim2.new(1, -255, 0, 0), BackgroundColor3 = Theme.Background, Parent = body })
@@ -603,8 +626,12 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
     Helpers.Stroke(layoutButton, Theme.Border, 1)
     local undoButton = Helpers.CreateButton({ Name = "Undo", Size = UDim2.fromOffset(34, 30), Text = "UNDO", TextColor3 = Theme.TextMuted, TextSize = 16, BackgroundColor3 = Theme.ElementBackground, Parent = footer })
     Helpers.Corner(undoButton, 7)
+    undoButton.Text = ""
+    addUiIcon(undoButton, "Actions", "undo", 16, 9, 7, 3)
     local redoButton = Helpers.CreateButton({ Name = "Redo", Size = UDim2.fromOffset(34, 30), Text = "REDO", TextColor3 = Theme.TextMuted, TextSize = 16, BackgroundColor3 = Theme.ElementBackground, Parent = footer })
     Helpers.Corner(redoButton, 7)
+    redoButton.Text = ""
+    addUiIcon(redoButton, "Actions", "redo", 16, 9, 7, 3)
     local footerHint = Helpers.CreateLabel({ Name = "Hint", Size = UDim2.new(1, -520, 0, 30), Text = "Click an element to select it  |  Drag to move  |  Drag the corner handle to resize", TextColor3 = Theme.TextMuted, TextSize = 8, Parent = footer })
     footerHint.LayoutOrder = 5
     local footerZoom = Helpers.CreateLabel({ Name = "Zoom", Size = UDim2.fromOffset(100, 30), Text = "Zoom 100%", TextColor3 = Theme.TextMuted, TextSize = 8, TextXAlignment = Enum.TextXAlignment.Right, Parent = footer })
@@ -624,6 +651,8 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
     local modalClose = Helpers.CreateButton({ Name = "Close", Size = UDim2.fromOffset(34, 30), Position = UDim2.new(1, -46, 0, 12), Text = "X", TextColor3 = Theme.TextMuted, TextSize = 11, BackgroundColor3 = Theme.ElementBackground, Parent = modalPanel })
     modalClose.ZIndex = 102
     Helpers.Corner(modalClose, 7)
+    modalClose.Text = ""
+    addUiIcon(modalClose, "Navigation", "close", 14, 10, 8, 103)
 
     local nameInput = Helpers.CreateTextBox({ Name = "NameInput", Size = UDim2.new(1, -36, 0, 36), Position = UDim2.fromOffset(18, 58), PlaceholderText = "Layout name...", Text = "", TextColor3 = Theme.Text, PlaceholderColor3 = Theme.TextMuted, TextSize = 10, BackgroundColor3 = Theme.ElementBackground, Parent = modalPanel })
     nameInput.ZIndex = 102
@@ -675,9 +704,11 @@ function ESPBuilder.new(options: any?): ESPBuilderHandle
                 local load = Helpers.CreateButton({ Size = UDim2.fromOffset(54, 30), Position = UDim2.new(1, -116, 0, 9), Text = "LOAD", TextColor3 = Theme.Text, TextSize = 8, Font = Theme.FontBold, BackgroundColor3 = Theme.AccentSoft, Parent = row })
                 load.ZIndex = 104
                 Helpers.Corner(load, 6)
+                addUiIcon(load, "Editor", "load", 14, 5, 8, 105)
                 local del = Helpers.CreateButton({ Size = UDim2.fromOffset(54, 30), Position = UDim2.new(1, -58, 0, 9), Text = "DELETE", TextColor3 = Theme.Error, TextSize = 7, Font = Theme.FontBold, BackgroundColor3 = Theme.ElementBackground, Parent = row })
                 del.ZIndex = 104
                 Helpers.Corner(del, 6)
+                addUiIcon(del, "Editor", "delete", 14, 5, 8, 105)
                 local captured = entry
                 self._Maid:GiveTask(load.MouseButton1Click:Connect(function()
                     self:SetLayout(cloneTable(captured.Layout))
