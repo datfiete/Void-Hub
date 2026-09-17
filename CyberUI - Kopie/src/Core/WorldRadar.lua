@@ -232,7 +232,6 @@ function WorldRadar.new(section: any, data: any)
 	local function applyFlySpeed(speed: number)
 		speed = math.clamp(math.floor(speed + 0.5), minSpeed, maxSpeed)
 		self._FlySpeed = speed
-		config.flySpeed = speed
 		refreshSpeedUI()
 	end
 
@@ -339,10 +338,6 @@ function WorldRadar.new(section: any, data: any)
 	local lockedTargetInstance = nil :: Instance? -- used by WaitUntilGone
 	local visitedTargets = {} :: { [Instance]: boolean } -- used by SkipVisited
 
-	local config = {
-		flySpeed = self._FlySpeed,
-	}
-
 	local function enableNoclip()
 		if noclipConnection then
 			return
@@ -419,11 +414,11 @@ function WorldRadar.new(section: any, data: any)
 
 				local horizontalVelocity = Vector3.zero
 				if horizontalDistance > 0.5 then
-					local horizontalSpeed = math.min(config.flySpeed, math.max(20, horizontalDistance * 5))
+					local horizontalSpeed = math.min(self._FlySpeed, math.max(20, horizontalDistance * 5))
 					horizontalVelocity = horizontal.Unit * horizontalSpeed
 				end
 
-				local verticalVelocity = math.clamp(verticalError * 5, -config.flySpeed, config.flySpeed)
+				local verticalVelocity = math.clamp(verticalError * 5, -self._FlySpeed, self._FlySpeed)
 				if math.abs(verticalError) < 0.75 then
 					verticalVelocity = 0
 				end
