@@ -9,6 +9,7 @@ local Input = require(script.Parent.Parent.Elements.Input)
 local Keybind = require(script.Parent.Parent.Elements.Keybind)
 local ColorPicker = require(script.Parent.Parent.Elements.ColorPicker)
 local Paragraph = require(script.Parent.Parent.Elements.Paragraph)
+local WorldRadar = require(script.Parent.WorldRadar)
 local Maid = require(script.Parent.Parent.Utils.Maid)
 local Helpers = require(script.Parent.Parent.Utils.Helpers)
 
@@ -24,6 +25,7 @@ export type SectionHandle = {
     CreateKeybind: (self: SectionHandle, data: any) -> any,
     CreateColorPicker: (self: SectionHandle, data: any) -> any,
     CreateParagraph: (self: SectionHandle, data: any) -> any,
+    CreateWorldRadar: (self: SectionHandle, data: any?) -> any,
     Destroy: (self: SectionHandle) -> (),
 }
 
@@ -208,6 +210,7 @@ function Section:CreateInput(data: any) return self:_track(Input.new(self, data)
 function Section:CreateKeybind(data: any) return self:_track(Keybind.new(self, data)) end
 function Section:CreateColorPicker(data: any) return self:_track(ColorPicker.new(self, data)) end
 function Section:CreateParagraph(data: any) return self:_track(Paragraph.new(self, data)) end
+function Section:CreateWorldRadar(data: any?) return self:_track(WorldRadar.new(self, data or {})) end
 function Section:CreateLabel(data: any) return self:CreateParagraph(data) end
 function Section:CreateInfo(data: any) return self:CreateParagraph(data) end
 

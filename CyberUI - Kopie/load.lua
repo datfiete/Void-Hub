@@ -34,6 +34,7 @@ local MODULE_PATHS = {
 	"Core/Tab",
 	"Core/ESPBuilder",
 	"Core/ESPWorldRenderer",
+	"Core/WorldRadar",
 	"Core/Window",
 }
 

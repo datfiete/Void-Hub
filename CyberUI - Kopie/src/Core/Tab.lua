@@ -426,6 +426,7 @@ function Tab:CreateInput(data: any) return self:_getDefaultSection():CreateInput
 function Tab:CreateKeybind(data: any) return self:_getDefaultSection():CreateKeybind(data) end
 function Tab:CreateColorPicker(data: any) return self:_getDefaultSection():CreateColorPicker(data) end
 function Tab:CreateParagraph(data: any) return self:_getDefaultSection():CreateParagraph(data) end
+function Tab:CreateWorldRadar(data: any?) return self:_getDefaultSection():CreateWorldRadar(data) end
 
 function Tab:Destroy()
     for _, section in self._Sections do
