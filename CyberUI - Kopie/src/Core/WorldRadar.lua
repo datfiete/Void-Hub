@@ -27,7 +27,7 @@ function WorldRadar.new(section: any, data: any)
 		_AutoFly = data.AutoFly == true, -- paid feature; default off unless requested
 		_FlySpeed = typeof(data.FlySpeed) == "number" and data.FlySpeed or 80,
 		_ArriveDistance = typeof(data.ArriveDistance) == "number" and data.ArriveDistance or 8,
-		_PreserveHeight = data.PreserveHeight ~= false, -- keep current height while flying horizontally
+		_PreserveHeight = data.PreserveHeight == true, -- false = use target Y height (default)
 	}, WorldRadar)
 
 	local theme = section.Tab.Window.Library.Theme
@@ -353,7 +353,9 @@ function WorldRadar.new(section: any, data: any)
 			return
 		end
 
-		if (preserveHeight ~= false) and hoverY then
+		-- preserveHeight == true  -> keep current flight height (ignore target Y)
+		-- preserveHeight == false -> fly to exact target height (X, Y, Z)
+		if preserveHeight and hoverY then
 			position = Vector3.new(position.X, hoverY, position.Z)
 		else
 			hoverY = position.Y
