@@ -59,7 +59,7 @@ function WorldRadar.new(section: any, data: any)
 	local theme = section.Tab.Window.Library.Theme
 	local root = make("Frame", {
 		Name = "WorldRadar",
-		Size = UDim2.new(1, 0, 0, 340), -- slightly taller for mode row
+		Size = UDim2.new(1, 0, 0, 372), -- header + filters + speed + radar
 		BackgroundTransparency = 1,
 		LayoutOrder = 999,
 	}, section.Inner)
@@ -124,7 +124,7 @@ function WorldRadar.new(section: any, data: any)
 			Name = "AutoFlyFilter",
 			Size = UDim2.fromOffset(90, 26),
 			BackgroundColor3 = self._AutoFly and theme.Accent or theme.SurfaceHover,
-			Text = self._AutoFly and "✓  AutoFly" or "AutoFly",
+			Text = self._AutoFly and "✓  AutoFly" or "□  AutoFly",
 			TextColor3 = theme.Text,
 			Font = Enum.Font.GothamMedium,
 			TextSize = 11,
@@ -149,10 +149,97 @@ function WorldRadar.new(section: any, data: any)
 		make("UICorner", { CornerRadius = UDim.new(0, 6) }, modeButton)
 	end
 
+	-- Fly speed controls
+	local speedRow = make("Frame", {
+		Name = "SpeedRow",
+		Size = UDim2.new(1, 0, 0, 28),
+		Position = UDim2.fromOffset(0, 62),
+		BackgroundTransparency = 1,
+	}, root)
+	make("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Padding = UDim.new(0, 6),
+		VerticalAlignment = Enum.VerticalAlignment.Center,
+	}, speedRow)
+
+	local minSpeed = typeof(data.MinFlySpeed) == "number" and data.MinFlySpeed or 20
+	local maxSpeed = typeof(data.MaxFlySpeed) == "number" and data.MaxFlySpeed or 200
+	local speedStep = typeof(data.FlySpeedStep) == "number" and data.FlySpeedStep or 10
+
+	local speedLabel = make("TextLabel", {
+		Name = "SpeedLabel",
+		Size = UDim2.fromOffset(88, 26),
+		BackgroundTransparency = 1,
+		Text = string.format("Speed: %d", self._FlySpeed),
+		TextColor3 = theme.TextMuted,
+		Font = Enum.Font.GothamMedium,
+		TextSize = 11,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	}, speedRow)
+
+	local speedDown = make("TextButton", {
+		Name = "SpeedDown",
+		Size = UDim2.fromOffset(32, 26),
+		BackgroundColor3 = theme.SurfaceHover,
+		Text = "−",
+		TextColor3 = theme.Text,
+		Font = Enum.Font.GothamBold,
+		TextSize = 16,
+		AutoButtonColor = true,
+	}, speedRow)
+	make("UICorner", { CornerRadius = UDim.new(0, 6) }, speedDown)
+
+	local speedUp = make("TextButton", {
+		Name = "SpeedUp",
+		Size = UDim2.fromOffset(32, 26),
+		BackgroundColor3 = theme.SurfaceHover,
+		Text = "+",
+		TextColor3 = theme.Text,
+		Font = Enum.Font.GothamBold,
+		TextSize = 16,
+		AutoButtonColor = true,
+	}, speedRow)
+	make("UICorner", { CornerRadius = UDim.new(0, 6) }, speedUp)
+
+	local speedPresets = { 40, 80, 120, 160 }
+	for _, preset in ipairs(speedPresets) do
+		local pb = make("TextButton", {
+			Name = "Speed" .. tostring(preset),
+			Size = UDim2.fromOffset(36, 26),
+			BackgroundColor3 = (self._FlySpeed == preset) and theme.Accent or theme.SurfaceHover,
+			Text = tostring(preset),
+			TextColor3 = theme.Text,
+			Font = Enum.Font.GothamMedium,
+			TextSize = 10,
+			AutoButtonColor = true,
+		}, speedRow)
+		make("UICorner", { CornerRadius = UDim.new(0, 6) }, pb)
+		-- store for later highlight updates
+		pb:SetAttribute("SpeedPreset", preset)
+	end
+
+	local function refreshSpeedUI()
+		speedLabel.Text = string.format("Speed: %d", self._FlySpeed)
+		for _, child in ipairs(speedRow:GetChildren()) do
+			if child:IsA("TextButton") and child:GetAttribute("SpeedPreset") then
+				local p = child:GetAttribute("SpeedPreset")
+				child.BackgroundColor3 = (self._FlySpeed == p) and theme.Accent or theme.SurfaceHover
+			end
+		end
+	end
+
+	local function applyFlySpeed(speed: number)
+		speed = math.clamp(math.floor(speed + 0.5), minSpeed, maxSpeed)
+		self._FlySpeed = speed
+		config.flySpeed = speed
+		refreshSpeedUI()
+	end
+
 	local radar = make("Frame", {
 		Name = "PointField",
 		Size = UDim2.new(1, 0, 0, 240),
-		Position = UDim2.fromOffset(0, 64),
+		Position = UDim2.fromOffset(0, 94),
 		BackgroundColor3 = theme.Background or theme.Surface,
 		BackgroundTransparency = 0.05,
 		BorderSizePixel = 0,
@@ -757,6 +844,21 @@ function WorldRadar.new(section: any, data: any)
 		end))
 	end
 
+	table.insert(self._Connections, speedDown.Activated:Connect(function()
+		applyFlySpeed(self._FlySpeed - speedStep)
+	end))
+	table.insert(self._Connections, speedUp.Activated:Connect(function()
+		applyFlySpeed(self._FlySpeed + speedStep)
+	end))
+	for _, child in ipairs(speedRow:GetChildren()) do
+		if child:IsA("TextButton") and child:GetAttribute("SpeedPreset") then
+			local preset = child:GetAttribute("SpeedPreset") :: number
+			table.insert(self._Connections, child.Activated:Connect(function()
+				applyFlySpeed(preset)
+			end))
+		end
+	end
+
 	table.insert(self._Connections, zoomIn.Activated:Connect(function()
 		self._Zoom = math.max(0.5, self._Zoom / 1.25)
 		update()
@@ -804,9 +906,12 @@ function WorldRadar.new(section: any, data: any)
 
 	function self:SetFlySpeed(speed: number)
 		if typeof(speed) == "number" and speed > 0 then
-			self._FlySpeed = speed
-			config.flySpeed = speed
+			applyFlySpeed(speed)
 		end
+	end
+
+	function self:GetFlySpeed(): number
+		return self._FlySpeed
 	end
 
 	function self:SetAutoFlyMode(mode: string)
