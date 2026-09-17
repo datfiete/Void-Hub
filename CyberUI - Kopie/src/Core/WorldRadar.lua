@@ -124,7 +124,7 @@ function WorldRadar.new(section: any, data: any)
 			Name = "AutoFlyFilter",
 			Size = UDim2.fromOffset(90, 26),
 			BackgroundColor3 = self._AutoFly and theme.Accent or theme.SurfaceHover,
-			Text = self._AutoFly and "✓  AutoFly" or "□  AutoFly",
+			Text = self._AutoFly and "✓  AutoFly" or "AutoFly",
 			TextColor3 = theme.Text,
 			Font = Enum.Font.GothamMedium,
 			TextSize = 11,
