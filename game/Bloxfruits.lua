@@ -4,6 +4,7 @@ local RunService = game:GetService("RunService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
+local Executor = getexecutorname()
 
 -- Load Vaxorin (or fallback UI)
 local useVaxorin = false
@@ -60,9 +61,9 @@ local success, err = pcall(function()
         Vaxorin.Theme.Style = "Vaxorin"
         window = Vaxorin:CreateWindow({
             Title = "Blox Fruits Auto Farm",
-            Subtitle = "Full Feature",
+            Subtitle = "by Fietewoozle",
             Logo = "rbxassetid://135320038058277",
-            Badges = {{Text = "Blox Fruits"}, {Text = "v1.0"}},
+            Badges = {{Text = "Vaxorin | v1.0"}, {Text = "Executor : " .. Executor}},
             Footer = {Username = LocalPlayer.Name, Status = "Ready"},
             DiscordLink = "https://discord.gg/example",
             ShowSearch = true,
