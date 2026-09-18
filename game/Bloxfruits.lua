@@ -141,11 +141,11 @@ end
 -- CONFIG (user settings)
 -- =============================================
 local config = {
-    flySpeed = 120,
+    flySpeed = 180,
     attackMode = "Melee",
     autoHeal = false,
     healThreshold = 30,
-    aboveHeight = 8,
+    aboveHeight = 15,
     attackRange = 30,
     attackSpeed = 0.002,
     bossAttackSpeed = 0.001,
@@ -154,12 +154,12 @@ local config = {
     clusterEnabled = true,
     clusterHeight = 12,
     maxClusterSize = 15,
-    clusterRange = 150, -- how far to pull mobs into cluster
+    clusterRange = 300, -- how far to pull mobs into cluster
     statEnabled = false,
     statsToAdd = {"Melee", "Defense"},
     pointsPerStat = 1,
     bossPriority = true,
-    autoEquip = false,
+    autoEquip = true,
     preferredWeapon = "Melee",
     questStack = false,
     stackCount = 3,
