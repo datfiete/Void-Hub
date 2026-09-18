@@ -2683,3 +2683,5 @@ end
 
 -- Keep script alive
 while task.wait(1) do end
+
+print("Test 1")
