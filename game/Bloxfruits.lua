@@ -2387,8 +2387,6 @@ if useVaxorin and window then
     local espTab = window:CreateTab("ESP")
     local MoneyTab = window:CreateTab("Auto Money")
     local combatTab = window:CreateTab("Combat")
-    local statsTab = window:CreateTab("Stats")
-    local equipTab = window:CreateTab("Equipment")
     local fruitTab = window:CreateTab("Fruits")
     local bossTab = window:CreateTab("Bosses")
 
@@ -2567,7 +2565,7 @@ if useVaxorin and window then
         Callback = function(v) config.healThreshold = v end,
     })
 
-    local statsSection = statsTab:CreateSection({Name = "Auto Stats"})
+    local statsSection = mainTab:CreateSection({Name = "Auto Stats"})
     statsSection:CreateToggle({
         Name = "Enable Auto Stats",
         CurrentValue = config.statEnabled,
@@ -2595,7 +2593,7 @@ if useVaxorin and window then
         end,
     })
 
-    local equipSection = equipTab:CreateSection({Name = "Auto Equip"})
+    local equipSection = mainTab:CreateSection({Name = "Auto Equip"})
     equipSection:CreateToggle({
         Name = "Auto Equip",
         CurrentValue = config.autoEquip,
