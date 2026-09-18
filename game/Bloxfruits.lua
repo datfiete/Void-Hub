@@ -443,7 +443,7 @@ local islands = {
         Quest = {"StartQuest","Area2Quest",1}, EnemyPatterns = {"Swan Pirate","Factory Staff"},
         BossQuest = {"StartQuest","Area2Quest",3}, BossPatterns = {"Jeremy"},
         isBoss = true},
-    {Name = "Smoke Admiral",      Min = 1150, Max = 1200, Pos = Vector3.new(-4857, 234, -5583),
+    {Name = "Smoke Admiral",      Min = 1150, Max = 1200, Pos = Vector3.new(-6342, 29, -5818),
         Quest = {"StartQuest","IceSideQuest",2}, EnemyPatterns = {"Horned Warrior"},
         BossQuest = {"StartQuest","IceSideQuest",3}, BossPatterns = {"Smoke Admiral"},
         isBoss = true},
