@@ -447,7 +447,7 @@ local islands = {
         Quest = {"StartQuest","IceSideQuest",2}, EnemyPatterns = {"Horned Warrior"},
         BossQuest = {"StartQuest","IceSideQuest",3}, BossPatterns = {"Smoke Admiral"},
         isBoss = true},
-    {Name = "Tide Keeper",        Min = 1475, Max = 1500, Pos = Vector3.new(-3760, 78, -11586),
+    {Name = "Tide Keeper",        Min = 1475, Max = 1500, Pos = Vector3.new(-3414, 239, -10335),
         Quest = {"StartQuest","ForgottenQuest",2}, EnemyPatterns = {"Water Fighter"},
         BossQuest = {"StartQuest","ForgottenQuest",3}, BossPatterns = {"Tide Keeper"},
         isBoss = true},
