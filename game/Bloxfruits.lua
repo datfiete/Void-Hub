@@ -2160,76 +2160,163 @@ local function startSeaProgress()
 
                 -- Sea2 Bartilo (only advance stages; never jump back)
                 if string.find(sea, "2") and sea2Stage ~= "done" then
-                    -- Bartilo flow (user):
-                    -- 1) StartQuest BartiloQuest 1 → kill Swan Pirates
-                    -- 2) When done: talk Bartilo, then JUST KILL Jeremy (no real "Jeremy quest")
-                    -- 3) Then kill Don Swan
+                    -- Full Sea2→3 path:
+                    -- Bartilo1 Swan → Jeremy → free prisoners/gladiators → Don Swan
+                    -- → King Red Head → rip_indra (to ~50%) → Mr Captain → Sea3
                     if level >= 850 then
                         if sea2Stage == "idle" then
                             if hasActiveQuest() and not activeQuestMatches("swan", "bartilo", "50", "pirate") then
-                                -- other farm quest active: don't steal it
+                                -- leave other quest alone
                             else
                                 if not activeQuestMatches("swan", "50") then
                                     _seaComm("StartQuest", "BartiloQuest", 1)
                                     task.wait(0.5)
                                 end
                                 sea2Stage = "swan"
-                                notifyUser("Sea", "Bartilo 1: Swan Pirates", 3)
+                                notifyUser("Sea", "Stage swan: Bartilo 1", 3)
                             end
                         elseif sea2Stage == "swan" then
                             if activeQuestMatches("swan", "50", "pirate") then
                                 _seaFly(Vector3.new(1019, 73, 1221))
                                 _seaKill("Swan Pirate", 40)
                             else
-                                -- Stage 1 done (quest gone / changed) → Jeremy next, no quest UI needed
-                                notifyUser("Sea", "Bartilo done → kill Jeremy", 3)
-                                _seaComm("StartQuest", "BartiloQuest", 2) -- talk / progress if remote exists
-                                task.wait(0.5)
+                                notifyUser("Sea", "Stage j: kill Jeremy", 3)
+                                _seaComm("StartQuest", "BartiloQuest", 2)
+                                task.wait(0.4)
                                 sea2Stage = "j"
                             end
                         elseif sea2Stage == "j" then
-                            notifyUser("Sea", "Stage: Jeremy (kill required)", 2)
+                            notifyUser("Sea", "Stage j: Jeremy must die", 2)
                             _seaFly(Vector3.new(2338, 451, 700))
                             local dead = _seaKill("Jeremy", 120)
                             if dead then
-                                notifyUser("Sea", "Jeremy KILLED → Don Swan", 3)
-                                sea2Stage = "don"
+                                notifyUser("Sea", "Jeremy dead → prisoners", 3)
+                                _seaComm("StartQuest", "BartiloQuest", 3)
+                                sea2Stage = "prisoners"
                             else
-                                -- not in server / not dead yet: keep stage j, retry next tick
                                 if not _seaFindAlive("Jeremy") then
-                                    notifyUser("Sea", "Jeremy not found (hop?) — retry", 2)
-                                else
-                                    notifyUser("Sea", "Jeremy still alive — retry", 2)
+                                    notifyUser("Sea", "Jeremy missing (server hop?)", 2)
                                 end
+                            end
+                        elseif sea2Stage == "prisoners" then
+                            -- Bartilo 3: free gladiators / open King Red Head cell (best-effort clicks)
+                            notifyUser("Sea", "Stage prisoners: Colosseum cell", 3)
+                            _seaFly(Vector3.new(-1836, 7, -2742))
+                            pcall(function()
+                                if fireclickdetector then
+                                    for _, d in ipairs(workspace:GetDescendants()) do
+                                        if d:IsA("ClickDetector") then
+                                            local p = d.Parent
+                                            if p and p:IsA("BasePart") then
+                                                local pos = p.Position
+                                                if (pos - Vector3.new(-1836, 7, -2742)).Magnitude < 150 then
+                                                    fireclickdetector(d)
+                                                    task.wait(0.05)
+                                                end
+                                            end
+                                        end
+                                    end
+                                end
+                            end)
+                            task.wait(2)
+                            -- progress even if puzzle not perfect (user can finish manually)
+                            if level >= 1000 then
+                                sea2Stage = "don"
+                                notifyUser("Sea", "Stage don: Don Swan", 3)
                             end
                         end
                     end
 
-                    -- Don Swan: only after Jeremy confirmed (stage don)
                     if sea2Stage == "don" then
-                        notifyUser("Sea", "Stage: Don Swan", 2)
+                        notifyUser("Sea", "Stage don: Don Swan (Trevor fruit may be manual)", 2)
                         _seaFly(Vector3.new(2289, 18, 663))
+                        -- try open door remotes
+                        _seaComm("TalkTrevor")
+                        _seaComm("Trevor")
                         local dead = _seaKill("Don Swan", 150)
                         if dead then
-                            notifyUser("Sea", "Don Swan KILLED → travel Sea3", 3)
-                            _seaComm("TravelZou")
-                            _seaComm("TravelToSea3")
-                            task.wait(2)
-                            if string.find(string.lower(tostring(workspace:GetAttribute("MAP") or "")), "3") then
-                                sea2Stage = "done"
-                                notifyUser("Sea", "Sea 3!", 4)
-                            end
+                            notifyUser("Sea", "Don Swan dead → King Red Head", 3)
+                            sea2Stage = "king"
                         else
                             if not _seaFindAlive("Don Swan") then
-                                notifyUser("Sea", "Don Swan not spawned — retry later", 2)
-                            else
-                                notifyUser("Sea", "Don Swan still alive — retry", 2)
+                                notifyUser("Sea", "Don Swan not in Enemies — need fruit door?", 2)
+                                -- still allow advance at 1500 if player already killed before
+                                if level >= 1500 then
+                                    sea2Stage = "king"
+                                end
                             end
                         end
-                    elseif level >= 1500 and sea2Stage == "wait" then
-                        sea2Stage = "don"
+                    elseif sea2Stage == "king" then
+                        -- King Red Head in Colosseum prison
+                        notifyUser("Sea", "Stage king: talk King Red Head", 3)
+                        _seaFly(Vector3.new(-1836, 7, -2742))
+                        _seaComm("KingRedHead")
+                        _seaComm("TalkKingRedHead")
+                        _seaComm("IndraRaid")
+                        _seaComm("StartQuest", "Indra", 1)
+                        -- try ProximityPrompt on nearby NPCs
+                        pcall(function()
+                            for _, d in ipairs(workspace:GetDescendants()) do
+                                if d:IsA("ProximityPrompt") then
+                                    local p = d.Parent
+                                    local pos = p and (p:IsA("BasePart") and p.Position or (p:IsA("Model") and p:GetPivot().Position))
+                                    if pos and (pos - Vector3.new(-1836, 7, -2742)).Magnitude < 80 then
+                                        if fireproximityprompt then
+                                            fireproximityprompt(d)
+                                        end
+                                    end
+                                end
+                            end
+                        end)
+                        task.wait(2)
+                        sea2Stage = "indra"
+                        notifyUser("Sea", "Stage indra: damage rip_indra", 3)
+                    elseif sea2Stage == "indra" then
+                        -- Fight rip_indra until ~50% or gone (cutscene)
+                        notifyUser("Sea", "Stage indra: attack rip_indra", 2)
+                        local indra = _seaFindAlive("indra") or _seaFindAlive("rip")
+                        if indra then
+                            local hum = indra:FindFirstChildOfClass("Humanoid")
+                            local root = indra:FindFirstChild("HumanoidRootPart")
+                            if root then
+                                pcall(function()
+                                    if not flying then enableFly() end
+                                    setFlyTarget(root.Position + Vector3.new(0, 12, 0), false)
+                                    attackEnemy(indra, config.bossAttackSpeed or 0.002, config.bossHitsPerCycle or 40)
+                                end)
+                            end
+                            if hum and hum.Health > 0 and hum.MaxHealth > 0 then
+                                local pct = hum.Health / hum.MaxHealth
+                                if pct <= 0.55 then
+                                    notifyUser("Sea", "Indra ~50% → cutscene / Mr Captain", 3)
+                                    sea2Stage = "captain"
+                                end
+                            end
+                        else
+                            -- may already be in cutscene / teleported back
+                            -- give kill attempt window then go captain
+                            local deadish = _seaKill("indra", 45)
+                            if deadish or not _seaFindAlive("indra") then
+                                sea2Stage = "captain"
+                                notifyUser("Sea", "Stage captain: Mr Captain → Sea3", 3)
+                            end
+                        end
+                    elseif sea2Stage == "captain" then
+                        notifyUser("Sea", "Stage captain: Green Zone Mr Captain", 3)
+                        _seaFly(Vector3.new(-3350, 73, -1010))
+                        _seaComm("TravelZou")
+                        _seaComm("TravelToSea3")
+                        _seaComm("MrCaptain")
+                        task.wait(2)
+                        local map2 = tostring(workspace:GetAttribute("MAP") or "")
+                        if string.find(string.lower(map2), "3") then
+                            sea2Stage = "done"
+                            notifyUser("Sea", "Sea 3 unlocked!", 4)
+                        else
+                            notifyUser("Sea", "Travel attempted — talk Mr Captain if still Sea2", 3)
+                        end
                     end
-                end
+
             end)
             if not ok then
                 warn("[BF] seaProgress:", err)
