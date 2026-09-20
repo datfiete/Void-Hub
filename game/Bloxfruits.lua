@@ -2401,7 +2401,7 @@ local RAID_TYPES = {
 }
 
 -- Lab / lobby approximate positions
-local RAID_LAB_SEA2 = Vector3.new(-6519, 308, -4654) -- chip insert / lab (user)
+local RAID_LAB_SEA2 = Vector3.new(-6520, 308, -4812) -- chip insert pad (user)
 local RAID_LAB_SEA3 = Vector3.new(-5550, 314, -2980) -- Castle on the Sea (approx)
 
 local function isInRaid()
@@ -2542,19 +2542,12 @@ local function goToRaidLobby()
 end
 
 local function tryStartRaid()
-    -- equip chip if present
+    -- NEVER equip the chip: button won't work while holding a tool
     pcall(function()
-        local bp = LocalPlayer:FindFirstChild("Backpack")
-        if bp then
-            for _, item in ipairs(bp:GetChildren()) do
-                if string.find(string.lower(item.Name), "microchip") then
-                    local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-                    if hum then hum:EquipTool(item) end
-                end
-            end
-        end
+        local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if hum then hum:UnequipTools() end
     end)
-    task.wait(0.3)
+    task.wait(0.25)
     -- press green start button / fire click detectors near lab
     pcall(function()
         if fireclickdetector then
@@ -2587,7 +2580,7 @@ local function tryStartRaid()
 end
 
 local raidStackPos = nil -- fixed hover point on current island (don't fly random)
-local raidHoverY = 80 -- height above enemies (kill aura style)
+local raidHoverY = 12 -- low hover so hits land (was 80 — too high)
 
 local function getRaidEnemies()
     local list = {}
