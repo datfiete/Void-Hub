@@ -2074,20 +2074,29 @@ local function _seaComm(...)
     end
 end
 
-local function _seaKill(nameSub, seconds)
-    local t0 = os.clock()
-    while os.clock() - t0 < (seconds or 60) and seaProgressRunning do
-        local en = workspace:FindFirstChild("Enemies")
-        local tgt = nil
-        if en then
-            for _, m in ipairs(en:GetChildren()) do
-                if string.find(string.lower(m.Name), string.lower(nameSub), 1, true) then
-                    local h = m:FindFirstChildOfClass("Humanoid")
-                    if h and h.Health > 0 then tgt = m break end
-                end
+-- returns true if we saw the target alive and then it died / despawned
+local function _seaFindAlive(nameSub)
+    local en = workspace:FindFirstChild("Enemies")
+    if not en then return nil end
+    for _, m in ipairs(en:GetChildren()) do
+        if string.find(string.lower(m.Name), string.lower(nameSub), 1, true) then
+            local h = m:FindFirstChildOfClass("Humanoid")
+            if h and h.Health > 0 then
+                return m
             end
         end
+    end
+    return nil
+end
+
+local function _seaKill(nameSub, seconds)
+    local t0 = os.clock()
+    local sawAlive = false
+    local confirmedDead = false
+    while os.clock() - t0 < (seconds or 60) and seaProgressRunning do
+        local tgt = _seaFindAlive(nameSub)
         if tgt then
+            sawAlive = true
             local root = tgt:FindFirstChild("HumanoidRootPart")
             if root then
                 pcall(function()
@@ -2096,9 +2105,18 @@ local function _seaKill(nameSub, seconds)
                     attackEnemy(tgt, config.bossAttackSpeed or 0.002, config.bossHitsPerCycle or 35)
                 end)
             end
+        elseif sawAlive then
+            -- was alive, now gone → killed
+            confirmedDead = true
+            break
         end
-        task.wait(0.15)
+        task.wait(0.12)
     end
+    -- final check
+    if sawAlive and not _seaFindAlive(nameSub) then
+        confirmedDead = true
+    end
+    return confirmedDead
 end
 
 local function startSeaProgress()
@@ -2111,6 +2129,10 @@ local function startSeaProgress()
                 local level = getPlayerLevel()
                 local map = tostring(workspace:GetAttribute("MAP") or "")
                 local sea = string.lower(map)
+                -- stage debug (throttled via notify helper)
+                if config.autoSeaProgress then
+                    notifyUser("Sea Stage", tostring(sea2Stage) .. " | map=" .. map .. " lv=" .. tostring(level), 2)
+                end
 
                 -- Sea1 -> 2
                 if level >= 700 and (sea == "" or sea == "sea1" or string.find(sea, "1")) and not string.find(sea, "2") and not string.find(sea, "3") and sea1Stage ~= "done" then
@@ -2166,31 +2188,46 @@ local function startSeaProgress()
                                 sea2Stage = "j"
                             end
                         elseif sea2Stage == "j" then
-                            -- Direct kill Jeremy, then Don Swan
-                            notifyUser("Sea", "Killing Jeremy...", 2)
+                            notifyUser("Sea", "Stage: Jeremy (kill required)", 2)
                             _seaFly(Vector3.new(2338, 451, 700))
-                            _seaKill("Jeremy", 100)
-                            -- always advance after kill window (no Jeremy quest text to wait on)
-                            notifyUser("Sea", "Jeremy done → Don Swan", 3)
-                            sea2Stage = "don"
+                            local dead = _seaKill("Jeremy", 120)
+                            if dead then
+                                notifyUser("Sea", "Jeremy KILLED → Don Swan", 3)
+                                sea2Stage = "don"
+                            else
+                                -- not in server / not dead yet: keep stage j, retry next tick
+                                if not _seaFindAlive("Jeremy") then
+                                    notifyUser("Sea", "Jeremy not found (hop?) — retry", 2)
+                                else
+                                    notifyUser("Sea", "Jeremy still alive — retry", 2)
+                                end
+                            end
                         end
                     end
 
-                    -- Don Swan whenever stage says so (and level high enough for sea3 path)
-                    if sea2Stage == "don" or (level >= 1500 and sea2Stage == "wait") then
-                        sea2Stage = "don"
-                        notifyUser("Sea", "Killing Don Swan...", 3)
+                    -- Don Swan: only after Jeremy confirmed (stage don)
+                    if sea2Stage == "don" then
+                        notifyUser("Sea", "Stage: Don Swan", 2)
                         _seaFly(Vector3.new(2289, 18, 663))
-                        _seaKill("Don Swan", 120)
-                        _seaComm("TravelZou")
-                        _seaComm("TravelToSea3")
-                        task.wait(2)
-                        if string.find(string.lower(tostring(workspace:GetAttribute("MAP") or "")), "3") then
-                            sea2Stage = "done"
-                            notifyUser("Sea", "Sea 3!", 4)
-                        elseif level < 1500 then
-                            sea2Stage = "wait"
+                        local dead = _seaKill("Don Swan", 150)
+                        if dead then
+                            notifyUser("Sea", "Don Swan KILLED → travel Sea3", 3)
+                            _seaComm("TravelZou")
+                            _seaComm("TravelToSea3")
+                            task.wait(2)
+                            if string.find(string.lower(tostring(workspace:GetAttribute("MAP") or "")), "3") then
+                                sea2Stage = "done"
+                                notifyUser("Sea", "Sea 3!", 4)
+                            end
+                        else
+                            if not _seaFindAlive("Don Swan") then
+                                notifyUser("Sea", "Don Swan not spawned — retry later", 2)
+                            else
+                                notifyUser("Sea", "Don Swan still alive — retry", 2)
+                            end
                         end
+                    elseif level >= 1500 and sea2Stage == "wait" then
+                        sea2Stage = "don"
                     end
                 end
             end)
