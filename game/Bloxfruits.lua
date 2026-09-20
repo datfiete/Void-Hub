@@ -2404,321 +2404,146 @@ local RAID_TYPES = {
 local RAID_LAB_SEA2 = Vector3.new(-6520, 308, -4812) -- chip insert pad (user)
 local RAID_LAB_SEA3 = Vector3.new(-5550, 314, -2980) -- Castle on the Sea (approx)
 
+-- In-raid: Main.Timer visible (hub standard) OR Island 1..5 in Locations
+local function getRaidLocations()
+    local wo = workspace:FindFirstChild("_WorldOrigin")
+    return wo and wo:FindFirstChild("Locations")
+end
+
 local function isInRaid()
-    -- STRICT: only true when RaidTimer is visible with a real countdown
-    -- (old check matched normal HUD timers → always "in raid")
     local ok, result = pcall(function()
         local pg = LocalPlayer:FindFirstChild("PlayerGui")
-        if not pg then return false end
-        local main = pg:FindFirstChild("Main")
-        if not main then return false end
-
-        local function timerLooksActive(obj)
-            if not obj then return false end
-            -- must be visible up the chain
-            local n = obj
-            while n and n ~= main do
-                if n:IsA("GuiObject") and n.Visible == false then
-                    return false
-                end
-                n = n.Parent
+        local main = pg and pg:FindFirstChild("Main")
+        if main then
+            local timer = main:FindFirstChild("Timer")
+            if timer and timer:IsA("GuiObject") and timer.Visible then
+                return true
             end
-            if obj:IsA("TextLabel") or obj:IsA("TextButton") then
-                local t = tostring(obj.Text or "")
-                -- real raid timers look like 12:34 or 0:45
-                if string.find(t, "%d+:%d+") then
-                    return true
-                end
-                if string.find(string.lower(t), "island") then
+        end
+        local locs = getRaidLocations()
+        if locs then
+            for i = 1, 5 do
+                if locs:FindFirstChild("Island " .. i) then
                     return true
                 end
             end
-            return false
         end
-
-        local raidTimer = main:FindFirstChild("RaidTimer", true)
-        if raidTimer then
-            if timerLooksActive(raidTimer) then return true end
-            -- child text labels
-            for _, d in ipairs(raidTimer:GetDescendants()) do
-                if timerLooksActive(d) then return true end
-            end
-            -- visible GuiObject named RaidTimer with no text still counts if Visible
-            if raidTimer:IsA("GuiObject") and raidTimer.Visible then
-                -- only if parent TopHUDList also visible
-                local p = raidTimer.Parent
-                if p and p:IsA("GuiObject") and p.Visible then
-                    -- require at least some numeric text somewhere under it
-                    local hasNum = false
-                    for _, d in ipairs(raidTimer:GetDescendants()) do
-                        if (d:IsA("TextLabel") or d:IsA("TextButton")) and string.find(tostring(d.Text or ""), "%d") then
-                            hasNum = true
-                            break
-                        end
-                    end
-                    if hasNum then return true end
-                end
-            end
-        end
-
-        -- Fallback: folder of raid islands only exists mid-raid in some versions
-        local islands = workspace:FindFirstChild("RaidIslands")
-            or workspace:FindFirstChild("Raids")
-            or (workspace:FindFirstChild("_WorldOrigin") and workspace._WorldOrigin:FindFirstChild("RaidIslands"))
-        if islands and #islands:GetChildren() > 0 then
-            return true
-        end
-
         return false
     end)
     return ok and result == true
 end
 
-local function hasMicrochip()
-    local function check(container)
-        if not container then return false end
-        for _, item in ipairs(container:GetChildren()) do
-            local n = string.lower(item.Name)
-            if string.find(n, "microchip") or string.find(n, "special microchip") then
-                return true
-            end
-        end
-        return false
-    end
-    return check(LocalPlayer:FindFirstChild("Backpack"))
-        or check(LocalPlayer.Character)
-end
-
-local function selectRaidType(name)
-    name = name or config.raidType or "Flame"
-    local remote = ReplicatedStorage:FindFirstChild("Remotes")
-    local comm = remote and remote:FindFirstChild("CommF_")
-    if not comm then return false end
-    local ok = pcall(function()
-        comm:InvokeServer("RaidsNpc", "Select", name)
-    end)
-    return ok
-end
-
-local function buyRaidChip()
-    if hasMicrochip() then return true end
-    if not config.raidAutoBuyChip then return false end
-    if os.clock() - lastRaidChipAt < 5 then return hasMicrochip() end
-    lastRaidChipAt = os.clock()
-    selectRaidType(config.raidType)
-    task.wait(0.3)
-    -- try common buy patterns
-    local remote = ReplicatedStorage:FindFirstChild("Remotes")
-    local comm = remote and remote:FindFirstChild("CommF_")
-    if not comm then return false end
-    pcall(function()
-        comm:InvokeServer("RaidsNpc", "Select", config.raidType or "Flame")
-    end)
-    task.wait(0.2)
-    -- some versions use BuyMicrochip / BlackbeardReward style
-    pcall(function()
-        comm:InvokeServer("BlackbeardReward", "Microchip", "1")
-    end)
-    pcall(function()
-        comm:InvokeServer("RaidsNpc", "Check")
-    end)
-    task.wait(0.5)
-    return hasMicrochip()
-end
-
-local function goToRaidLobby()
-    local map = tostring(workspace:GetAttribute("MAP") or "")
-    local sea = string.lower(map)
-    local pos = RAID_LAB_SEA2
-    if string.find(sea, "3") then
-        pos = RAID_LAB_SEA3
-    end
-    pcall(function()
-        if not flying then enableFly() end
-        -- exact chip-insert pad
-        setFlyTarget(pos + Vector3.new(0, 3, 0), false)
-    end)
-    task.wait(2.5)
-end
-
-local function tryStartRaid()
-    -- NEVER equip the chip: button won't work while holding a tool
-    pcall(function()
-        local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-        if hum then hum:UnequipTools() end
-    end)
-    task.wait(0.25)
-    -- press green start button / fire click detectors near lab
-    pcall(function()
-        if fireclickdetector then
-            for _, d in ipairs(workspace:GetDescendants()) do
-                if d:IsA("ClickDetector") then
-                    local p = d.Parent
-                    if p and p:IsA("BasePart") then
-                        local n = string.lower(p.Name)
-                        if string.find(n, "button") or string.find(n, "start") or string.find(n, "raid") then
-                            fireclickdetector(d)
-                        end
-                    end
+-- Highest existing Island N (other hubs: fly to furthest spawned island)
+local function getActiveRaidIsland()
+    local locs = getRaidLocations()
+    if not locs then return nil, 0, nil end
+    for i = 5, 1, -1 do
+        local island = locs:FindFirstChild("Island " .. i)
+        if island then
+            local cf = nil
+            pcall(function()
+                if island:IsA("BasePart") then
+                    cf = island.CFrame
+                elseif island:IsA("Model") then
+                    cf = island:GetPivot()
+                else
+                    local p = island:FindFirstChildWhichIsA("BasePart", true)
+                    if p then cf = p.CFrame end
                 end
+            end)
+            if cf then
+                return island, i, cf
             end
         end
-    end)
-    -- proximity prompts
-    pcall(function()
-        if fireproximityprompt then
-            for _, d in ipairs(workspace:GetDescendants()) do
-                if d:IsA("ProximityPrompt") then
-                    local txt = string.lower(tostring(d.ActionText or "") .. tostring(d.ObjectText or ""))
-                    if string.find(txt, "raid") or string.find(txt, "start") or string.find(txt, "enter") then
-                        fireproximityprompt(d)
-                    end
-                end
-            end
-        end
-    end)
+    end
+    return nil, 0, nil
 end
 
-local raidStackPos = nil -- locked island center (XZ), only set once per island
-local raidHoverY = 25
-local raidOrbitAngle = 0
-local raidOrbitRadius = 18 -- small circle = dodge while aura hits
-local raidEmptySince = nil -- when island went empty
-local raidIslandLocked = false
-
-local function getRaidEnemies()
+local function getRaidEnemiesNear(pos, radius)
     local list = {}
     local en = workspace:FindFirstChild("Enemies")
     if not en then return list end
+    radius = radius or 200
     for _, m in ipairs(en:GetChildren()) do
         local h = m:FindFirstChildOfClass("Humanoid")
         local r = m:FindFirstChild("HumanoidRootPart")
         if h and r and h.Health > 0 then
-            table.insert(list, m)
+            if not pos or (r.Position - pos).Magnitude <= radius then
+                table.insert(list, m)
+            end
         end
     end
     return list
 end
 
-local function getEnemyCentroidNear(enemies, nearPos, maxDist)
-    local sum = Vector3.zero
-    local n = 0
-    for _, m in ipairs(enemies) do
-        local r = m:FindFirstChild("HumanoidRootPart")
-        if r then
-            if not nearPos or (r.Position - nearPos).Magnitude <= maxDist then
-                sum = sum + r.Position
-                n = n + 1
-            end
-        end
-    end
-    if n == 0 then return nil, 0 end
-    return sum / n, n
-end
+local raidOrbitAngle = 0
+local raidHoverY = 25
+local raidOrbitRadius = 16
+local currentRaidIslandIndex = 0
 
--- Orbit around island center (dodge) + hard stop when close
-local function raidOrbitFly()
-    if not raidStackPos then return end
-    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
-
+local function raidFlyToIslandCF(cf)
+    if not cf then return end
+    local hover = cf.Position + Vector3.new(0, raidHoverY, 0)
     pcall(function()
         if not flying then enableFly() end
-
-        -- advance orbit angle slowly
-        raidOrbitAngle = raidOrbitAngle + 0.045
+        raidOrbitAngle = raidOrbitAngle + 0.05
         local ox = math.cos(raidOrbitAngle) * raidOrbitRadius
         local oz = math.sin(raidOrbitAngle) * raidOrbitRadius
-        local hover = Vector3.new(raidStackPos.X + ox, raidStackPos.Y + raidHoverY, raidStackPos.Z + oz)
-
-        setFlyTarget(hover, false)
-
-        -- hard brake if we overshot badly (the "doesn't stop / flies off" bug)
-        local flat = Vector3.new(hrp.Position.X - hover.X, 0, hrp.Position.Z - hover.Z)
-        if flat.Magnitude < 6 then
-            -- damp velocity so we don't keep sliding past
-            local v = hrp.AssemblyLinearVelocity
-            hrp.AssemblyLinearVelocity = Vector3.new(v.X * 0.3, v.Y * 0.5, v.Z * 0.3)
-        elseif flat.Magnitude > 100 then
-            -- emergency: snap target, kill horizontal speed
-            hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-            setFlyTarget(hover, false)
+        local target = Vector3.new(hover.X + ox, hover.Y, hover.Z + oz)
+        setFlyTarget(target, false)
+        local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            local flat = Vector3.new(hrp.Position.X - target.X, 0, hrp.Position.Z - target.Z)
+            if flat.Magnitude < 8 then
+                local v = hrp.AssemblyLinearVelocity
+                hrp.AssemblyLinearVelocity = Vector3.new(v.X * 0.25, v.Y * 0.4, v.Z * 0.25)
+            elseif flat.Magnitude > 120 then
+                hrp.AssemblyLinearVelocity = Vector3.zero
+                setFlyTarget(target, false)
+            end
         end
     end)
 end
 
 local function raidKillLoop()
-    local enemies = getRaidEnemies()
-    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if not hrp then return #enemies > 0 end
-
-    ensureSimRadius()
-
-    if #enemies == 0 then
-        -- cleared: keep orbiting same island (wait for next island spawn)
-        if not raidEmptySince then
-            raidEmptySince = os.clock()
-        end
-        raidOrbitFly()
-        -- after 3s empty, unlock so NEXT island can set a new stack
-        if os.clock() - raidEmptySince > 3 then
-            raidIslandLocked = false
-            -- keep raidStackPos until new enemies appear (don't fly to 0,0,0)
-        end
+    local island, idx, cf = getActiveRaidIsland()
+    if not island or not cf then
+        -- islands not ready: HOLD still (no fly-away at raid start)
+        pcall(function()
+            local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                if not flying then enableFly() end
+                setFlyTarget(hrp.Position, false)
+                hrp.AssemblyLinearVelocity = Vector3.zero
+            end
+        end)
         return false
     end
 
-    raidEmptySince = nil
-
-    -- Lock island ONCE from nearby enemies (prefer near player / existing stack)
-    if not raidIslandLocked then
-        local ref = raidStackPos or hrp.Position
-        local center, n = getEnemyCentroidNear(enemies, ref, 250)
-        if not center then
-            center, n = getEnemyCentroidNear(enemies, nil, 1e9)
-        end
-        if center and n > 0 then
-            raidStackPos = Vector3.new(center.X, center.Y, center.Z)
-            raidIslandLocked = true
-            raidOrbitAngle = 0
-            notifyUser("Raid", "Island lock @ " .. math.floor(center.X) .. "," .. math.floor(center.Z), 2)
-        end
+    if idx ~= currentRaidIslandIndex then
+        currentRaidIslandIndex = idx
+        notifyUser("Raid", "Going to Island " .. idx, 2)
     end
 
-    -- NEVER re-lock from far enemies (that was the 90° wrong-direction fly-away)
-    raidOrbitFly()
+    -- fly to Locations Island N (hub method), not enemy centroid
+    raidFlyToIslandCF(cf)
 
-    -- Aura: only enemies near THIS island (not other islands)
-    local aura = {}
-    local base = raidStackPos or hrp.Position
-    for _, m in ipairs(enemies) do
-        local r = m:FindFirstChild("HumanoidRootPart")
-        if r and (r.Position - base).Magnitude < 160 then
-            table.insert(aura, m)
-        end
-    end
+    ensureSimRadius()
+    local pos = cf.Position
+    local aura = getRaidEnemiesNear(pos, 220)
     if #aura == 0 then
-        -- all enemies far = next island already? unlock for next lock
-        local center, n = getEnemyCentroidNear(enemies, nil, 1e9)
-        if center and n > 0 and raidStackPos and (center - raidStackPos).Magnitude > 200 then
-            raidIslandLocked = false
-            raidStackPos = Vector3.new(center.X, center.Y, center.Z)
-            raidIslandLocked = true
-            notifyUser("Raid", "Next island @ " .. math.floor(center.X) .. "," .. math.floor(center.Z), 2)
-        end
-        return true
+        return false
     end
 
-    -- soft pull into stack ring (helps multi-hit)
     pcall(function()
         for i, m in ipairs(aura) do
             if i > 14 then break end
             local r = m:FindFirstChild("HumanoidRootPart")
-            if r and raidStackPos then
-                local d = (r.Position - raidStackPos).Magnitude
-                if d > 20 and d < 140 then
+            if r then
+                local d = (r.Position - pos).Magnitude
+                if d > 25 and d < 180 then
                     local ang = (i - 1) * 0.55
-                    r.CFrame = CFrame.new(raidStackPos + Vector3.new(math.cos(ang) * 5, 0, math.sin(ang) * 5))
+                    r.CFrame = CFrame.new(pos + Vector3.new(math.cos(ang) * 6, 2, math.sin(ang) * 6))
                 end
             end
         end
@@ -2749,9 +2574,7 @@ local function startAutoRaid()
                 end
 
                 -- definitely outside raid
-                raidStackPos = nil
-                raidIslandLocked = false
-                raidEmptySince = nil
+                currentRaidIslandIndex = 0
                 notifyUser("Raid", "Outside raid → lobby / chip", 2)
 
                 -- Outside raid: buy chip + go lobby + start
