@@ -2152,25 +2152,65 @@ local function startSeaProgress()
                                 sea2Stage = "swan"
                             end
                         elseif sea2Stage == "swan" then
+                            -- Still on stage-1 UI?
                             if activeQuestMatches("jeremy") then
                                 sea2Stage = "j"
-                            else
-                                -- farm swan only; do NOT start other bartilo stages
+                                notifyUser("Sea", "Bartilo → Jeremy", 3)
+                            elseif activeQuestMatches("gladiator", "imprisoned", "free the") then
+                                sea2Stage = "g"
+                            elseif activeQuestMatches("swan", "50", "bartilo") then
+                                -- quest still stage 1: farm
                                 _seaFly(Vector3.new(1019, 73, 1221))
-                                _seaKill("Swan Pirate", 45)
+                                _seaKill("Swan Pirate", 40)
+                            else
+                                -- Quest cleared / changed: request stage 2 once
+                                notifyUser("Sea", "Swan done → accept Bartilo 2", 3)
+                                _seaComm("StartQuest", "BartiloQuest", 2)
+                                task.wait(1)
+                                if activeQuestMatches("jeremy") or not activeQuestMatches("swan", "50") then
+                                    sea2Stage = "j"
+                                end
+                                -- if still nothing, try talking progression again next tick
                             end
                         elseif sea2Stage == "j" then
-                            if activeQuestMatches("gladiator", "free") then
+                            if activeQuestMatches("gladiator", "free", "imprisoned") then
                                 sea2Stage = "g"
+                                notifyUser("Sea", "Bartilo → Colosseum", 3)
+                            elseif activeQuestMatches("jeremy") or activeQuestMatches("spring") then
+                                _seaFly(Vector3.new(2338, 451, 700))
+                                _seaKill("Jeremy", 80)
                             else
-                                if not activeQuestMatches("jeremy") and not hasActiveQuest() then
+                                -- no jeremy quest text: accept stage 2, then kill
+                                if not hasActiveQuest() or activeQuestMatches("swan") then
                                     _seaComm("StartQuest", "BartiloQuest", 2)
+                                    task.wait(0.8)
                                 end
                                 _seaFly(Vector3.new(2338, 451, 700))
-                                _seaKill("Jeremy", 90)
+                                _seaKill("Jeremy", 80)
+                                -- after kill attempt, move on if quest gone
+                                if not activeQuestMatches("jeremy") then
+                                    _seaComm("StartQuest", "BartiloQuest", 3)
+                                    sea2Stage = "g"
+                                end
                             end
                         elseif sea2Stage == "g" then
+                            if not hasActiveQuest() or activeQuestMatches("gladiator", "free", "colosseum") then
+                                _seaComm("StartQuest", "BartiloQuest", 3)
+                            end
                             _seaFly(Vector3.new(-1836, 7, -2742))
+                            pcall(function()
+                                if fireclickdetector then
+                                    for _, d in ipairs(workspace:GetDescendants()) do
+                                        if d:IsA("ClickDetector") then
+                                            local p = d.Parent
+                                            if p and p:IsA("BasePart") and (p.Position - Vector3.new(-1836, 7, -2742)).Magnitude < 120 then
+                                                fireclickdetector(d)
+                                            end
+                                        end
+                                    end
+                                end
+                            end)
+                            task.wait(2)
                             if level >= 1500 then sea2Stage = "don" else sea2Stage = "wait" end
                         end
                     end
