@@ -165,6 +165,7 @@ local config = {
     stackCount = 3,
     fruitNotifier = true,        -- fruit notifier toggle
     fruitAutoCollect = false,
+    autoSeaProgress = true,
     bossTimersEnabled = true,    -- show boss respawn board
     bossSpawnNotify = true,      -- notify when a boss becomes SPAWNED
 }
@@ -694,6 +695,10 @@ local function stackQuest(questArgs, count)
 end
 
 local function acceptQuestWrapper(questArgs)
+    if questArgs and questArgs[2] and activeQuestMatches and activeQuestMatches(tostring(questArgs[2])) then
+        return true
+    end
+
     if config.questStack and questArgs then
         return stackQuest(questArgs, config.stackCount)
     else
@@ -864,14 +869,68 @@ local function getIslandForLevel(level)
     return selectedList[1]
 end
 
-local function hasActiveQuest()
+-- Returns: active(bool), title(string), body(string)
+-- Used by farm (don't re-accept if already on this quest) and sea progress (Bartilo stages)
+local function getActiveQuestInfo()
     local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
-    if not playerGui then return false end
+    if not playerGui then
+        return false, "", ""
+    end
     local main = playerGui:FindFirstChild("Main")
-    if not main then return false end
+    if not main then
+        return false, "", ""
+    end
     local quest = main:FindFirstChild("Quest")
-    if not quest then return false end
-    return quest.Visible == true
+    if not quest or quest.Visible ~= true then
+        return false, "", ""
+    end
+    local title, body = "", ""
+    pcall(function()
+        local t = quest:FindFirstChild("Title") or quest:FindFirstChild("QuestTitle")
+        if t and t:IsA("TextLabel") then
+            title = t.Text or ""
+        end
+        local b = quest:FindFirstChild("Description")
+            or quest:FindFirstChild("Desc")
+            or quest:FindFirstChild("Content")
+            or quest:FindFirstChild("Level")
+        if b and (b:IsA("TextLabel") or b:IsA("TextButton")) then
+            body = b.Text or ""
+        end
+        -- fallback: concatenate visible text labels under Quest
+        if title == "" and body == "" then
+            local parts = {}
+            for _, d in ipairs(quest:GetDescendants()) do
+                if d:IsA("TextLabel") and d.Visible and d.Text and #d.Text > 0 then
+                    table.insert(parts, d.Text)
+                end
+            end
+            body = table.concat(parts, " | ")
+            title = parts[1] or ""
+        end
+    end)
+    return true, tostring(title), tostring(body)
+end
+
+local function hasActiveQuest()
+    local active = getActiveQuestInfo()
+    return active == true
+end
+
+-- true if active quest text mentions any of the needles (case-insensitive)
+local function activeQuestMatches(...)
+    local active, title, body = getActiveQuestInfo()
+    if not active then
+        return false
+    end
+    local hay = string.lower(title .. " " .. body)
+    for i = 1, select("#", ...) do
+        local needle = string.lower(tostring(select(i, ...)))
+        if needle ~= "" and string.find(hay, needle, 1, true) then
+            return true
+        end
+    end
+    return false
 end
 
 -- =============================================
@@ -2009,6 +2068,367 @@ local function startBossTimers()
 end
 
 -- =============================================
+-- AUTO SEA PROGRESS (1→2 / 2→3) — stage machine, no quest spam
+-- =============================================
+local seaProgressRunning = false
+local seaProgressTask = nil
+-- persistent stages so we never restart Bartilo 1 every tick
+-- sea1: idle | detective | ice | detective2 | captain | done
+-- sea2: idle | bartilo1 | bartilo2 | bartilo3 | donswan | captain3 | done | wait_level
+local sea1Stage = "idle"
+local sea2Stage = "idle"
+local lastSeaActionAt = 0
+
+local SEA_POS = {
+    Prison = Vector3.new(4850, 20, 750),
+    IceAdmiral = Vector3.new(-1166, 13, -2447),
+    MiddleTownCaptain = Vector3.new(-285, 9, 5360),
+    SwanPirates = Vector3.new(1019, 73, 1221),
+    Jeremy = Vector3.new(2338, 451, 700),
+    DonSwan = Vector3.new(2289, 18, 663),
+    ColosseumJail = Vector3.new(-1836, 7, -2742),
+    GreenZoneDock = Vector3.new(-3350, 73, -1010),
+}
+
+local function getCommF()
+    local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+    return remotes and remotes:FindFirstChild("CommF_")
+end
+
+local function invokComm(...)
+    local f = getCommF()
+    if not f then return false end
+    local ok = pcall(function()
+        f:InvokeServer(...)
+    end)
+    return ok
+end
+
+local function flyToPos(pos, waitSec)
+    if not pos then return end
+    if not flying then pcall(enableFly) end
+    if _bossFlyUnlock ~= nil then _bossFlyUnlock = true end
+    setFlyTarget(pos + Vector3.new(0, 8, 0), false)
+    if _bossFlyUnlock ~= nil then _bossFlyUnlock = false end
+    task.wait(waitSec or 3)
+end
+
+local function killBossNamed(patterns, timeoutSec)
+    local deadline = os.clock() + (timeoutSec or 90)
+    while os.clock() < deadline and seaProgressRunning do
+        if bossHuntOwnsFly and type(bossHuntOwnsFly) == "function" and bossHuntOwnsFly() then
+            task.wait(0.5)
+        else
+            local enemies = workspace:FindFirstChild("Enemies")
+            local target = nil
+            if enemies then
+                for _, m in ipairs(enemies:GetChildren()) do
+                    for _, p in ipairs(patterns) do
+                        if string.find(string.lower(m.Name), string.lower(p), 1, true) then
+                            local hum = m:FindFirstChildOfClass("Humanoid")
+                            local root = m:FindFirstChild("HumanoidRootPart")
+                            if hum and hum.Health > 0 and root then
+                                target = m
+                                break
+                            end
+                        end
+                    end
+                    if target then break end
+                end
+            end
+            if target then
+                local root = target:FindFirstChild("HumanoidRootPart")
+                if root then
+                    if not flying then pcall(enableFly) end
+                    if _bossFlyUnlock ~= nil then _bossFlyUnlock = true end
+                    setFlyTarget(root.Position + Vector3.new(0, 10, 0), false)
+                    if _bossFlyUnlock ~= nil then _bossFlyUnlock = false end
+                    pcall(function()
+                        attackEnemy(target, config.bossAttackSpeed or 0.002, config.bossHitsPerCycle or 40)
+                    end)
+                end
+            end
+            task.wait(0.1)
+        end
+    end
+end
+
+local function farmPatternsFor(patterns, seconds)
+    local deadline = os.clock() + (seconds or 60)
+    while os.clock() < deadline and seaProgressRunning do
+        -- stay on same stage; do not accept other quests
+        if not activeQuestMatches("swan", "bartilo", "colosseum", "pirate") then
+            -- quest might have completed early
+            break
+        end
+        local enemies = workspace:FindFirstChild("Enemies")
+        local target = nil
+        if enemies then
+            for _, m in ipairs(enemies:GetChildren()) do
+                for _, p in ipairs(patterns) do
+                    if string.find(string.lower(m.Name), string.lower(p), 1, true) then
+                        local hum = m:FindFirstChildOfClass("Humanoid")
+                        if hum and hum.Health > 0 then
+                            target = m
+                            break
+                        end
+                    end
+                end
+                if target then break end
+            end
+        end
+        if target then
+            local root = target:FindFirstChild("HumanoidRootPart")
+            if root then
+                if not flying then pcall(enableFly) end
+                if _bossFlyUnlock ~= nil then _bossFlyUnlock = true end
+                setFlyTarget(root.Position + Vector3.new(0, 8, 0), false)
+                if _bossFlyUnlock ~= nil then _bossFlyUnlock = false end
+                pcall(function()
+                    attackEnemy(target, config.attackSpeed or 0.003, config.hitsPerCycle or 25)
+                end)
+            end
+        end
+        task.wait(0.12)
+    end
+end
+
+local function ensureBartiloStage1()
+    -- Only accept stage 1 if NO active quest, or already on stage 1
+    if activeQuestMatches("jeremy") then
+        return "stage2"
+    end
+    if activeQuestMatches("gladiator", "prisoner", "free the", "colosseum") then
+        return "stage3"
+    end
+    if activeQuestMatches("swan", "50") then
+        return "stage1"
+    end
+    if hasActiveQuest() then
+        -- unknown active quest: don't overwrite
+        return "busy"
+    end
+    invokComm("StartQuest", "BartiloQuest", 1)
+    task.wait(0.5)
+    if activeQuestMatches("swan", "bartilo", "50") then
+        return "stage1"
+    end
+    return "stage1" -- try farm anyway
+end
+
+local function stepSea1()
+    local map = tostring(workspace:GetAttribute("MAP") or "")
+    if map == "Sea2" or string.find(string.lower(map), "2") then
+        sea1Stage = "done"
+        return
+    end
+    local level = getPlayerLevel()
+    if level < 700 then
+        return
+    end
+
+    if sea1Stage == "idle" or sea1Stage == "detective" then
+        sea1Stage = "detective"
+        notifyUser("Sea Progress", "Sea1→2: Detective", 3)
+        flyToPos(SEA_POS.Prison, 3)
+        invokComm("TalkDetective")
+        invokComm("Detective")
+        sea1Stage = "ice"
+    elseif sea1Stage == "ice" then
+        notifyUser("Sea Progress", "Kill Ice Admiral", 3)
+        flyToPos(SEA_POS.IceAdmiral, 4)
+        killBossNamed({"Ice Admiral"}, 100)
+        sea1Stage = "detective2"
+    elseif sea1Stage == "detective2" then
+        flyToPos(SEA_POS.Prison, 3)
+        invokComm("TalkDetective")
+        sea1Stage = "captain"
+    elseif sea1Stage == "captain" then
+        notifyUser("Sea Progress", "Experienced Captain → Sea2", 3)
+        flyToPos(SEA_POS.MiddleTownCaptain, 4)
+        invokComm("TravelDressrosa")
+        invokComm("TravelToSea2")
+        invokComm("TravelMain")
+        task.wait(2)
+        map = tostring(workspace:GetAttribute("MAP") or "")
+        if map == "Sea2" or string.find(string.lower(map), "2") then
+            sea1Stage = "done"
+            notifyUser("Sea Progress", "Sea 2 reached!", 4)
+        end
+    end
+end
+
+local function stepSea2()
+    local map = tostring(workspace:GetAttribute("MAP") or "")
+    if map == "Sea3" or string.find(string.lower(map), "3") then
+        sea2Stage = "done"
+        return
+    end
+    local level = getPlayerLevel()
+
+    -- Detect stage from live quest GUI (never skip backwards)
+    if activeQuestMatches("jeremy") then
+        if sea2Stage == "idle" or sea2Stage == "bartilo1" then
+            sea2Stage = "bartilo2"
+        end
+    elseif activeQuestMatches("gladiator", "free the", "imprisoned") then
+        if sea2Stage ~= "donswan" and sea2Stage ~= "captain3" and sea2Stage ~= "done" then
+            sea2Stage = "bartilo3"
+        end
+    elseif activeQuestMatches("swan") and (sea2Stage == "idle" or sea2Stage == "bartilo1") then
+        sea2Stage = "bartilo1"
+    end
+
+    if level >= 850 then
+        if sea2Stage == "idle" then
+            local st = ensureBartiloStage1()
+            if st == "busy" then
+                return -- don't steal farm quest
+            elseif st == "stage2" then
+                sea2Stage = "bartilo2"
+            elseif st == "stage3" then
+                sea2Stage = "bartilo3"
+            else
+                sea2Stage = "bartilo1"
+            end
+        end
+
+        if sea2Stage == "bartilo1" then
+            -- Do NOT re-accept stage 2/3 here
+            if not activeQuestMatches("swan", "bartilo", "50") and not hasActiveQuest() then
+                invokComm("StartQuest", "BartiloQuest", 1)
+                task.wait(0.4)
+            end
+            if activeQuestMatches("jeremy") then
+                sea2Stage = "bartilo2"
+            else
+                notifyUser("Sea Progress", "Bartilo 1: Swan Pirates (stay on this quest)", 2)
+                flyToPos(SEA_POS.SwanPirates, 3)
+                farmPatternsFor({"Swan Pirate"}, 70)
+                -- only advance if quest GUI no longer asks for swan / asks for jeremy
+                if activeQuestMatches("jeremy") or not activeQuestMatches("swan", "50") then
+                    if not hasActiveQuest() or activeQuestMatches("jeremy") then
+                        sea2Stage = "bartilo2"
+                    end
+                end
+            end
+        elseif sea2Stage == "bartilo2" then
+            if not activeQuestMatches("jeremy") and not hasActiveQuest() then
+                invokComm("StartQuest", "BartiloQuest", 2)
+                task.wait(0.4)
+            end
+            if activeQuestMatches("gladiator", "free") then
+                sea2Stage = "bartilo3"
+            else
+                notifyUser("Sea Progress", "Bartilo 2: Jeremy", 2)
+                flyToPos(SEA_POS.Jeremy, 4)
+                killBossNamed({"Jeremy"}, 100)
+                if not activeQuestMatches("jeremy") then
+                    sea2Stage = "bartilo3"
+                end
+            end
+        elseif sea2Stage == "bartilo3" then
+            if not hasActiveQuest() then
+                invokComm("StartQuest", "BartiloQuest", 3)
+            end
+            notifyUser("Sea Progress", "Bartilo 3: Colosseum (best effort)", 2)
+            flyToPos(SEA_POS.ColosseumJail, 3)
+            pcall(function()
+                if fireclickdetector then
+                    for _, d in ipairs(workspace:GetDescendants()) do
+                        if d:IsA("ClickDetector") then
+                            local p = d.Parent
+                            if p and p:IsA("BasePart") and (p.Position - SEA_POS.ColosseumJail).Magnitude < 100 then
+                                fireclickdetector(d)
+                            end
+                        end
+                    end
+                end
+            end)
+            task.wait(2)
+            if level >= 1500 then
+                sea2Stage = "donswan"
+            else
+                sea2Stage = "wait_level"
+            end
+        end
+    end
+
+    if level < 1500 then
+        if sea2Stage ~= "wait_level" and sea2Stage ~= "bartilo1" and sea2Stage ~= "bartilo2" and sea2Stage ~= "bartilo3" and sea2Stage ~= "idle" then
+            sea2Stage = "wait_level"
+        end
+        return
+    end
+
+    if sea2Stage == "wait_level" or sea2Stage == "bartilo3" or sea2Stage == "donswan" then
+        sea2Stage = "donswan"
+        notifyUser("Sea Progress", "Trying Don Swan", 3)
+        flyToPos(SEA_POS.DonSwan, 4)
+        killBossNamed({"Don Swan"}, 120)
+        sea2Stage = "captain3"
+    end
+
+    if sea2Stage == "captain3" then
+        flyToPos(SEA_POS.GreenZoneDock, 4)
+        invokComm("TravelZou")
+        invokComm("TravelToSea3")
+        task.wait(2)
+        map = tostring(workspace:GetAttribute("MAP") or "")
+        if map == "Sea3" or string.find(string.lower(map), "3") then
+            sea2Stage = "done"
+            notifyUser("Sea Progress", "Sea 3 reached!", 4)
+        end
+    end
+end
+
+local function seaProgressTick()
+    if not config.autoSeaProgress then
+        return
+    end
+    if bossHuntOwnsFly and type(bossHuntOwnsFly) == "function" and bossHuntOwnsFly() then
+        return
+    end
+    -- throttle heavy actions
+    if os.clock() - lastSeaActionAt < 6 then
+        return
+    end
+    lastSeaActionAt = os.clock()
+
+    local map = tostring(workspace:GetAttribute("MAP") or "")
+    local level = getPlayerLevel()
+
+    if level >= 700 and (map == "Sea1" or map == "" or string.find(string.lower(map), "1")) and sea1Stage ~= "done" then
+        -- if map empty, still try when level high
+        if map ~= "Sea2" and map ~= "Sea3" then
+            pcall(stepSea1)
+        end
+    end
+
+    if (map == "Sea2" or string.find(string.lower(map), "2")) and sea2Stage ~= "done" then
+        pcall(stepSea2)
+    end
+end
+
+local function startSeaProgress()
+    if seaProgressRunning then
+        return
+    end
+    seaProgressRunning = true
+    seaProgressTask = task.spawn(function()
+        while seaProgressRunning do
+            pcall(seaProgressTick)
+            task.wait(5)
+        end
+    end)
+end
+
+local function stopSeaProgress()
+    seaProgressRunning = false
+    seaProgressTask = nil
+end
+
+-- =============================================
 -- STATE MACHINE (FARMING)
 -- =============================================
 local farmRunning = false
@@ -2397,6 +2817,15 @@ if useVaxorin and window then
         Flag = "Farm.Enabled", Save = true,
         Callback = function(v)
             if v then startFarm() else stopFarm() end
+        end,
+    })
+    mainSection:CreateToggle({
+        Name = "Auto Sea Progress (1→2 / 2→3)",
+        CurrentValue = config.autoSeaProgress == true,
+        Flag = "Farm.AutoSeaProgress", Save = true,
+        Callback = function(v)
+            config.autoSeaProgress = v
+            if v then startSeaProgress() else stopSeaProgress() end
         end,
     })
     mainSection:CreateToggle({
