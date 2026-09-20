@@ -2134,15 +2134,46 @@ local function startSeaProgress()
                 local level = getPlayerLevel()
                 local map = tostring(workspace:GetAttribute("MAP") or "")
                 local sea = string.lower(map)
-                -- stage debug (throttled via notify helper)
-                if config.autoSeaProgress then
-                    notifyUser("Sea Stage", tostring(sea2Stage) .. " | map=" .. map .. " lv=" .. tostring(level), 2)
+
+                -- ========== RECONCILE STAGE FROM WORLD ==========
+                -- Never trust only sea2Stage; fix mismatches every tick.
+                local jeremyAlive = _seaFindAlive("Jeremy") ~= nil
+                local donAlive = _seaFindAlive("Don Swan") ~= nil
+                local indraAlive = (_seaFindAlive("indra") or _seaFindAlive("rip_indra") or _seaFindAlive("rip indra")) ~= nil
+                local onSwanQuest = activeQuestMatches("swan", "50") and activeQuestMatches("pirate", "swan", "bartilo")
+                -- softer swan quest detect
+                if activeQuestMatches("swan") and activeQuestMatches("50") then
+                    onSwanQuest = true
+                elseif activeQuestMatches("swan pirate") then
+                    onSwanQuest = true
                 end
 
-                -- Sea1 -> 2
-                if level >= 700 and (sea == "" or sea == "sea1" or string.find(sea, "1")) and not string.find(sea, "2") and not string.find(sea, "3") and sea1Stage ~= "done" then
+                -- If we think we're past Jeremy but he's still alive → force stage j
+                if jeremyAlive and (sea2Stage == "prisoners" or sea2Stage == "don" or sea2Stage == "king") then
+                    sea2Stage = "j"
+                    notifyUser("Sea", "Jeremy still alive → back to stage j", 3)
+                end
+                -- If on swan quest text, force swan stage
+                if onSwanQuest and sea2Stage ~= "swan" and sea2Stage ~= "idle" then
+                    if sea2Stage == "j" or sea2Stage == "prisoners" then
+                        -- allow if user already advanced; only force if clearly still stage1
+                        if activeQuestMatches("50") then
+                            sea2Stage = "swan"
+                        end
+                    end
+                end
+
+                local stageLabel = tostring(sea2Stage)
+                if jeremyAlive then stageLabel = stageLabel .. " | Jeremy ALIVE" end
+                if donAlive then stageLabel = stageLabel .. " | Don ALIVE" end
+                notifyUser("Sea Stage", stageLabel .. " | " .. map .. " lv" .. tostring(level), 2)
+
+                -- ========== SEA1 → SEA2 ==========
+                if level >= 700 and (sea == "" or sea == "sea1" or string.find(sea, "1"))
+                    and not string.find(sea, "2") and not string.find(sea, "3")
+                    and sea1Stage ~= "done" then
                     if sea1Stage == "idle" then
-                        notifyUser("Sea", "Detective / Ice Admiral", 3)
+                        notifyUser("Sea", "Sea1: Detective", 3)
                         _seaFly(Vector3.new(4850, 20, 750))
                         _seaComm("TalkDetective")
                         sea1Stage = "ice"
@@ -2161,179 +2192,555 @@ local function startSeaProgress()
                             notifyUser("Sea", "Sea 2!", 4)
                         end
                     end
+                    return
                 end
 
-                -- Sea2 Bartilo (only advance stages; never jump back)
-                if string.find(sea, "2") and sea2Stage ~= "done" then
-                    -- Full Sea2→3 path:
-                    -- Bartilo1 Swan → Jeremy → free prisoners/gladiators → Don Swan
-                    -- → King Red Head → rip_indra (to ~50%) → Mr Captain → Sea3
-                    if level >= 850 then
-                        if sea2Stage == "idle" then
-                            if hasActiveQuest() and not activeQuestMatches("swan", "bartilo", "50", "pirate") then
-                                -- leave other quest alone
-                            else
-                                if not activeQuestMatches("swan", "50") then
-                                    _seaComm("StartQuest", "BartiloQuest", 1)
-                                    task.wait(0.5)
-                                end
-                                sea2Stage = "swan"
-                                notifyUser("Sea", "Stage swan: Bartilo 1", 3)
-                            end
-                        elseif sea2Stage == "swan" then
-                            if activeQuestMatches("swan", "50", "pirate") then
-                                _seaFly(Vector3.new(1019, 73, 1221))
-                                _seaKill("Swan Pirate", 40)
-                            else
-                                notifyUser("Sea", "Stage j: kill Jeremy", 3)
-                                _seaComm("StartQuest", "BartiloQuest", 2)
-                                task.wait(0.4)
-                                sea2Stage = "j"
-                            end
-                        elseif sea2Stage == "j" then
-                            notifyUser("Sea", "Stage j: Jeremy must die", 2)
-                            _seaFly(Vector3.new(2338, 451, 700))
-                            local dead = _seaKill("Jeremy", 120)
-                            if dead then
-                                notifyUser("Sea", "Jeremy dead → prisoners", 3)
-                                _seaComm("StartQuest", "BartiloQuest", 3)
-                                sea2Stage = "prisoners"
-                            else
-                                if not _seaFindAlive("Jeremy") then
-                                    notifyUser("Sea", "Jeremy missing (server hop?)", 2)
-                                end
-                            end
-                        elseif sea2Stage == "prisoners" then
-                            -- Bartilo 3: free gladiators / open King Red Head cell (best-effort clicks)
-                            notifyUser("Sea", "Stage prisoners: Colosseum cell", 3)
-                            _seaFly(Vector3.new(-1836, 7, -2742))
-                            pcall(function()
-                                if fireclickdetector then
-                                    for _, d in ipairs(workspace:GetDescendants()) do
-                                        if d:IsA("ClickDetector") then
-                                            local p = d.Parent
-                                            if p and p:IsA("BasePart") then
-                                                local pos = p.Position
-                                                if (pos - Vector3.new(-1836, 7, -2742)).Magnitude < 150 then
-                                                    fireclickdetector(d)
-                                                    task.wait(0.05)
-                                                end
-                                            end
-                                        end
+                -- ========== SEA2 → SEA3 ==========
+                if not (string.find(sea, "2") or sea == "") then
+                    if string.find(sea, "3") then
+                        sea2Stage = "done"
+                    end
+                    return
+                end
+                if sea2Stage == "done" then return end
+
+                -- Stage machine (one action per tick, always fly to correct place first)
+                if sea2Stage == "idle" then
+                    if hasActiveQuest() and not activeQuestMatches("swan", "bartilo", "50", "pirate") then
+                        return
+                    end
+                    if not activeQuestMatches("swan", "50") then
+                        _seaComm("StartQuest", "BartiloQuest", 1)
+                        task.wait(0.5)
+                    end
+                    sea2Stage = "swan"
+                    notifyUser("Sea", "→ stage swan", 3)
+
+                elseif sea2Stage == "swan" then
+                    _seaFly(Vector3.new(1019, 73, 1221))
+                    if activeQuestMatches("swan", "50", "pirate") or activeQuestMatches("swan") then
+                        _seaKill("Swan Pirate", 35)
+                    else
+                        -- quest cleared → Jeremy
+                        _seaComm("StartQuest", "BartiloQuest", 2)
+                        task.wait(0.4)
+                        sea2Stage = "j"
+                        notifyUser("Sea", "→ stage j (Jeremy)", 3)
+                    end
+
+                elseif sea2Stage == "j" then
+                    -- MUST stay here until Jeremy confirmed dead
+                    _seaFly(Vector3.new(2338, 451, 700))
+                    if jeremyAlive then
+                        local dead = _seaKill("Jeremy", 90)
+                        if dead then
+                            sea2Stage = "prisoners"
+                            notifyUser("Sea", "Jeremy dead → stage prisoners", 3)
+                        else
+                            notifyUser("Sea", "Jeremy still fighting...", 2)
+                        end
+                    else
+                        -- not on map: wait / hop, do NOT skip to don
+                        notifyUser("Sea", "Jeremy not in Enemies — waiting (stage j)", 2)
+                        task.wait(3)
+                        -- if still missing after a few ticks, optional skip only if level high and user wants
+                        -- stay on j
+                    end
+
+                elseif sea2Stage == "prisoners" then
+                    -- Colosseum / free gladiators / King cell — STAY HERE, don't skip
+                    local colPos = Vector3.new(-1836, 7, -2742)
+                    notifyUser("Sea", "Stage prisoners: flying to Colosseum", 2)
+                    _seaFly(colPos)
+                    -- verify we moved roughly near colosseum
+                    pcall(function()
+                        local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                        if hrp and (hrp.Position - colPos).Magnitude > 200 then
+                            _seaFly(colPos)
+                            task.wait(2)
+                        end
+                    end)
+                    pcall(function()
+                        if fireclickdetector then
+                            for _, d in ipairs(workspace:GetDescendants()) do
+                                if d:IsA("ClickDetector") then
+                                    local p = d.Parent
+                                    if p and p:IsA("BasePart") and (p.Position - colPos).Magnitude < 150 then
+                                        fireclickdetector(d)
+                                        task.wait(0.05)
                                     end
                                 end
-                            end)
-                            task.wait(2)
-                            -- progress even if puzzle not perfect (user can finish manually)
-                            if level >= 1000 then
-                                sea2Stage = "don"
-                                notifyUser("Sea", "Stage don: Don Swan", 3)
                             end
+                        end
+                    end)
+                    _seaComm("StartQuest", "BartiloQuest", 3)
+                    task.wait(4)
+                    -- only leave prisoners when Jeremy is gone AND we've spent time at colosseum
+                    if not jeremyAlive then
+                        sea2Stage = "don"
+                        notifyUser("Sea", "→ stage don (Don Swan)", 3)
+                    end
+
+                elseif sea2Stage == "don" then
+                    if jeremyAlive then
+                        sea2Stage = "j"
+                        return
+                    end
+                    local donPos = Vector3.new(2289, 18, 663)
+                    notifyUser("Sea", "Stage don: Don Swan", 2)
+                    _seaFly(donPos)
+                    _seaComm("TalkTrevor")
+                    _seaComm("Trevor")
+                    if donAlive then
+                        local dead = _seaKill("Don Swan", 120)
+                        if dead then
+                            sea2Stage = "king"
+                            notifyUser("Sea", "Don Swan dead → stage king", 3)
+                        end
+                    else
+                        notifyUser("Sea", "Don Swan not spawned (fruit door?)", 2)
+                        if level >= 1500 then
+                            -- allow try king if already killed before on this account
+                            sea2Stage = "king"
                         end
                     end
 
-                    if sea2Stage == "don" then
-                        notifyUser("Sea", "Stage don: Don Swan (Trevor fruit may be manual)", 2)
-                        _seaFly(Vector3.new(2289, 18, 663))
-                        -- try open door remotes
-                        _seaComm("TalkTrevor")
-                        _seaComm("Trevor")
-                        local dead = _seaKill("Don Swan", 150)
-                        if dead then
-                            notifyUser("Sea", "Don Swan dead → King Red Head", 3)
-                            sea2Stage = "king"
-                        else
-                            if not _seaFindAlive("Don Swan") then
-                                notifyUser("Sea", "Don Swan not in Enemies — need fruit door?", 2)
-                                -- still allow advance at 1500 if player already killed before
-                                if level >= 1500 then
-                                    sea2Stage = "king"
-                                end
-                            end
-                        end
-                    elseif sea2Stage == "king" then
-                        -- King Red Head in Colosseum prison
-                        notifyUser("Sea", "Stage king: talk King Red Head", 3)
-                        _seaFly(Vector3.new(-1836, 7, -2742))
-                        _seaComm("KingRedHead")
-                        _seaComm("TalkKingRedHead")
-                        _seaComm("IndraRaid")
-                        _seaComm("StartQuest", "Indra", 1)
-                        -- try ProximityPrompt on nearby NPCs
-                        pcall(function()
+                elseif sea2Stage == "king" then
+                    local colPos = Vector3.new(-1836, 7, -2742)
+                    notifyUser("Sea", "Stage king: King Red Head", 2)
+                    _seaFly(colPos)
+                    _seaComm("KingRedHead")
+                    _seaComm("TalkKingRedHead")
+                    _seaComm("IndraRaid")
+                    pcall(function()
+                        if fireproximityprompt then
                             for _, d in ipairs(workspace:GetDescendants()) do
                                 if d:IsA("ProximityPrompt") then
                                     local p = d.Parent
-                                    local pos = p and (p:IsA("BasePart") and p.Position or (p:IsA("Model") and p:GetPivot().Position))
-                                    if pos and (pos - Vector3.new(-1836, 7, -2742)).Magnitude < 80 then
-                                        if fireproximityprompt then
-                                            fireproximityprompt(d)
-                                        end
+                                    local pos = nil
+                                    if p and p:IsA("BasePart") then pos = p.Position
+                                    elseif p and p:IsA("Model") then pos = p:GetPivot().Position end
+                                    if pos and (pos - colPos).Magnitude < 80 then
+                                        fireproximityprompt(d)
                                     end
                                 end
                             end
-                        end)
-                        task.wait(2)
-                        sea2Stage = "indra"
-                        notifyUser("Sea", "Stage indra: damage rip_indra", 3)
-                    elseif sea2Stage == "indra" then
-                        -- Fight rip_indra until ~50% or gone (cutscene)
-                        notifyUser("Sea", "Stage indra: attack rip_indra", 2)
-                        local indra = _seaFindAlive("indra") or _seaFindAlive("rip")
-                        if indra then
-                            local hum = indra:FindFirstChildOfClass("Humanoid")
-                            local root = indra:FindFirstChild("HumanoidRootPart")
-                            if root then
-                                pcall(function()
-                                    if not flying then enableFly() end
-                                    setFlyTarget(root.Position + Vector3.new(0, 12, 0), false)
-                                    attackEnemy(indra, config.bossAttackSpeed or 0.002, config.bossHitsPerCycle or 40)
-                                end)
-                            end
-                            if hum and hum.Health > 0 and hum.MaxHealth > 0 then
-                                local pct = hum.Health / hum.MaxHealth
-                                if pct <= 0.55 then
-                                    notifyUser("Sea", "Indra ~50% → cutscene / Mr Captain", 3)
-                                    sea2Stage = "captain"
-                                end
-                            end
-                        else
-                            -- may already be in cutscene / teleported back
-                            -- give kill attempt window then go captain
-                            local deadish = _seaKill("indra", 45)
-                            if deadish or not _seaFindAlive("indra") then
-                                sea2Stage = "captain"
-                                notifyUser("Sea", "Stage captain: Mr Captain → Sea3", 3)
-                            end
                         end
-                    elseif sea2Stage == "captain" then
-                        notifyUser("Sea", "Stage captain: Green Zone Mr Captain", 3)
-                        _seaFly(Vector3.new(-3350, 73, -1010))
-                        _seaComm("TravelZou")
-                        _seaComm("TravelToSea3")
-                        _seaComm("MrCaptain")
-                        task.wait(2)
-                        local map2 = tostring(workspace:GetAttribute("MAP") or "")
-                        if string.find(string.lower(map2), "3") then
-                            sea2Stage = "done"
-                            notifyUser("Sea", "Sea 3 unlocked!", 4)
-                        else
-                            notifyUser("Sea", "Travel attempted — talk Mr Captain if still Sea2", 3)
+                    end)
+                    task.wait(3)
+                    sea2Stage = "indra"
+                    notifyUser("Sea", "→ stage indra", 3)
+
+                elseif sea2Stage == "indra" then
+                    notifyUser("Sea", "Stage indra: rip_indra", 2)
+                    local indra = _seaFindAlive("indra") or _seaFindAlive("rip_indra") or _seaFindAlive("rip")
+                    if indra then
+                        local hum = indra:FindFirstChildOfClass("Humanoid")
+                        local root = indra:FindFirstChild("HumanoidRootPart")
+                        if root then
+                            pcall(function()
+                                if not flying then enableFly() end
+                                setFlyTarget(root.Position + Vector3.new(0, 12, 0), false)
+                                attackEnemy(indra, config.bossAttackSpeed or 0.002, config.bossHitsPerCycle or 40)
+                            end)
+                        end
+                        if hum and hum.MaxHealth > 0 and (hum.Health / hum.MaxHealth) <= 0.55 then
+                            sea2Stage = "captain"
+                            notifyUser("Sea", "Indra ~50% → captain", 3)
+                        end
+                    else
+                        local deadish = _seaKill("indra", 40)
+                        if deadish or not (_seaFindAlive("indra") or _seaFindAlive("rip")) then
+                            sea2Stage = "captain"
+                            notifyUser("Sea", "→ stage captain", 3)
                         end
                     end
-                end -- sea2
 
+                elseif sea2Stage == "captain" then
+                    notifyUser("Sea", "Stage captain: Mr Captain", 2)
+                    _seaFly(Vector3.new(-3350, 73, -1010))
+                    _seaComm("TravelZou")
+                    _seaComm("TravelToSea3")
+                    _seaComm("MrCaptain")
+                    task.wait(2)
+                    map = tostring(workspace:GetAttribute("MAP") or "")
+                    if string.find(string.lower(map), "3") then
+                        sea2Stage = "done"
+                        notifyUser("Sea", "Sea 3 unlocked!", 4)
+                    end
+                end
             end)
             if not ok then
                 warn("[BF] seaProgress:", err)
             end
-            task.wait(8)
+            task.wait(6)
         end
     end)
 end
 
 local function stopSeaProgress()
     seaProgressRunning = false
+end
+
+
+
+-- =============================================
+-- AUTO RAID (Microchip / Awakening Raids)
+-- Wiki: 5 islands, kill all enemies to progress, boss on island 5
+-- Start: Mysterious Scientist chip → lab tubes (Sea2 Hot&Cold / Sea3 Castle)
+-- Remote: CommF_ "RaidsNpc","Select", <RaidName>
+-- In-raid detect: PlayerGui.Main.TopHUDList.RaidTimer (or similar)
+-- =============================================
+local raidRunning = false
+local raidTask = nil
+local lastRaidChipAt = 0
+
+local RAID_TYPES = {
+    "Flame", "Ice", "Quake", "Light", "Dark", "Magma", "Sand",
+    "Buddha", "Spider", "Rumble", "Phoenix", "Dough",
+}
+
+-- Lab / lobby approximate positions
+local RAID_LAB_SEA2 = Vector3.new(-6519, 308, -4654) -- chip insert / lab (user)
+local RAID_LAB_SEA3 = Vector3.new(-5550, 314, -2980) -- Castle on the Sea (approx)
+
+local function isInRaid()
+    -- STRICT: only true when RaidTimer is visible with a real countdown
+    -- (old check matched normal HUD timers → always "in raid")
+    local ok, result = pcall(function()
+        local pg = LocalPlayer:FindFirstChild("PlayerGui")
+        if not pg then return false end
+        local main = pg:FindFirstChild("Main")
+        if not main then return false end
+
+        local function timerLooksActive(obj)
+            if not obj then return false end
+            -- must be visible up the chain
+            local n = obj
+            while n and n ~= main do
+                if n:IsA("GuiObject") and n.Visible == false then
+                    return false
+                end
+                n = n.Parent
+            end
+            if obj:IsA("TextLabel") or obj:IsA("TextButton") then
+                local t = tostring(obj.Text or "")
+                -- real raid timers look like 12:34 or 0:45
+                if string.find(t, "%d+:%d+") then
+                    return true
+                end
+                if string.find(string.lower(t), "island") then
+                    return true
+                end
+            end
+            return false
+        end
+
+        local raidTimer = main:FindFirstChild("RaidTimer", true)
+        if raidTimer then
+            if timerLooksActive(raidTimer) then return true end
+            -- child text labels
+            for _, d in ipairs(raidTimer:GetDescendants()) do
+                if timerLooksActive(d) then return true end
+            end
+            -- visible GuiObject named RaidTimer with no text still counts if Visible
+            if raidTimer:IsA("GuiObject") and raidTimer.Visible then
+                -- only if parent TopHUDList also visible
+                local p = raidTimer.Parent
+                if p and p:IsA("GuiObject") and p.Visible then
+                    -- require at least some numeric text somewhere under it
+                    local hasNum = false
+                    for _, d in ipairs(raidTimer:GetDescendants()) do
+                        if (d:IsA("TextLabel") or d:IsA("TextButton")) and string.find(tostring(d.Text or ""), "%d") then
+                            hasNum = true
+                            break
+                        end
+                    end
+                    if hasNum then return true end
+                end
+            end
+        end
+
+        -- Fallback: folder of raid islands only exists mid-raid in some versions
+        local islands = workspace:FindFirstChild("RaidIslands")
+            or workspace:FindFirstChild("Raids")
+            or (workspace:FindFirstChild("_WorldOrigin") and workspace._WorldOrigin:FindFirstChild("RaidIslands"))
+        if islands and #islands:GetChildren() > 0 then
+            return true
+        end
+
+        return false
+    end)
+    return ok and result == true
+end
+
+local function hasMicrochip()
+    local function check(container)
+        if not container then return false end
+        for _, item in ipairs(container:GetChildren()) do
+            local n = string.lower(item.Name)
+            if string.find(n, "microchip") or string.find(n, "special microchip") then
+                return true
+            end
+        end
+        return false
+    end
+    return check(LocalPlayer:FindFirstChild("Backpack"))
+        or check(LocalPlayer.Character)
+end
+
+local function selectRaidType(name)
+    name = name or config.raidType or "Flame"
+    local remote = ReplicatedStorage:FindFirstChild("Remotes")
+    local comm = remote and remote:FindFirstChild("CommF_")
+    if not comm then return false end
+    local ok = pcall(function()
+        comm:InvokeServer("RaidsNpc", "Select", name)
+    end)
+    return ok
+end
+
+local function buyRaidChip()
+    if hasMicrochip() then return true end
+    if not config.raidAutoBuyChip then return false end
+    if os.clock() - lastRaidChipAt < 5 then return hasMicrochip() end
+    lastRaidChipAt = os.clock()
+    selectRaidType(config.raidType)
+    task.wait(0.3)
+    -- try common buy patterns
+    local remote = ReplicatedStorage:FindFirstChild("Remotes")
+    local comm = remote and remote:FindFirstChild("CommF_")
+    if not comm then return false end
+    pcall(function()
+        comm:InvokeServer("RaidsNpc", "Select", config.raidType or "Flame")
+    end)
+    task.wait(0.2)
+    -- some versions use BuyMicrochip / BlackbeardReward style
+    pcall(function()
+        comm:InvokeServer("BlackbeardReward", "Microchip", "1")
+    end)
+    pcall(function()
+        comm:InvokeServer("RaidsNpc", "Check")
+    end)
+    task.wait(0.5)
+    return hasMicrochip()
+end
+
+local function goToRaidLobby()
+    local map = tostring(workspace:GetAttribute("MAP") or "")
+    local sea = string.lower(map)
+    local pos = RAID_LAB_SEA2
+    if string.find(sea, "3") then
+        pos = RAID_LAB_SEA3
+    end
+    pcall(function()
+        if not flying then enableFly() end
+        -- exact chip-insert pad
+        setFlyTarget(pos + Vector3.new(0, 3, 0), false)
+    end)
+    task.wait(2.5)
+end
+
+local function tryStartRaid()
+    -- equip chip if present
+    pcall(function()
+        local bp = LocalPlayer:FindFirstChild("Backpack")
+        if bp then
+            for _, item in ipairs(bp:GetChildren()) do
+                if string.find(string.lower(item.Name), "microchip") then
+                    local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+                    if hum then hum:EquipTool(item) end
+                end
+            end
+        end
+    end)
+    task.wait(0.3)
+    -- press green start button / fire click detectors near lab
+    pcall(function()
+        if fireclickdetector then
+            for _, d in ipairs(workspace:GetDescendants()) do
+                if d:IsA("ClickDetector") then
+                    local p = d.Parent
+                    if p and p:IsA("BasePart") then
+                        local n = string.lower(p.Name)
+                        if string.find(n, "button") or string.find(n, "start") or string.find(n, "raid") then
+                            fireclickdetector(d)
+                        end
+                    end
+                end
+            end
+        end
+    end)
+    -- proximity prompts
+    pcall(function()
+        if fireproximityprompt then
+            for _, d in ipairs(workspace:GetDescendants()) do
+                if d:IsA("ProximityPrompt") then
+                    local txt = string.lower(tostring(d.ActionText or "") .. tostring(d.ObjectText or ""))
+                    if string.find(txt, "raid") or string.find(txt, "start") or string.find(txt, "enter") then
+                        fireproximityprompt(d)
+                    end
+                end
+            end
+        end
+    end)
+end
+
+local raidStackPos = nil -- fixed hover point on current island (don't fly random)
+local raidHoverY = 80 -- height above enemies (kill aura style)
+
+local function getRaidEnemies()
+    local list = {}
+    local en = workspace:FindFirstChild("Enemies")
+    if not en then return list end
+    for _, m in ipairs(en:GetChildren()) do
+        local h = m:FindFirstChildOfClass("Humanoid")
+        local r = m:FindFirstChild("HumanoidRootPart")
+        if h and r and h.Health > 0 then
+            table.insert(list, m)
+        end
+    end
+    return list
+end
+
+-- Average position of living raid enemies = island center
+local function getEnemyCentroid(enemies)
+    local sum = Vector3.zero
+    local n = 0
+    for _, m in ipairs(enemies) do
+        local r = m:FindFirstChild("HumanoidRootPart")
+        if r then
+            sum = sum + r.Position
+            n = n + 1
+        end
+    end
+    if n == 0 then return nil end
+    return sum / n
+end
+
+local function raidKillLoop()
+    local enemies = getRaidEnemies()
+    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return #enemies > 0 end
+
+    if #enemies == 0 then
+        -- Island cleared: stay put above last stack, do NOT fly random
+        if raidStackPos then
+            pcall(function()
+                if not flying then enableFly() end
+                setFlyTarget(raidStackPos + Vector3.new(0, raidHoverY, 0), false)
+            end)
+        end
+        return false
+    end
+
+    -- Update stack only when enemies exist (centroid of current island)
+    local center = getEnemyCentroid(enemies)
+    if center then
+        -- lock stack if far from old or first time (new island)
+        if not raidStackPos or (center - raidStackPos).Magnitude > 120 then
+            raidStackPos = Vector3.new(center.X, center.Y, center.Z)
+        else
+            -- soft blend so we don't jitter
+            raidStackPos = raidStackPos:Lerp(Vector3.new(center.X, center.Y, center.Z), 0.15)
+        end
+    end
+
+    local hover = (raidStackPos or center) + Vector3.new(0, raidHoverY, 0)
+    pcall(function()
+        if not flying then enableFly() end
+        setFlyTarget(hover, false)
+    end)
+
+    -- Kill aura: attack nearest + a few around the stack (multi-hit via attackEnemy)
+    table.sort(enemies, function(a, b)
+        local ra = a:FindFirstChild("HumanoidRootPart")
+        local rb = b:FindFirstChild("HumanoidRootPart")
+        local base = raidStackPos or hrp.Position
+        if not ra then return false end
+        if not rb then return true end
+        return (ra.Position - base).Magnitude < (rb.Position - base).Magnitude
+    end)
+
+    local primary = enemies[1]
+    if primary then
+        pcall(function()
+            attackEnemy(primary, config.raidAttackSpeed or 0.001, config.raidHitsPerCycle or 50)
+        end)
+    end
+    -- also tick a couple more nearby for aura feel
+    for i = 2, math.min(4, #enemies) do
+        local e = enemies[i]
+        local r = e:FindFirstChild("HumanoidRootPart")
+        if r and raidStackPos and (r.Position - raidStackPos).Magnitude < 80 then
+            pcall(function()
+                attackEnemy(e, config.raidAttackSpeed or 0.001, 15)
+            end)
+        end
+    end
+    return true
+end
+
+local function startAutoRaid()
+    if raidRunning then return end
+    raidRunning = true
+    notifyUser("Raid", "Auto Raid ON (" .. tostring(config.raidType) .. ")", 3)
+    raidTask = task.spawn(function()
+        while raidRunning do
+            local ok, err = pcall(function()
+                if not config.autoRaid then return end
+
+                if isInRaid() then
+                    notifyUser("Raid", "In raid — clearing enemies", 2)
+                    local fighting = raidKillLoop()
+                    if not fighting then
+                        task.wait(1.5)
+                    end
+                    return
+                end
+
+                -- definitely outside raid
+                raidStackPos = nil
+                notifyUser("Raid", "Outside raid → lobby / chip", 2)
+
+                -- Outside raid: buy chip + go lobby + start
+                if getPlayerLevel() < 1100 then
+                    notifyUser("Raid", "Need level 1100+ for raids", 3)
+                    task.wait(10)
+                    return
+                end
+
+                selectRaidType(config.raidType)
+                if not hasMicrochip() then
+                    buyRaidChip()
+                    if not hasMicrochip() then
+                        notifyUser("Raid", "No Microchip (buy at Scientist / wait CD)", 3)
+                        goToRaidLobby()
+                        task.wait(5)
+                        return
+                    end
+                end
+
+                notifyUser("Raid", "Going to raid lobby...", 2)
+                goToRaidLobby()
+                tryStartRaid()
+                task.wait(3)
+                if not isInRaid() then
+                    notifyUser("Raid", "Not in raid yet — equip chip & press green button if needed", 3)
+                end
+            end)
+            if not ok then
+                warn("[BF] autoRaid:", err)
+            end
+            task.wait(0.4)
+        end
+    end)
+end
+
+local function stopAutoRaid()
+    raidRunning = false
+    config.autoRaid = false
+    notifyUser("Raid", "Auto Raid OFF", 2)
 end
 
 
@@ -2714,6 +3121,40 @@ if useVaxorin and window then
     local MoneyTab = window:CreateTab("Auto Money")
     local combatTab = window:CreateTab("Combat")
     local fruitTab = window:CreateTab("Fruits")
+
+    local raidTab = window:CreateTab("Raid")
+    local raidSection = raidTab:CreateSection({Name = "Auto Raid (Microchip)"})
+    raidSection:CreateToggle({
+        Name = "Auto Raid",
+        CurrentValue = false,
+        Flag = "Raid.Enabled", Save = true,
+        Callback = function(v)
+            config.autoRaid = v
+            if v then startAutoRaid() else stopAutoRaid() end
+        end,
+    })
+    raidSection:CreateDropdown({
+        Name = "Raid Type",
+        Options = {"Flame", "Ice", "Quake", "Light", "Dark", "Magma", "Sand", "Buddha", "Spider", "Rumble", "Phoenix", "Dough"},
+        CurrentOption = config.raidType or "Flame",
+        Flag = "Raid.Type", Save = true,
+        Callback = function(v)
+            if type(v) == "table" then v = v[1] end
+            config.raidType = tostring(v or "Flame")
+            selectRaidType(config.raidType)
+        end,
+    })
+    raidSection:CreateToggle({
+        Name = "Auto Buy Chip",
+        CurrentValue = true,
+        Flag = "Raid.AutoBuy", Save = true,
+        Callback = function(v) config.raidAutoBuyChip = v end,
+    })
+    raidSection:CreateParagraph({
+        Title = "How it works",
+        Content = "Lv 1100+ | Sea2/3. Selects raid, buys Special Microchip when possible, flies to lab, starts raid, kills all enemies on each of the 5 islands. Flame = easiest. Phoenix/Dough need advanced chip.",
+    })
+
     local bossTab = window:CreateTab("Bosses")
 
     local mainSection = mainTab:CreateSection({Name = "Farm Controls"})
