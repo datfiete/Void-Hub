@@ -1,3 +1,4 @@
+-- BF_FULL_BUILD size_marker
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local RunService = game:GetService("RunService")
@@ -9,7 +10,7 @@ pcall(function()
     if type(getexecutorname) == "function" then Executor = tostring(getexecutorname())
     elseif type(identifyexecutor) == "function" then Executor = tostring(identifyexecutor()) end
 end)
-print("[BF] load ok")
+print("[BF] load ok — full autofarm script")
 
 -- Load Vaxorin (or fallback UI)
 local useVaxorin = false
@@ -63,7 +64,11 @@ local success, err = pcall(function()
         "https://raw.githubusercontent.com/datfiete/Void-Hub/refs/heads/main/CyberUI%20-%20Kopie/load.lua"
     ))()
     if Vaxorin then
-        Vaxorin.Theme.Style = "Vaxorin"
+        pcall(function()
+            if Vaxorin.Theme then
+                Vaxorin.Theme.Style = "Vaxorin"
+            end
+        end)
         window = Vaxorin:CreateWindow({
             Title = "Blox Fruits Auto Farm",
             Subtitle = "by Fietewoozle",
@@ -2316,6 +2321,7 @@ local function startSeaProgress()
                             notifyUser("Sea", "Travel attempted — talk Mr Captain if still Sea2", 3)
                         end
                     end
+                end -- sea2
 
             end)
             if not ok then
@@ -3000,16 +3006,19 @@ if useVaxorin and window then
 
     window:SetWatermarkEnabled(true)
     if config.bossTimersEnabled then
-        startBossTimers()
+        pcall(startBossTimers)
     end
-    notifyUser("Loaded", "Vaxorin UI active. Sea: " .. getCurrentSea())
+    local seaName = "?"
+    pcall(function() seaName = tostring(getCurrentSea()) end)
+    notifyUser("Loaded", "Vaxorin UI active. Sea: " .. seaName)
 else
     notifyUser("Loaded", "Fallback UI active. Use the button to start/stop.")
     if config.bossTimersEnabled then
-        startBossTimers()
+        pcall(startBossTimers)
     end
 end
 
+print("[BF] fully loaded, lines ready")
 -- Keep script alive
 while task.wait(1) do end
 
