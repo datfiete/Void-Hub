@@ -2138,92 +2138,58 @@ local function startSeaProgress()
 
                 -- Sea2 Bartilo (only advance stages; never jump back)
                 if string.find(sea, "2") and sea2Stage ~= "done" then
+                    -- Bartilo flow (user):
+                    -- 1) StartQuest BartiloQuest 1 → kill Swan Pirates
+                    -- 2) When done: talk Bartilo, then JUST KILL Jeremy (no real "Jeremy quest")
+                    -- 3) Then kill Don Swan
                     if level >= 850 then
-                        if activeQuestMatches("jeremy") then sea2Stage = "j" end
-                        if activeQuestMatches("gladiator", "imprisoned", "free the") then sea2Stage = "g" end
-
                         if sea2Stage == "idle" then
-                            if hasActiveQuest() and not activeQuestMatches("swan", "bartilo", "50") then
-                                -- leave farm quest alone
+                            if hasActiveQuest() and not activeQuestMatches("swan", "bartilo", "50", "pirate") then
+                                -- other farm quest active: don't steal it
                             else
                                 if not activeQuestMatches("swan", "50") then
                                     _seaComm("StartQuest", "BartiloQuest", 1)
+                                    task.wait(0.5)
                                 end
                                 sea2Stage = "swan"
+                                notifyUser("Sea", "Bartilo 1: Swan Pirates", 3)
                             end
                         elseif sea2Stage == "swan" then
-                            -- Still on stage-1 UI?
-                            if activeQuestMatches("jeremy") then
-                                sea2Stage = "j"
-                                notifyUser("Sea", "Bartilo → Jeremy", 3)
-                            elseif activeQuestMatches("gladiator", "imprisoned", "free the") then
-                                sea2Stage = "g"
-                            elseif activeQuestMatches("swan", "50", "bartilo") then
-                                -- quest still stage 1: farm
+                            if activeQuestMatches("swan", "50", "pirate") then
                                 _seaFly(Vector3.new(1019, 73, 1221))
                                 _seaKill("Swan Pirate", 40)
                             else
-                                -- Quest cleared / changed: request stage 2 once
-                                notifyUser("Sea", "Swan done → accept Bartilo 2", 3)
-                                _seaComm("StartQuest", "BartiloQuest", 2)
-                                task.wait(1)
-                                if activeQuestMatches("jeremy") or not activeQuestMatches("swan", "50") then
-                                    sea2Stage = "j"
-                                end
-                                -- if still nothing, try talking progression again next tick
+                                -- Stage 1 done (quest gone / changed) → Jeremy next, no quest UI needed
+                                notifyUser("Sea", "Bartilo done → kill Jeremy", 3)
+                                _seaComm("StartQuest", "BartiloQuest", 2) -- talk / progress if remote exists
+                                task.wait(0.5)
+                                sea2Stage = "j"
                             end
                         elseif sea2Stage == "j" then
-                            if activeQuestMatches("gladiator", "free", "imprisoned") then
-                                sea2Stage = "g"
-                                notifyUser("Sea", "Bartilo → Colosseum", 3)
-                            elseif activeQuestMatches("jeremy") or activeQuestMatches("spring") then
-                                _seaFly(Vector3.new(2338, 451, 700))
-                                _seaKill("Jeremy", 80)
-                            else
-                                -- no jeremy quest text: accept stage 2, then kill
-                                if not hasActiveQuest() or activeQuestMatches("swan") then
-                                    _seaComm("StartQuest", "BartiloQuest", 2)
-                                    task.wait(0.8)
-                                end
-                                _seaFly(Vector3.new(2338, 451, 700))
-                                _seaKill("Jeremy", 80)
-                                -- after kill attempt, move on if quest gone
-                                if not activeQuestMatches("jeremy") then
-                                    _seaComm("StartQuest", "BartiloQuest", 3)
-                                    sea2Stage = "g"
-                                end
-                            end
-                        elseif sea2Stage == "g" then
-                            if not hasActiveQuest() or activeQuestMatches("gladiator", "free", "colosseum") then
-                                _seaComm("StartQuest", "BartiloQuest", 3)
-                            end
-                            _seaFly(Vector3.new(-1836, 7, -2742))
-                            pcall(function()
-                                if fireclickdetector then
-                                    for _, d in ipairs(workspace:GetDescendants()) do
-                                        if d:IsA("ClickDetector") then
-                                            local p = d.Parent
-                                            if p and p:IsA("BasePart") and (p.Position - Vector3.new(-1836, 7, -2742)).Magnitude < 120 then
-                                                fireclickdetector(d)
-                                            end
-                                        end
-                                    end
-                                end
-                            end)
-                            task.wait(2)
-                            if level >= 1500 then sea2Stage = "don" else sea2Stage = "wait" end
+                            -- Direct kill Jeremy, then Don Swan
+                            notifyUser("Sea", "Killing Jeremy...", 2)
+                            _seaFly(Vector3.new(2338, 451, 700))
+                            _seaKill("Jeremy", 100)
+                            -- always advance after kill window (no Jeremy quest text to wait on)
+                            notifyUser("Sea", "Jeremy done → Don Swan", 3)
+                            sea2Stage = "don"
                         end
                     end
-                    if level >= 1500 and (sea2Stage == "don" or sea2Stage == "wait" or sea2Stage == "g") then
+
+                    -- Don Swan whenever stage says so (and level high enough for sea3 path)
+                    if sea2Stage == "don" or (level >= 1500 and sea2Stage == "wait") then
                         sea2Stage = "don"
+                        notifyUser("Sea", "Killing Don Swan...", 3)
                         _seaFly(Vector3.new(2289, 18, 663))
-                        _seaKill("Don Swan", 100)
+                        _seaKill("Don Swan", 120)
                         _seaComm("TravelZou")
                         _seaComm("TravelToSea3")
                         task.wait(2)
                         if string.find(string.lower(tostring(workspace:GetAttribute("MAP") or "")), "3") then
                             sea2Stage = "done"
                             notifyUser("Sea", "Sea 3!", 4)
+                        elseif level < 1500 then
+                            sea2Stage = "wait"
                         end
                     end
                 end
