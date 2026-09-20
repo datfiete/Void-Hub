@@ -2579,9 +2579,12 @@ local function tryStartRaid()
     end)
 end
 
-local raidStackPos = nil -- locked island hover XZ (only changes on NEW island)
-local raidHoverY = 28 -- height above island ground
-local lastRaidFlySet = 0
+local raidStackPos = nil -- locked island center (XZ), only set once per island
+local raidHoverY = 25
+local raidOrbitAngle = 0
+local raidOrbitRadius = 18 -- small circle = dodge while aura hits
+local raidEmptySince = nil -- when island went empty
+local raidIslandLocked = false
 
 local function getRaidEnemies()
     local list = {}
@@ -2597,36 +2600,49 @@ local function getRaidEnemies()
     return list
 end
 
-local function getEnemyCentroid(enemies)
+local function getEnemyCentroidNear(enemies, nearPos, maxDist)
     local sum = Vector3.zero
     local n = 0
     for _, m in ipairs(enemies) do
         local r = m:FindFirstChild("HumanoidRootPart")
         if r then
-            sum = sum + r.Position
-            n = n + 1
+            if not nearPos or (r.Position - nearPos).Magnitude <= maxDist then
+                sum = sum + r.Position
+                n = n + 1
+            end
         end
     end
-    if n == 0 then return nil end
-    return sum / n
+    if n == 0 then return nil, 0 end
+    return sum / n, n
 end
 
-local function raidHoldPosition()
+-- Orbit around island center (dodge) + hard stop when close
+local function raidOrbitFly()
     if not raidStackPos then return end
-    local hover = raidStackPos + Vector3.new(0, raidHoverY, 0)
+    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
     pcall(function()
         if not flying then enableFly() end
-        -- only refresh fly target occasionally so we don't jitter / fly off
-        local now = os.clock()
-        if now - lastRaidFlySet > 0.35 then
-            lastRaidFlySet = now
+
+        -- advance orbit angle slowly
+        raidOrbitAngle = raidOrbitAngle + 0.045
+        local ox = math.cos(raidOrbitAngle) * raidOrbitRadius
+        local oz = math.sin(raidOrbitAngle) * raidOrbitRadius
+        local hover = Vector3.new(raidStackPos.X + ox, raidStackPos.Y + raidHoverY, raidStackPos.Z + oz)
+
+        setFlyTarget(hover, false)
+
+        -- hard brake if we overshot badly (the "doesn't stop / flies off" bug)
+        local flat = Vector3.new(hrp.Position.X - hover.X, 0, hrp.Position.Z - hover.Z)
+        if flat.Magnitude < 6 then
+            -- damp velocity so we don't keep sliding past
+            local v = hrp.AssemblyLinearVelocity
+            hrp.AssemblyLinearVelocity = Vector3.new(v.X * 0.3, v.Y * 0.5, v.Z * 0.3)
+        elseif flat.Magnitude > 100 then
+            -- emergency: snap target, kill horizontal speed
+            hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
             setFlyTarget(hover, false)
-        end
-        -- hard snap if drifted far (random fly bug)
-        local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-        if hrp and (hrp.Position - hover).Magnitude > 60 then
-            setFlyTarget(hover, false)
-            lastRaidFlySet = now
         end
     end)
 end
@@ -2639,55 +2655,77 @@ local function raidKillLoop()
     ensureSimRadius()
 
     if #enemies == 0 then
-        -- cleared: HOLD last island, do not seek random targets
-        raidHoldPosition()
+        -- cleared: keep orbiting same island (wait for next island spawn)
+        if not raidEmptySince then
+            raidEmptySince = os.clock()
+        end
+        raidOrbitFly()
+        -- after 3s empty, unlock so NEXT island can set a new stack
+        if os.clock() - raidEmptySince > 3 then
+            raidIslandLocked = false
+            -- keep raidStackPos until new enemies appear (don't fly to 0,0,0)
+        end
         return false
     end
 
-    local center = getEnemyCentroid(enemies)
-    if center then
-        -- NEW island only if centroid jumped far; otherwise NEVER move stack
-        if not raidStackPos or (Vector3.new(center.X, 0, center.Z) - Vector3.new(raidStackPos.X, 0, raidStackPos.Z)).Magnitude > 180 then
+    raidEmptySince = nil
+
+    -- Lock island ONCE from nearby enemies (prefer near player / existing stack)
+    if not raidIslandLocked then
+        local ref = raidStackPos or hrp.Position
+        local center, n = getEnemyCentroidNear(enemies, ref, 250)
+        if not center then
+            center, n = getEnemyCentroidNear(enemies, nil, 1e9)
+        end
+        if center and n > 0 then
             raidStackPos = Vector3.new(center.X, center.Y, center.Z)
-            lastRaidFlySet = 0 -- force re-aim
+            raidIslandLocked = true
+            raidOrbitAngle = 0
             notifyUser("Raid", "Island lock @ " .. math.floor(center.X) .. "," .. math.floor(center.Z), 2)
         end
     end
 
-    raidHoldPosition()
+    -- NEVER re-lock from far enemies (that was the 90° wrong-direction fly-away)
+    raidOrbitFly()
 
-    -- REAL kill aura: one multi-hit packet for ALL living enemies in range of stack
+    -- Aura: only enemies near THIS island (not other islands)
     local aura = {}
-    local base = raidStackPos or center or hrp.Position
+    local base = raidStackPos or hrp.Position
     for _, m in ipairs(enemies) do
         local r = m:FindFirstChild("HumanoidRootPart")
-        if r and (r.Position - base).Magnitude < 200 then
+        if r and (r.Position - base).Magnitude < 160 then
             table.insert(aura, m)
         end
     end
     if #aura == 0 then
-        aura = enemies
+        -- all enemies far = next island already? unlock for next lock
+        local center, n = getEnemyCentroidNear(enemies, nil, 1e9)
+        if center and n > 0 and raidStackPos and (center - raidStackPos).Magnitude > 200 then
+            raidIslandLocked = false
+            raidStackPos = Vector3.new(center.X, center.Y, center.Z)
+            raidIslandLocked = true
+            notifyUser("Raid", "Next island @ " .. math.floor(center.X) .. "," .. math.floor(center.Z), 2)
+        end
+        return true
     end
 
-    -- soft pull: nudge distant aura mobs toward stack (helps hit registration)
+    -- soft pull into stack ring (helps multi-hit)
     pcall(function()
         for i, m in ipairs(aura) do
-            if i > 12 then break end
+            if i > 14 then break end
             local r = m:FindFirstChild("HumanoidRootPart")
             if r and raidStackPos then
                 local d = (r.Position - raidStackPos).Magnitude
-                if d > 25 and d < 150 then
-                    local ang = (i - 1) * 0.7
-                    local offset = Vector3.new(math.cos(ang) * 4, 0, math.sin(ang) * 4)
-                    r.CFrame = CFrame.new(raidStackPos + offset)
+                if d > 20 and d < 140 then
+                    local ang = (i - 1) * 0.55
+                    r.CFrame = CFrame.new(raidStackPos + Vector3.new(math.cos(ang) * 5, 0, math.sin(ang) * 5))
                 end
             end
         end
     end)
 
-    -- attackTargets multi-hits entire list in ONE RegisterHit each cycle
     pcall(function()
-        attackTargets(aura, config.raidAttackSpeed or 0.001, config.raidHitsPerCycle or 35)
+        attackTargets(aura, config.raidAttackSpeed or 0.001, config.raidHitsPerCycle or 40)
     end)
     return true
 end
@@ -2712,6 +2750,8 @@ local function startAutoRaid()
 
                 -- definitely outside raid
                 raidStackPos = nil
+                raidIslandLocked = false
+                raidEmptySince = nil
                 notifyUser("Raid", "Outside raid → lobby / chip", 2)
 
                 -- Outside raid: buy chip + go lobby + start
