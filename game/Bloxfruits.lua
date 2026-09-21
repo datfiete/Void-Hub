@@ -290,31 +290,106 @@ local function fireVirtualClick()
 end
 
 -- Cobalt-style Sea1 remotes (names/keys rotate — best effort)
-local _combatSessionHash = "1601bdf5"
-local _combatNumericId = 4281595387
-local _combatKeyCandidates = { "UB(Ub`ntsbuOns", "QF,QfdjpwfqKjw" }
+-- Latest Cobalt dump (Sea1):
+-- ReplicatedStorage.Assets["825"]:FireServer("XO%Xomcy~oxBc~", 16110659, bodyPart, {}, nil, "160293a1")
+local _combatSessionHash = "160293a1"
+local _combatNumericId = 16110659
+local _combatKeyCandidates = {
+    "XO%Xomcy~oxBc~", -- latest
+    "UB(Ub`ntsbuOns",
+    "QF,QfdjpwfqKjw",
+}
+local _cachedHitRemote = nil
+local _cachedHitRemoteAt = 0
 
-local function fireNewStyleHit(bodyPart)
-    if not bodyPart then return false end
-    local fired = false
-    for _, folderName in ipairs({"Common", "Util"}) do
+local function findAssetsHitRemote()
+    local now = os.clock()
+    if _cachedHitRemote and _cachedHitRemote.Parent and (now - _cachedHitRemoteAt) < 3 then
+        return _cachedHitRemote
+    end
+    -- Prefer exact path from dump
+    local assets = ReplicatedStorage:FindFirstChild("Assets")
+    if assets then
+        local exact = assets:FindFirstChild("825")
+        if exact and exact:IsA("RemoteEvent") then
+            _cachedHitRemote = exact
+            _cachedHitRemoteAt = now
+            return exact
+        end
+        -- any RemoteEvent under Assets
+        for _, ch in ipairs(assets:GetChildren()) do
+            if ch:IsA("RemoteEvent") then
+                _cachedHitRemote = ch
+                _cachedHitRemoteAt = now
+                return ch
+            end
+        end
+    end
+    for _, folderName in ipairs({"Common", "Util", "Modules"}) do
         local folder = ReplicatedStorage:FindFirstChild(folderName)
         if folder then
-            for _, rem in ipairs(folder:GetChildren()) do
-                if rem:IsA("RemoteEvent") then
-                    for _, key in ipairs(_combatKeyCandidates) do
-                        pcall(function()
-                            rem:FireServer(key, _combatNumericId, bodyPart, {}, nil, _combatSessionHash)
-                            fired = true
-                        end)
-                        pcall(function()
-                            rem:FireServer(key, LocalPlayer.UserId, bodyPart, {}, nil, _combatSessionHash)
-                        end)
-                    end
+            for _, ch in ipairs(folder:GetChildren()) do
+                if ch:IsA("RemoteEvent") then
+                    _cachedHitRemote = ch
+                    _cachedHitRemoteAt = now
+                    return ch
                 end
             end
         end
     end
+    return nil
+end
+
+local function fireNewStyleHit(bodyPart)
+    if not bodyPart or not bodyPart.Parent then return false end
+    local rem = findAssetsHitRemote()
+    if not rem then return false end
+
+    local fired = false
+    -- Primary: exact Cobalt signature
+    local ok = pcall(function()
+        rem:FireServer(
+            _combatKeyCandidates[1],
+            _combatNumericId,
+            bodyPart,
+            {},
+            nil,
+            _combatSessionHash
+        )
+    end)
+    if ok then fired = true end
+
+    -- Try other known keys / ids (rotation)
+    for i, key in ipairs(_combatKeyCandidates) do
+        if i ~= 1 then
+            pcall(function()
+                rem:FireServer(key, _combatNumericId, bodyPart, {}, nil, _combatSessionHash)
+            end)
+            pcall(function()
+                rem:FireServer(key, LocalPlayer.UserId, bodyPart, {}, nil, _combatSessionHash)
+            end)
+        end
+    end
+
+    -- Also fire ALL RemoteEvents under Assets (name rotates: 825, 38, 633, ...)
+    local assets = ReplicatedStorage:FindFirstChild("Assets")
+    if assets then
+        for _, ch in ipairs(assets:GetChildren()) do
+            if ch:IsA("RemoteEvent") and ch ~= rem then
+                pcall(function()
+                    ch:FireServer(
+                        _combatKeyCandidates[1],
+                        _combatNumericId,
+                        bodyPart,
+                        {},
+                        nil,
+                        _combatSessionHash
+                    )
+                end)
+            end
+        end
+    end
+
     return fired
 end
 
@@ -326,36 +401,32 @@ local function fireCombatHit(targets)
 
     local used = false
 
-    -- 1) Tool M1 remote (very common after updates)
+    -- 1) Sea1 Assets remote (Cobalt) — THIS is what damages now
+    for _, pair in ipairs(hits) do
+        if fireNewStyleHit(pair[2]) then
+            used = true
+        end
+    end
+
+    -- 2) Tool M1
     if fireLeftClickRemote(primary) then
         used = true
     end
 
-    -- 2) Classic Net RegisterAttack + RegisterHit
+    -- 3) Classic RegisterHit (Sea2/3)
     local RegisterAttack, RegisterHit = getCombatRemotes()
     if RegisterHit then
-        local ok = pcall(function()
-            if RegisterAttack then
-                RegisterAttack:FireServer(0)
-            end
-            -- hubs use root/head + list of {model, part}
+        pcall(function()
+            if RegisterAttack then RegisterAttack:FireServer(0) end
             RegisterHit:FireServer(primary, hits)
         end)
-        if ok then used = true end
-        -- alternate: head as first arg only
         pcall(function()
-            local head = hits[1][2]
             if RegisterAttack then RegisterAttack:FireServer(0) end
-            RegisterHit:FireServer(head, hits)
+            RegisterHit:FireServer(hits[1][2], hits)
         end)
     end
 
-    -- 3) Sea1 obfuscated remotes
-    for _, pair in ipairs(hits) do
-        fireNewStyleHit(pair[2])
-    end
-
-    -- 4) Always click as fallback (real tool activation)
+    -- 4) Click fallback
     fireVirtualClick()
 
     return used or true
