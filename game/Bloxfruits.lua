@@ -1128,9 +1128,50 @@ local function enemyMatchesPatterns(enemy, patternInfo)
     local root = enemy:FindFirstChild("HumanoidRootPart")
     local head = enemy:FindFirstChild("Head")
     if not humanoid or humanoid.Health <= 0 or not root or not head then return false end
-    if patternInfo.includeBossAttr and enemy:GetAttribute("isBoss") == true then return true end
-    for _, pattern in ipairs(patternInfo.patterns) do
-        if enemy.Name:lower():find(pattern:lower()) then return true end
+
+    local lower = string.lower(enemy.Name)
+    local wantBoss = patternInfo.includeBossAttr == true
+
+    -- Boss-only mode
+    if wantBoss then
+        if enemy:GetAttribute("isBoss") == true or string.find(lower, "%[boss%]") then
+            return true
+        end
+        for _, pattern in ipairs(patternInfo.patterns or {}) do
+            local p = string.lower(pattern)
+            if string.sub(lower, 1, #p) == p then
+                return true
+            end
+        end
+        return false
+    end
+
+    -- Normal farm: NEVER take bosses (Gorilla King while farming Gorilla)
+    if enemy:GetAttribute("isBoss") == true then return false end
+    if string.find(lower, "%[boss%]") then return false end
+
+    for _, pattern in ipairs(patternInfo.patterns or {}) do
+        local p = string.lower(pattern)
+        -- must start with pattern as a name token (not mid-string)
+        if string.sub(lower, 1, #p) == p then
+            local nextc = string.sub(lower, #p + 1, #p + 1)
+            if nextc == "" or nextc == " " or nextc == "[" then
+                local rest = string.sub(lower, #p + 1)
+                -- reject "Gorilla King", "Fishman Lord", etc. unless pattern includes that word
+                if string.find(rest, "^%s+king") or string.find(rest, "^%s+lord")
+                    or string.find(rest, "^%s+admiral") or string.find(rest, "^%s+boss") then
+                    -- allow if pattern itself was e.g. "Gorilla King"
+                    if not string.find(p, "king") and not string.find(p, "lord")
+                        and not string.find(p, "admiral") and not string.find(p, "boss") then
+                        -- skip this pattern match
+                    else
+                        return true
+                    end
+                else
+                    return true
+                end
+            end
+        end
     end
     return false
 end
