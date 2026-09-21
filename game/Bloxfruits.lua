@@ -182,7 +182,21 @@ local config = {
 
 -- =============================================
 -- COMBAT REMOTES
+-- Legacy (Sea2/3 often still): Modules.Net RE/RegisterHit
+-- Sea1 rework (Cobalt): ReplicatedStorage.Common["38"] / Util["633"]
+--   FireServer(obfuscatedKey, numericId, bodyPart, {}, nil, sessionHash)
+-- Keys/names rotate — we try legacy first, then new-style remotes.
 -- =============================================
+local _newHitRemotes = nil -- cached list of RemoteEvents under Common/Util
+local _newHitCacheAt = 0
+local _combatSessionHash = "1601bdf5" -- from your Cobalt dump; refresh if hits stop
+local _combatNumericId = 4281595387 -- from your Cobalt dump
+-- known first-arg keys from your captures (game rotates these)
+local _combatKeyCandidates = {
+    "UB(Ub`ntsbuOns",
+    "QF,QfdjpwfqKjw",
+}
+
 local function getCombatRemotes()
     local modules = ReplicatedStorage:FindFirstChild("Modules")
     local net = modules and modules:FindFirstChild("Net")
@@ -192,43 +206,117 @@ local function getCombatRemotes()
     return net:FindFirstChild("RE/RegisterAttack"), net:FindFirstChild("RE/RegisterHit")
 end
 
--- Multi-hit like:
--- RegisterHit:FireServer(primaryHead, { {enemy, head}, {enemy2, head2}, ... })
+local function refreshNewHitRemotes()
+    local now = os.clock()
+    if _newHitRemotes and (now - _newHitCacheAt) < 5 then
+        return _newHitRemotes
+    end
+    local list = {}
+    for _, folderName in ipairs({"Common", "Util"}) do
+        local folder = ReplicatedStorage:FindFirstChild(folderName)
+        if folder then
+            for _, ch in ipairs(folder:GetChildren()) do
+                if ch:IsA("RemoteEvent") then
+                    table.insert(list, ch)
+                end
+            end
+        end
+    end
+    _newHitRemotes = list
+    _newHitCacheAt = now
+    return list
+end
+
+local function getEnemyHitPart(enemy)
+    if not enemy then return nil end
+    return enemy:FindFirstChild("Head")
+        or enemy:FindFirstChild("UpperTorso")
+        or enemy:FindFirstChild("LowerTorso")
+        or enemy:FindFirstChild("HumanoidRootPart")
+        or enemy:FindFirstChild("RightHand")
+        or enemy:FindFirstChild("LeftHand")
+        or enemy:FindFirstChildWhichIsA("BasePart")
+end
+
+-- New Sea1-style hit (one body part per fire; call per target)
+local function fireNewStyleHit(bodyPart)
+    if not bodyPart or not bodyPart.Parent then return false end
+    local remotes = refreshNewHitRemotes()
+    if #remotes == 0 then return false end
+
+    local uid = LocalPlayer.UserId
+    local numericCandidates = { _combatNumericId, uid, uid * 2 }
+    local fired = false
+    for _, remote in ipairs(remotes) do
+        for _, key in ipairs(_combatKeyCandidates) do
+            for _, num in ipairs(numericCandidates) do
+                local ok = pcall(function()
+                    remote:FireServer(key, num, bodyPart, {}, nil, _combatSessionHash)
+                end)
+                if ok then fired = true end
+            end
+            -- also try without relying on fixed hash variants
+            pcall(function()
+                remote:FireServer(key, _combatNumericId, bodyPart, {}, nil, _combatSessionHash)
+            end)
+        end
+    end
+    return fired
+end
+
+-- Multi-hit:
+-- 1) Legacy RegisterHit(primaryHead, { {enemy, head}, ... })
+-- 2) New Common/Util remotes per target body part
 local function fireCombatHit(targets)
     if not targets or #targets == 0 then
-        return false
-    end
-    local RegisterAttack, RegisterHit = getCombatRemotes()
-    if not RegisterHit then
         return false
     end
 
     local hitList = {}
     local primaryHead = nil
+    local bodyParts = {}
     for _, enemy in ipairs(targets) do
         if enemy and enemy.Parent then
-            local enemyHead = enemy:FindFirstChild("Head")
             local humanoid = enemy:FindFirstChildOfClass("Humanoid")
-            if enemyHead and humanoid and humanoid.Health > 0 then
-                table.insert(hitList, { enemy, enemyHead })
-                if not primaryHead then
-                    primaryHead = enemyHead
+            if humanoid and humanoid.Health > 0 then
+                local part = getEnemyHitPart(enemy)
+                if part then
+                    table.insert(bodyParts, part)
+                    local head = enemy:FindFirstChild("Head") or part
+                    table.insert(hitList, { enemy, head })
+                    if not primaryHead then
+                        primaryHead = head
+                    end
                 end
             end
         end
     end
-    if not primaryHead or #hitList == 0 then
+    if #hitList == 0 then
         return false
     end
 
-    pcall(function()
-        if RegisterAttack then
-            RegisterAttack:FireServer(0)
+    local used = false
+
+    -- Legacy path
+    local RegisterAttack, RegisterHit = getCombatRemotes()
+    if RegisterHit and primaryHead then
+        local ok = pcall(function()
+            if RegisterAttack then
+                RegisterAttack:FireServer(0)
+            end
+            RegisterHit:FireServer(primaryHead, hitList)
+        end)
+        if ok then used = true end
+    end
+
+    -- New Sea1 path (fires each target; remote names rotate under Common/Util)
+    for _, part in ipairs(bodyParts) do
+        if fireNewStyleHit(part) then
+            used = true
         end
-        -- primary head first arg, full multi-target list second (your working format)
-        RegisterHit:FireServer(primaryHead, hitList)
-    end)
-    return true
+    end
+
+    return used
 end
 
 -- Cluster / Bring (hub-style, less immortal desync):
@@ -2404,66 +2492,98 @@ local RAID_TYPES = {
 local RAID_LAB_SEA2 = Vector3.new(-6520, 308, -4812) -- chip insert pad (user)
 local RAID_LAB_SEA3 = Vector3.new(-5550, 314, -2980) -- Castle on the Sea (approx)
 
--- In-raid: Main.Timer visible (hub standard) OR Island 1..5 in Locations
+-- ========== RAID CORE (hub-style Locations + death/end handling) ==========
 local function getRaidLocations()
     local wo = workspace:FindFirstChild("_WorldOrigin")
     return wo and wo:FindFirstChild("Locations")
 end
 
-local function isInRaid()
-    local ok, result = pcall(function()
-        local pg = LocalPlayer:FindFirstChild("PlayerGui")
-        local main = pg and pg:FindFirstChild("Main")
-        if main then
-            local timer = main:FindFirstChild("Timer")
-            if timer and timer:IsA("GuiObject") and timer.Visible then
-                return true
-            end
-        end
-        local locs = getRaidLocations()
-        if locs then
-            for i = 1, 5 do
-                if locs:FindFirstChild("Island " .. i) then
-                    return true
-                end
-            end
+local function raidTimerVisible()
+    local ok, vis = pcall(function()
+        local main = LocalPlayer:FindFirstChild("PlayerGui") and LocalPlayer.PlayerGui:FindFirstChild("Main")
+        if not main then return false end
+        local timer = main:FindFirstChild("Timer")
+        if timer and timer:IsA("GuiObject") then
+            return timer.Visible == true
         end
         return false
     end)
-    return ok and result == true
+    return ok and vis == true
 end
 
--- Highest existing Island N (other hubs: fly to furthest spawned island)
+local function isPlayerDead()
+    local char = LocalPlayer.Character
+    if not char then return true end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum or hum.Health <= 0 then return true end
+    return false
+end
+
+local function isInRaid()
+    -- Timer HUD OR any Island part under Locations
+    if raidTimerVisible() then return true end
+    local locs = getRaidLocations()
+    if not locs then return false end
+    for _, ch in ipairs(locs:GetChildren()) do
+        local n = string.lower(ch.Name)
+        if string.find(n, "island") then
+            return true
+        end
+    end
+    return false
+end
+
+local function getPartCFrame(obj)
+    if not obj then return nil end
+    local cf = nil
+    pcall(function()
+        if obj:IsA("BasePart") then
+            cf = obj.CFrame
+        elseif obj:IsA("Model") then
+            cf = obj:GetPivot()
+        else
+            local p = obj:FindFirstChildWhichIsA("BasePart", true)
+            if p then cf = p.CFrame end
+        end
+    end)
+    return cf
+end
+
+-- Prefer highest Island N; also accept "Island1" / loose names
 local function getActiveRaidIsland()
     local locs = getRaidLocations()
     if not locs then return nil, 0, nil end
+
     for i = 5, 1, -1 do
-        local island = locs:FindFirstChild("Island " .. i)
+        local island = locs:FindFirstChild("Island " .. i) or locs:FindFirstChild("Island" .. i)
         if island then
-            local cf = nil
-            pcall(function()
-                if island:IsA("BasePart") then
-                    cf = island.CFrame
-                elseif island:IsA("Model") then
-                    cf = island:GetPivot()
-                else
-                    local p = island:FindFirstChildWhichIsA("BasePart", true)
-                    if p then cf = p.CFrame end
-                end
-            end)
+            local cf = getPartCFrame(island)
+            if cf then return island, i, cf end
+        end
+    end
+
+    -- fallback: any child with Island in name, pick furthest from player or first
+    local best, bestI, bestCf, bestScore = nil, 0, nil, -1
+    for _, ch in ipairs(locs:GetChildren()) do
+        local n = string.lower(ch.Name)
+        if string.find(n, "island") then
+            local cf = getPartCFrame(ch)
             if cf then
-                return island, i, cf
+                local num = tonumber(string.match(ch.Name, "%d+")) or 1
+                if num >= bestScore then
+                    best, bestI, bestCf, bestScore = ch, num, cf, num
+                end
             end
         end
     end
-    return nil, 0, nil
+    return best, bestI, bestCf
 end
 
 local function getRaidEnemiesNear(pos, radius)
     local list = {}
     local en = workspace:FindFirstChild("Enemies")
     if not en then return list end
-    radius = radius or 200
+    radius = radius or 250
     for _, m in ipairs(en:GetChildren()) do
         local h = m:FindFirstChildOfClass("Humanoid")
         local r = m:FindFirstChild("HumanoidRootPart")
@@ -2476,61 +2596,88 @@ local function getRaidEnemiesNear(pos, radius)
     return list
 end
 
-local raidOrbitAngle = 0
-local raidHoverY = 25
-local raidOrbitRadius = 16
-local currentRaidIslandIndex = 0
+local function getAllRaidEnemies()
+    return getRaidEnemiesNear(nil, 1e9)
+end
 
-local function raidFlyToIslandCF(cf)
-    if not cf then return end
-    local hover = cf.Position + Vector3.new(0, raidHoverY, 0)
+local raidOrbitAngle = 0
+local raidHoverY = 22
+local raidDodgeAmp = 35 -- side-to-side dodge distance (not stuck mid-island)
+local currentRaidIslandIndex = 0
+local raidEndedAt = 0
+local RAID_REENTRY_COOLDOWN = 8
+
+-- Stay over the island, but STRAFE left/right (real dodge), not tiny circle in the center
+local function raidFlyToPos(pos)
+    if not pos then return end
     pcall(function()
+        _bossFlyUnlock = true
         if not flying then enableFly() end
-        raidOrbitAngle = raidOrbitAngle + 0.05
-        local ox = math.cos(raidOrbitAngle) * raidOrbitRadius
-        local oz = math.sin(raidOrbitAngle) * raidOrbitRadius
-        local target = Vector3.new(hover.X + ox, hover.Y, hover.Z + oz)
+
+        -- smooth left-right + slight forward/back (figure-8-ish)
+        raidOrbitAngle = raidOrbitAngle + 0.07
+        local ox = math.sin(raidOrbitAngle) * raidDodgeAmp
+        local oz = math.sin(raidOrbitAngle * 0.5) * (raidDodgeAmp * 0.45)
+        local target = Vector3.new(pos.X + ox, pos.Y + raidHoverY, pos.Z + oz)
         setFlyTarget(target, false)
+
         local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
         if hrp then
             local flat = Vector3.new(hrp.Position.X - target.X, 0, hrp.Position.Z - target.Z)
-            if flat.Magnitude < 8 then
+            if flat.Magnitude < 6 then
                 local v = hrp.AssemblyLinearVelocity
-                hrp.AssemblyLinearVelocity = Vector3.new(v.X * 0.25, v.Y * 0.4, v.Z * 0.25)
-            elseif flat.Magnitude > 120 then
+                hrp.AssemblyLinearVelocity = Vector3.new(v.X * 0.35, v.Y * 0.5, v.Z * 0.35)
+            elseif flat.Magnitude > 160 then
                 hrp.AssemblyLinearVelocity = Vector3.zero
                 setFlyTarget(target, false)
             end
         end
+        _bossFlyUnlock = false
     end)
 end
 
 local function raidKillLoop()
-    local island, idx, cf = getActiveRaidIsland()
-    if not island or not cf then
-        -- islands not ready: HOLD still (no fly-away at raid start)
-        pcall(function()
-            local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                if not flying then enableFly() end
-                setFlyTarget(hrp.Position, false)
-                hrp.AssemblyLinearVelocity = Vector3.zero
-            end
-        end)
+    if isPlayerDead() then
         return false
     end
 
-    if idx ~= currentRaidIslandIndex then
-        currentRaidIslandIndex = idx
-        notifyUser("Raid", "Going to Island " .. idx, 2)
+    ensureSimRadius()
+
+    local island, idx, cf = getActiveRaidIsland()
+    local focusPos = cf and cf.Position or nil
+
+    -- Fallback: no Locations parts → use living enemies as focus (still progress raid)
+    if not focusPos then
+        local all = getAllRaidEnemies()
+        if #all > 0 then
+            local sum = Vector3.zero
+            for _, m in ipairs(all) do
+                sum = sum + m.HumanoidRootPart.Position
+            end
+            focusPos = sum / #all
+            if currentRaidIslandIndex ~= -1 then
+                currentRaidIslandIndex = -1
+                notifyUser("Raid", "No Island parts — following enemies", 2)
+            end
+        end
     end
 
-    -- fly to Locations Island N (hub method), not enemy centroid
-    raidFlyToIslandCF(cf)
+    if not focusPos then
+        -- truly nothing: stay put briefly (island between spawns)
+        return false
+    end
 
-    ensureSimRadius()
-    local pos = cf.Position
-    local aura = getRaidEnemiesNear(pos, 220)
+    if idx > 0 and idx ~= currentRaidIslandIndex then
+        currentRaidIslandIndex = idx
+        notifyUser("Raid", "Island " .. idx, 2)
+    end
+
+    raidFlyToPos(focusPos)
+
+    local aura = getRaidEnemiesNear(focusPos, 250)
+    if #aura == 0 then
+        aura = getAllRaidEnemies()
+    end
     if #aura == 0 then
         return false
     end
@@ -2539,11 +2686,11 @@ local function raidKillLoop()
         for i, m in ipairs(aura) do
             if i > 14 then break end
             local r = m:FindFirstChild("HumanoidRootPart")
-            if r then
-                local d = (r.Position - pos).Magnitude
-                if d > 25 and d < 180 then
+            if r and focusPos then
+                local d = (r.Position - focusPos).Magnitude
+                if d > 20 and d < 200 then
                     local ang = (i - 1) * 0.55
-                    r.CFrame = CFrame.new(pos + Vector3.new(math.cos(ang) * 6, 2, math.sin(ang) * 6))
+                    r.CFrame = CFrame.new(focusPos + Vector3.new(math.cos(ang) * 6, 2, math.sin(ang) * 6))
                 end
             end
         end
@@ -2558,28 +2705,44 @@ end
 local function startAutoRaid()
     if raidRunning then return end
     raidRunning = true
+    raidEndedAt = 0
+    currentRaidIslandIndex = 0
     notifyUser("Raid", "Auto Raid ON (" .. tostring(config.raidType) .. ")", 3)
     raidTask = task.spawn(function()
         while raidRunning do
             local ok, err = pcall(function()
                 if not config.autoRaid then return end
 
+                -- DEAD: wait for respawn, do not fly to old raid
+                if isPlayerDead() then
+                    notifyUser("Raid", "Dead — waiting respawn", 2)
+                    task.wait(1)
+                    return
+                end
+
                 if isInRaid() then
-                    notifyUser("Raid", "In raid — clearing enemies", 2)
+                    raidEndedAt = 0
                     local fighting = raidKillLoop()
                     if not fighting then
-                        task.wait(1.5)
+                        task.wait(0.8)
                     end
                     return
                 end
 
-                -- definitely outside raid
+                -- Raid ended (timer gone, no islands)
                 currentRaidIslandIndex = 0
-                notifyUser("Raid", "Outside raid → lobby / chip", 2)
+                if raidEndedAt == 0 then
+                    raidEndedAt = os.clock()
+                    notifyUser("Raid", "Raid ended — cooldown then new chip", 3)
+                end
+                -- short cooldown so we don't path back into a finishing raid
+                if os.clock() - raidEndedAt < RAID_REENTRY_COOLDOWN then
+                    task.wait(0.5)
+                    return
+                end
 
-                -- Outside raid: buy chip + go lobby + start
                 if getPlayerLevel() < 1100 then
-                    notifyUser("Raid", "Need level 1100+ for raids", 3)
+                    notifyUser("Raid", "Need level 1100+", 3)
                     task.wait(10)
                     return
                 end
@@ -2588,25 +2751,22 @@ local function startAutoRaid()
                 if not hasMicrochip() then
                     buyRaidChip()
                     if not hasMicrochip() then
-                        notifyUser("Raid", "No Microchip (buy at Scientist / wait CD)", 3)
+                        notifyUser("Raid", "No Microchip — lobby / CD", 3)
                         goToRaidLobby()
-                        task.wait(5)
+                        task.wait(4)
                         return
                     end
                 end
 
-                notifyUser("Raid", "Going to raid lobby...", 2)
+                notifyUser("Raid", "Lobby → start", 2)
                 goToRaidLobby()
                 tryStartRaid()
-                task.wait(3)
-                if not isInRaid() then
-                    notifyUser("Raid", "Not in raid yet — equip chip & press green button if needed", 3)
-                end
+                task.wait(2.5)
             end)
             if not ok then
                 warn("[BF] autoRaid:", err)
             end
-            task.wait(0.4)
+            task.wait(0.35)
         end
     end)
 end
