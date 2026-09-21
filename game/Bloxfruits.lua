@@ -181,39 +181,71 @@ local config = {
 }
 
 -- =============================================
--- COMBAT REMOTES (hub-style 2026)
--- Working pattern from public FastAttack modules:
---   1) RegisterAttack:FireServer(cooldown)
---   2) RegisterHit:FireServer(primaryRoot/Head, { {enemy, bodyPart}, ... })
---   3) tool.LeftClickRemote:FireServer(direction, combo)  -- M1
---   4) VirtualUser click fallback
--- Sea1 may also use obfuscated Common/Util remotes (Cobalt dumps)
+-- COMBAT (copied from working FastAttack hubs: QuantumOnyx / redz-style)
+-- Real damage path: getsenv(PlayerScripts LocalScript)._G.SendHitsToServer(part, bladeHits)
+-- Plus: RegisterAttack, LeftClickRemote, RegisterHit fallback
 -- =============================================
 local _hitBodyParts = {
-    "Head", "UpperTorso", "LowerTorso", "HumanoidRootPart",
     "RightHand", "LeftHand", "RightLowerArm", "LeftLowerArm",
-    "RightUpperArm", "LeftUpperArm",
+    "RightUpperArm", "LeftUpperArm", "Head", "UpperTorso", "LowerTorso", "HumanoidRootPart",
 }
 
+local _SendHitsToServer = nil
+local _CombatController = nil
+local _m1Combo = 0
+local _comboDebounce = 0
+
+local function resolveSendHits()
+    if _SendHitsToServer then return _SendHitsToServer end
+    pcall(function()
+        if not getsenv then return end
+        local ps = LocalPlayer:FindFirstChild("PlayerScripts")
+        if not ps then return end
+        for _, ls in ipairs(ps:GetChildren()) do
+            if ls:IsA("LocalScript") then
+                local ok, env = pcall(getsenv, ls)
+                if ok and type(env) == "table" then
+                    local g = env._G or env
+                    if type(g) == "table" and type(g.SendHitsToServer) == "function" then
+                        _SendHitsToServer = g.SendHitsToServer
+                        return
+                    end
+                    if type(env.SendHitsToServer) == "function" then
+                        _SendHitsToServer = env.SendHitsToServer
+                        return
+                    end
+                end
+            end
+        end
+    end)
+    return _SendHitsToServer
+end
+
+local function resolveCombatController()
+    if _CombatController then return _CombatController end
+    pcall(function()
+        local c = ReplicatedStorage:FindFirstChild("Controllers")
+        local mod = c and c:FindFirstChild("CombatController")
+        if mod then
+            _CombatController = require(mod)
+        end
+    end)
+    return _CombatController
+end
+
 local function getNetRemote(name)
-    -- try direct path
     local modules = ReplicatedStorage:FindFirstChild("Modules")
     local net = modules and modules:FindFirstChild("Net")
-    if net then
-        local direct = net:FindFirstChild("RE/" .. name) or net:FindFirstChild(name)
-        if direct then return direct end
-        -- require Net module style: Net:RemoteEvent("RegisterHit", true)
-        local ok, netMod = pcall(function()
-            return require(net)
-        end)
-        if ok and netMod and type(netMod.RemoteEvent) == "function" then
-            local ok2, rem = pcall(function()
-                return netMod:RemoteEvent(name, true)
-            end)
-            if ok2 and rem then return rem end
+    if not net then return nil end
+    local direct = net:FindFirstChild("RE/" .. name) or net:FindFirstChild(name)
+    if direct then return direct end
+    pcall(function()
+        local netMod = require(net)
+        if netMod and netMod.RemoteEvent then
+            direct = netMod:RemoteEvent(name, true)
         end
-    end
-    return nil
+    end)
+    return direct
 end
 
 local function getCombatRemotes()
@@ -222,8 +254,11 @@ end
 
 local function getEnemyHitPart(enemy)
     if not enemy then return nil end
+    local pick = _hitBodyParts[math.random(1, #_hitBodyParts)]
+    local p = enemy:FindFirstChild(pick)
+    if p and p:IsA("BasePart") then return p end
     for _, n in ipairs(_hitBodyParts) do
-        local p = enemy:FindFirstChild(n)
+        p = enemy:FindFirstChild(n)
         if p and p:IsA("BasePart") then return p end
     end
     return enemy:FindFirstChildWhichIsA("BasePart")
@@ -235,12 +270,13 @@ local function buildBladeHits(targets)
     for _, enemy in ipairs(targets) do
         if enemy and enemy.Parent then
             local hum = enemy:FindFirstChildOfClass("Humanoid")
-            if hum and hum.Health > 0 then
+            local root = enemy:FindFirstChild("HumanoidRootPart")
+            if hum and root and hum.Health > 0 then
                 local part = getEnemyHitPart(enemy)
                 if part then
                     table.insert(hits, { enemy, part })
                     if not primary then
-                        primary = enemy:FindFirstChild("HumanoidRootPart") or part
+                        primary = part
                     end
                 end
             end
@@ -249,7 +285,15 @@ local function buildBladeHits(targets)
     return primary, hits
 end
 
-local _m1Combo = 0
+local function getCombo()
+    local since = tick() - _comboDebounce
+    local combo = (since <= 0.5) and _m1Combo or 0
+    combo = (combo >= 4) and 1 or (combo + 1)
+    _comboDebounce = tick()
+    _m1Combo = combo
+    return combo
+end
+
 local function fireLeftClickRemote(primaryPart)
     local char = LocalPlayer.Character
     if not char then return false end
@@ -257,18 +301,18 @@ local function fireLeftClickRemote(primaryPart)
     if not tool then return false end
     local remote = tool:FindFirstChild("LeftClickRemote")
     if not remote then return false end
-    _m1Combo = (_m1Combo % 4) + 1
+    local combo = getCombo()
     local hrp = char:FindFirstChild("HumanoidRootPart")
     local ok = pcall(function()
         if primaryPart and hrp then
             local dir = (primaryPart.Position - hrp.Position)
             if dir.Magnitude > 0.01 then
-                remote:FireServer(dir.Unit, _m1Combo)
+                remote:FireServer(dir.Unit, combo)
             else
-                remote:FireServer(Vector3.new(0.01, -500, 0.01), _m1Combo, true)
+                remote:FireServer(Vector3.new(0.01, -500, 0.01), combo, true)
             end
         else
-            remote:FireServer(Vector3.new(0.01, -500, 0.01), _m1Combo, true)
+            remote:FireServer(Vector3.new(0.01, -500, 0.01), combo, true)
         end
     end)
     return ok
@@ -279,8 +323,6 @@ local function fireVirtualClick()
         local vu = game:GetService("VirtualUser")
         vu:CaptureController()
         vu:Button1Down(Vector2.new(0, 0))
-        task.wait()
-        vu:Button1Up(Vector2.new(0, 0))
     end)
     pcall(function()
         VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
@@ -289,147 +331,75 @@ local function fireVirtualClick()
     end)
 end
 
--- Cobalt-style Sea1 remotes (names/keys rotate — best effort)
--- Latest Cobalt dump (Sea1):
--- ReplicatedStorage.Assets["825"]:FireServer("XO%Xomcy~oxBc~", 16110659, bodyPart, {}, nil, "160293a1")
+-- Cobalt Assets path (updates often)
 local _combatSessionHash = "160293a1"
 local _combatNumericId = 16110659
-local _combatKeyCandidates = {
-    "XO%Xomcy~oxBc~", -- latest
-    "UB(Ub`ntsbuOns",
-    "QF,QfdjpwfqKjw",
-}
-local _cachedHitRemote = nil
-local _cachedHitRemoteAt = 0
+local _combatKey = "XO%Xomcy~oxBc~"
 
-local function findAssetsHitRemote()
-    local now = os.clock()
-    if _cachedHitRemote and _cachedHitRemote.Parent and (now - _cachedHitRemoteAt) < 3 then
-        return _cachedHitRemote
-    end
-    -- Prefer exact path from dump
+local function fireAssetsHit(bodyPart)
+    if not bodyPart then return false end
     local assets = ReplicatedStorage:FindFirstChild("Assets")
-    if assets then
-        local exact = assets:FindFirstChild("825")
-        if exact and exact:IsA("RemoteEvent") then
-            _cachedHitRemote = exact
-            _cachedHitRemoteAt = now
-            return exact
-        end
-        -- any RemoteEvent under Assets
-        for _, ch in ipairs(assets:GetChildren()) do
-            if ch:IsA("RemoteEvent") then
-                _cachedHitRemote = ch
-                _cachedHitRemoteAt = now
-                return ch
-            end
-        end
-    end
-    for _, folderName in ipairs({"Common", "Util", "Modules"}) do
-        local folder = ReplicatedStorage:FindFirstChild(folderName)
-        if folder then
-            for _, ch in ipairs(folder:GetChildren()) do
-                if ch:IsA("RemoteEvent") then
-                    _cachedHitRemote = ch
-                    _cachedHitRemoteAt = now
-                    return ch
-                end
-            end
-        end
-    end
-    return nil
-end
-
-local function fireNewStyleHit(bodyPart)
-    if not bodyPart or not bodyPart.Parent then return false end
-    local rem = findAssetsHitRemote()
-    if not rem then return false end
-
+    if not assets then return false end
     local fired = false
-    -- Primary: exact Cobalt signature
-    local ok = pcall(function()
-        rem:FireServer(
-            _combatKeyCandidates[1],
-            _combatNumericId,
-            bodyPart,
-            {},
-            nil,
-            _combatSessionHash
-        )
-    end)
-    if ok then fired = true end
-
-    -- Try other known keys / ids (rotation)
-    for i, key in ipairs(_combatKeyCandidates) do
-        if i ~= 1 then
-            pcall(function()
-                rem:FireServer(key, _combatNumericId, bodyPart, {}, nil, _combatSessionHash)
+    for _, rem in ipairs(assets:GetChildren()) do
+        if rem:IsA("RemoteEvent") then
+            local ok = pcall(function()
+                rem:FireServer(_combatKey, _combatNumericId, bodyPart, {}, nil, _combatSessionHash)
             end)
-            pcall(function()
-                rem:FireServer(key, LocalPlayer.UserId, bodyPart, {}, nil, _combatSessionHash)
-            end)
+            if ok then fired = true end
         end
     end
-
-    -- Also fire ALL RemoteEvents under Assets (name rotates: 825, 38, 633, ...)
-    local assets = ReplicatedStorage:FindFirstChild("Assets")
-    if assets then
-        for _, ch in ipairs(assets:GetChildren()) do
-            if ch:IsA("RemoteEvent") and ch ~= rem then
-                pcall(function()
-                    ch:FireServer(
-                        _combatKeyCandidates[1],
-                        _combatNumericId,
-                        bodyPart,
-                        {},
-                        nil,
-                        _combatSessionHash
-                    )
-                end)
-            end
-        end
-    end
-
     return fired
 end
 
 local function fireCombatHit(targets)
     if not targets or #targets == 0 then return false end
-
     local primary, hits = buildBladeHits(targets)
     if not primary or #hits == 0 then return false end
 
-    local used = false
+    -- 1) Game's own SendHitsToServer (what working hubs use)
+    local send = resolveSendHits()
+    if send then
+        pcall(function()
+            send(primary, hits)
+        end)
+    end
 
-    -- 1) Sea1 Assets remote (Cobalt) — THIS is what damages now
-    for _, pair in ipairs(hits) do
-        if fireNewStyleHit(pair[2]) then
-            used = true
+    -- 2) RegisterAttack + RegisterHit
+    local RegisterAttack, RegisterHit = getCombatRemotes()
+    if RegisterAttack then
+        pcall(function() RegisterAttack:FireServer(0) end)
+    end
+    if RegisterHit then
+        pcall(function() RegisterHit:FireServer(primary, hits) end)
+        -- some builds want HRP as first arg
+        local root = hits[1][1]:FindFirstChild("HumanoidRootPart")
+        if root then
+            pcall(function() RegisterHit:FireServer(root, hits) end)
         end
     end
 
-    -- 2) Tool M1
-    if fireLeftClickRemote(primary) then
-        used = true
+    -- 3) LeftClickRemote on tool
+    fireLeftClickRemote(primary)
+
+    -- 4) CombatController:Attack(tool)
+    pcall(function()
+        local cc = resolveCombatController()
+        local tool = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
+        if cc and tool and type(cc.Attack) == "function" then
+            cc:Attack(tool)
+        end
+    end)
+
+    -- 5) Assets Cobalt remote
+    for _, pair in ipairs(hits) do
+        fireAssetsHit(pair[2])
     end
 
-    -- 3) Classic RegisterHit (Sea2/3)
-    local RegisterAttack, RegisterHit = getCombatRemotes()
-    if RegisterHit then
-        pcall(function()
-            if RegisterAttack then RegisterAttack:FireServer(0) end
-            RegisterHit:FireServer(primary, hits)
-        end)
-        pcall(function()
-            if RegisterAttack then RegisterAttack:FireServer(0) end
-            RegisterHit:FireServer(hits[1][2], hits)
-        end)
-    end
-
-    -- 4) Click fallback
+    -- 6) Click
     fireVirtualClick()
 
-    return used or true
+    return true
 end
 
 -- Cluster / Bring (hub-style, less immortal desync):
