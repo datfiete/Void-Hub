@@ -159,11 +159,11 @@ local config = {
     attackRange = 30,
     attackSpeed = 0.002,
     bossAttackSpeed = 0.001,
-    hitsPerCycle = 25,
+    hitsPerCycle = 40,
     bossHitsPerCycle = 35,
     clusterEnabled = true,
     clusterHeight = 12,
-    maxClusterSize = 15,
+    maxClusterSize = 25,
     clusterRange = 300, -- how far to pull mobs into cluster
     statEnabled = false,
     statsToAdd = {"Melee", "Defense"},
@@ -178,6 +178,7 @@ local config = {
     bossTimersEnabled = true,    -- show boss respawn board
     bossSpawnNotify = true,
     autoSeaProgress = false, -- off by default until stable
+    autoSecrets = false, -- Update 30 island secrets (windmill etc.)
 }
 
 -- =============================================
@@ -319,7 +320,14 @@ local function fireLeftClickRemote(primaryPart)
 end
 
 local function fireVirtualClick()
-    -- disabled: constant clicking blocks UI / movement
+    -- used only for secret rope cuts, not combat spam
+    pcall(function()
+        local vu = game:GetService("VirtualUser")
+        vu:CaptureController()
+        vu:Button1Down(Vector2.new(0, 0))
+        task.wait(0.05)
+        vu:Button1Up(Vector2.new(0, 0))
+    end)
 end
 
 -- Cobalt Assets path (updates often)
@@ -488,7 +496,7 @@ local function collectNearbyTargets(allTargets, playerRoot, lockedEnemy, maxCoun
         return a.d < b.d
     end)
     for _, item in ipairs(scored) do
-        if maxCount > 0 and #list >= maxCount then
+        if maxCount and maxCount > 0 and #list >= maxCount then
             break
         end
         add(item.enemy, idx, true)
@@ -502,36 +510,86 @@ end
 -- ISLAND DATA (full list)
 -- =============================================
 local islands = {
-    -- ========== SEA 1 — Normal ==========
-    {Name = "Pirate Starter",     Min = 0,   Max = 10,  Pos = Vector3.new(944, 51, 1401), Quest = {"StartQuest","BanditQuest1",1}, EnemyPatterns = {"Bandit"}, isBoss = false},
+    -- Sea1 (from EnemySpawns dump MAP=Sea1 PlaceId=2753915549)
+    {Name = "Pirate Starter",     Min = 0,   Max = 10,  Pos = Vector3.new(1137, 13, 1594), Quest = {"StartQuest","BanditQuest1",1}, EnemyPatterns = {"Bandit"}, isBoss = false},
     {Name = "Marine Starter",     Min = 0,   Max = 10,  Pos = Vector3.new(-2723, 32, 2090), Quest = {"StartQuest","MarineQuest1",1}, EnemyPatterns = {"Trainee"}, isBoss = false},
-    {Name = "Jungle (Normal)",    Min = 10,  Max = 15,  Pos = Vector3.new(-1620, 37, 144), Quest = {"StartQuest","JungleQuest",1}, EnemyPatterns = {"Monkey"}, isBoss = false},
-    {Name = "Jungle (Stage 2)",   Min = 15,  Max = 20,  Pos = Vector3.new(-1206, 8, -448), Quest = {"StartQuest","JungleQuest",2}, EnemyPatterns = {"Gorilla"}, isBoss = false},
-    {Name = "Pirate Village",     Min = 30,  Max = 40,  Pos = Vector3.new(-1151, 45, 3868), Quest = {"StartQuest","BuggyQuest1",1}, EnemyPatterns = {"Pirate"}, isBoss = false},
-    {Name = "Pirate Village Stage 2", Min = 40, Max = 55, Pos = Vector3.new(-1151, 45, 3868), Quest = {"StartQuest","BuggyQuest1",2}, EnemyPatterns = {"Brute"}, isBoss = false},
+    {Name = "Jungle (Normal)",    Min = 10,  Max = 15,  Pos = Vector3.new(-1520, 30, 150), Quest = {"StartQuest","JungleQuest",1}, EnemyPatterns = {"Monkey"}, isBoss = false},
+    {Name = "Jungle (Stage 2)",   Min = 15,  Max = 20,  Pos = Vector3.new(-1313, 18, -548), Quest = {"StartQuest","JungleQuest",2}, EnemyPatterns = {"Gorilla"}, isBoss = false},
+    {Name = "Pirate Village",     Min = 30,  Max = 40,  Pos = Vector3.new(-1141, 22, 3976), Quest = {"StartQuest","BuggyQuest1",1}, EnemyPatterns = {"Pirate"}, isBoss = false},
+    {Name = "Pirate Village Stage 2", Min = 40, Max = 55, Pos = Vector3.new(-1204, 28, 4370), Quest = {"StartQuest","BuggyQuest1",2}, EnemyPatterns = {"Brute"}, isBoss = false},
     {Name = "Desert 1",           Min = 60, Max = 75, Pos = Vector3.new(924, 8, 4514), Quest = {"StartQuest","DesertQuest",1}, EnemyPatterns = {"Desert Bandit"}, isBoss = false},
     {Name = "Desert 2",           Min = 75, Max = 90, Pos = Vector3.new(1573, 14, 4159), Quest = {"StartQuest","DesertQuest",2}, EnemyPatterns = {"Desert Officer"}, isBoss = false},
-    {Name = "Snow 1",             Min = 90, Max = 100, Pos = Vector3.new(1364, 78, -1430), Quest = {"StartQuest","SnowQuest",1}, EnemyPatterns = {"Snow Bandit"}, isBoss = false},
-    {Name = "Snow 2",             Min = 100, Max = 120, Pos = Vector3.new(1375, 106, -1408), Quest = {"StartQuest","SnowQuest",2}, EnemyPatterns = {"Snowman"}, isBoss = false},
-    {Name = "Marine Fortress",    Min = 120, Max = 150, Pos = Vector3.new(-4834, 13, 4277), Quest = {"StartQuest","MarineQuest2",1}, EnemyPatterns = {"Chief Petty Officer"}, isBoss = false},
+    {Name = "Snow 1",             Min = 90, Max = 100, Pos = Vector3.new(1416, 78, -1435), Quest = {"StartQuest","SnowQuest",1}, EnemyPatterns = {"Snow Bandit"}, isBoss = false},
+    {Name = "Snow 2",             Min = 100, Max = 120, Pos = Vector3.new(1198, 98, -1603), Quest = {"StartQuest","SnowQuest",2}, EnemyPatterns = {"Snowman"}, isBoss = false},
+    {Name = "Marine Fortress",    Min = 120, Max = 150, Pos = Vector3.new(-4809, 13, 4302), Quest = {"StartQuest","MarineQuest2",1}, EnemyPatterns = {"Chief Petty Officer"}, isBoss = false},
     {Name = "Sky 1",              Min = 150, Max = 175, Pos = Vector3.new(-5092, 281, -1019), Quest = {"StartQuest","SkyQuest",1}, EnemyPatterns = {"Sky Bandit"}, isBoss = false},
     {Name = "Sky 2",              Min = 175, Max = 190, Pos = Vector3.new(-5293, 505, -351), Quest = {"StartQuest","SkyQuest",2}, EnemyPatterns = {"Dark Master"}, isBoss = false},
     {Name = "Prison 1",           Min = 190, Max = 210, Pos = Vector3.new(5272, 7, 468), Quest = {"StartQuest","PrisonerQuest",1}, EnemyPatterns = {"Prisoner"}, isBoss = false},
-    {Name = "Prison 2",           Min = 210, Max = 250, Pos = Vector3.new(5252, 20, 865), Quest = {"StartQuest","PrisonerQuest",2}, EnemyPatterns = {"Dangerous Prisoner"}, isBoss = false},
-    {Name = "Colosseum",          Min = 250, Max = 299, Pos = Vector3.new(-1685, 10, -2765), Quest = {"StartQuest","ColosseumQuest",1}, EnemyPatterns = {"Toga Warrior"}, isBoss = false},
-    {Name = "Colosseum 2",        Min = 275, Max = 299, Pos = Vector3.new(-1175, 12, -3214), Quest = {"StartQuest","ColosseumQuest",2}, EnemyPatterns = {"Gladiator"}, isBoss = false},
-    {Name = "Volcano 1",          Min = 300, Max = 324, Pos = Vector3.new(-5445, 17, 8434), Quest = {"StartQuest","MagmaQuest",1}, EnemyPatterns = {"Military Soldier"}, isBoss = false},
-    {Name = "Volcano 2",          Min = 325, Max = 374, Pos = Vector3.new(-5842, 77, 8773), Quest = {"StartQuest","MagmaQuest",2}, EnemyPatterns = {"Military Spy"}, isBoss = false},
-    {Name = "Underwater 1",       Min = 375, Max = 399, Pos = Vector3.new(60793, 24, 1361), Quest = {"StartQuest","FishmanQuest",1}, EnemyPatterns = {"Fishman Warrior"}, isBoss = false},
-    {Name = "Underwater 2",       Min = 400, Max = 449, Pos = Vector3.new(61928, 25, 1331), Quest = {"StartQuest","FishmanQuest",2}, EnemyPatterns = {"Fishman Commando"}, isBoss = false},
-    {Name = "Lower Upper Sky 1",  Min = 450, Max = 474, Pos = Vector3.new(-4705, 845, -1916), Quest = {"StartQuest","SkyExp1Quest",1}, EnemyPatterns = {"God's Guard"}, isBoss = false},
-    {Name = "Lower Upper Sky 2",  Min = 475, Max = 524, Pos = Vector3.new(-7637, 5546, -515), Quest = {"StartQuest","SkyExp1Quest",2}, EnemyPatterns = {"Shanda"}, isBoss = false},
-    {Name = "Upper Sky 1",        Min = 525, Max = 549, Pos = Vector3.new(-7680, 5607, -1445), Quest = {"StartQuest","SkyExp2Quest",1}, EnemyPatterns = {"Royal Squad"}, isBoss = false},
-    {Name = "Upper Sky 2",        Min = 550, Max = 624, Pos = Vector3.new(-7137, 5541, 893), Quest = {"StartQuest","SkyExp2Quest",2}, EnemyPatterns = {"Royal Soldier"}, isBoss = false},
-    {Name = "Fountain 1",         Min = 625, Max = 649, Pos = Vector3.new(5577, 78, 3968), Quest = {"StartQuest","FountainQuest",1}, EnemyPatterns = {"Galley Pirate"}, isBoss = false},
-    {Name = "Fountain 2",         Min = 650, Max = 700, Pos = Vector3.new(5572, 78, 4780), Quest = {"StartQuest","FountainQuest",2}, EnemyPatterns = {"Galley Captain"}, isBoss = false},
+    {Name = "Prison 2",           Min = 210, Max = 230, Pos = Vector3.new(5224, 9, 998), Quest = {"StartQuest","PrisonerQuest",2}, EnemyPatterns = {"Dangerous Prisoner"}, isBoss = false},
+    {Name = "Colosseum 1",        Min = 250, Max = 275, Pos = Vector3.new(-1745, 10, -2705), Quest = {"StartQuest","ColosseumQuest",1}, EnemyPatterns = {"Toga Warrior"}, isBoss = false},
+    {Name = "Colosseum 2",        Min = 275, Max = 300, Pos = Vector3.new(-1175, 12, -3214), Quest = {"StartQuest","ColosseumQuest",2}, EnemyPatterns = {"Gladiator"}, isBoss = false},
+    {Name = "Magma 1",            Min = 300, Max = 325, Pos = Vector3.new(-5468, 17, 8450), Quest = {"StartQuest","MagmaQuest",1}, EnemyPatterns = {"Military Soldier"}, isBoss = false},
+    {Name = "Magma 2",            Min = 325, Max = 350, Pos = Vector3.new(-5842, 77, 8773), Quest = {"StartQuest","MagmaQuest",2}, EnemyPatterns = {"Military Spy"}, isBoss = false},
+    {Name = "Fishman 1",          Min = 375, Max = 400, Pos = Vector3.new(60793, 24, 1362), Quest = {"StartQuest","FishmanQuest",1}, EnemyPatterns = {"Fishman Warrior"}, isBoss = false},
+    {Name = "Fishman 2",          Min = 400, Max = 425, Pos = Vector3.new(61928, 25, 1331), Quest = {"StartQuest","FishmanQuest",2}, EnemyPatterns = {"Fishman Commando"}, isBoss = false},
+    {Name = "Sky Upper 1",        Min = 450, Max = 475, Pos = Vector3.new(-4241, 1089, -404), Quest = {"StartQuest","SkyExp1Quest",1}, EnemyPatterns = {"God's Guard"}, isBoss = false},
+    {Name = "Sky Upper 2",        Min = 475, Max = 500, Pos = Vector3.new(-5959, 5469, 1831), Quest = {"StartQuest","SkyExp1Quest",2}, EnemyPatterns = {"Shanda"}, isBoss = false},
+    {Name = "Sky Upper 3",        Min = 525, Max = 550, Pos = Vector3.new(-6798, 5552, 1214), Quest = {"StartQuest","SkyExp2Quest",1}, EnemyPatterns = {"Royal Squad"}, isBoss = false},
+    {Name = "Sky Upper 4",        Min = 550, Max = 575, Pos = Vector3.new(-7064, 5541, 939), Quest = {"StartQuest","SkyExp2Quest",2}, EnemyPatterns = {"Royal Soldier"}, isBoss = false},
+    {Name = "Fountain 1",         Min = 625, Max = 650, Pos = Vector3.new(5572, 78, 4010), Quest = {"StartQuest","FountainQuest",1}, EnemyPatterns = {"Galley Pirate"}, isBoss = false},
+    {Name = "Fountain 2",         Min = 650, Max = 675, Pos = Vector3.new(5634, 78, 4789), Quest = {"StartQuest","FountainQuest",2}, EnemyPatterns = {"Galley Captain"}, isBoss = false},
 
-    -- ========== SEA 2 — Normal ==========
+    -- Sea1 Bosses (positions from dump)
+    {Name = "The Gorilla King", Min = 20, Max = 30, Pos = Vector3.new(-1194, 11, -550),
+        Quest = {"StartQuest","JungleQuest",2}, EnemyPatterns = {"Gorilla"},
+        BossQuest = {"StartQuest","JungleQuest",3}, BossPatterns = {"The Gorilla King", "Gorilla King"},
+        isBoss = true},
+    {Name = "Chef", Min = 55, Max = 70, Pos = Vector3.new(-1121, 55, 4121),
+        Quest = {"StartQuest","BuggyQuest1",2}, EnemyPatterns = {"Brute"},
+        BossQuest = {"StartQuest","BuggyQuest1",3}, BossPatterns = {"Chef"},
+        isBoss = true},
+    {Name = "Yeti", Min = 105, Max = 120, Pos = Vector3.new(1182, 104, -1617),
+        Quest = {"StartQuest","SnowQuest",2}, EnemyPatterns = {"Snowman"},
+        BossQuest = {"StartQuest","SnowQuest",3}, BossPatterns = {"Yeti"},
+        isBoss = true},
+    {Name = "Mob Boss", Min = 110, Max = 130, Pos = Vector3.new(-2881, 7, 5431),
+        Quest = {"StartQuest","MarineQuest2",1}, EnemyPatterns = {"Chief Petty Officer"},
+        BossQuest = nil, BossPatterns = {"Mob Boss"},
+        isBoss = true},
+    {Name = "Vice Admiral", Min = 130, Max = 150, Pos = Vector3.new(-5011, 15, 4384),
+        Quest = {"StartQuest","MarineQuest2",1}, EnemyPatterns = {"Chief Petty Officer"},
+        BossQuest = {"StartQuest","MarineQuest2",2}, BossPatterns = {"Vice Admiral"},
+        isBoss = true},
+    {Name = "Warden", Min = 220, Max = 240, Pos = Vector3.new(5623, 1, 734),
+        Quest = {"StartQuest","PrisonerQuest",2}, EnemyPatterns = {"Dangerous Prisoner"},
+        BossQuest = nil, BossPatterns = {"Warden"},
+        isBoss = true},
+    {Name = "Magma General", Min = 350, Max = 375, Pos = Vector3.new(-5626, 55, 8623),
+        Quest = {"StartQuest","MagmaQuest",2}, EnemyPatterns = {"Military Spy"},
+        BossQuest = {"StartQuest","MagmaQuest",3}, BossPatterns = {"Magma General", "Magma General"},
+        isBoss = true},
+    {Name = "Fishman Lord", Min = 425, Max = 450, Pos = Vector3.new(61353, 67, 1029),
+        Quest = {"StartQuest","FishmanQuest",2}, EnemyPatterns = {"Fishman Commando"},
+        BossQuest = {"StartQuest","FishmanQuest",3}, BossPatterns = {"Fishman Lord"},
+        isBoss = true},
+    {Name = "Sky Warlord", Min = 500, Max = 525, Pos = Vector3.new(-6272, 5473, 1888),
+        Quest = {"StartQuest","SkyExp1Quest",2}, EnemyPatterns = {"Shanda"},
+        BossQuest = {"StartQuest","SkyExp1Quest",3}, BossPatterns = {"Sky Warlord", "Sky Warlord"},
+        isBoss = true},
+    {Name = "Lightning God", Min = 575, Max = 625, Pos = Vector3.new(-7125, 5596, 112),
+        Quest = {"StartQuest","SkyExp2Quest",2}, EnemyPatterns = {"Royal Soldier"},
+        BossQuest = {"StartQuest","SkyExp2Quest",3}, BossPatterns = {"Lightning God", "Lightning God"},
+        isBoss = true},
+    {Name = "Cyborg", Min = 675, Max = 700, Pos = Vector3.new(6252, 9, 4941),
+        Quest = {"StartQuest","FountainQuest",2}, EnemyPatterns = {"Galley Captain"},
+        BossQuest = {"StartQuest","FountainQuest",3}, BossPatterns = {"Cyborg"},
+        isBoss = true},
+    {Name = "Ice Admiral", Min = 700, Max = 725, Pos = Vector3.new(1212, 20, -1430),
+        Quest = nil, EnemyPatterns = {},
+        BossQuest = nil, BossPatterns = {"Ice Admiral"},
+        isBoss = true},
+
+    -- Sea2+ (kept)
     {Name = "Area1 Raider",       Min = 700, Max = 724, Pos = Vector3.new(-189, 40, 2354), Quest = {"StartQuest","Area1Quest",1}, EnemyPatterns = {"Raider"}, isBoss = false},
     {Name = "Area1 Mercenary",    Min = 725, Max = 774, Pos = Vector3.new(-1043, 73, 1411), Quest = {"StartQuest","Area1Quest",2}, EnemyPatterns = {"Mercenary"}, isBoss = false},
     {Name = "Area2 Swan Pirate",  Min = 775, Max = 799, Pos = Vector3.new(1019, 73, 1221), Quest = {"StartQuest","Area2Quest",1}, EnemyPatterns = {"Swan Pirate","Factory Staff"}, isBoss = false},
@@ -584,9 +642,9 @@ local islands = {
         Quest = {"StartQuest","PrisonerQuest",2}, EnemyPatterns = {"Dangerous Prisoner"},
         BossQuest = {"StartQuest","ImpelQuest",3}, BossPatterns = {"Swan"},
         isBoss = true},
-    {Name = "Magma Admiral",      Min = 350, Max = 374, Pos = Vector3.new(-5804, 98, 8797),
+    {Name = "Magma General",      Min = 350, Max = 374, Pos = Vector3.new(-5804, 98, 8797),
         Quest = {"StartQuest","MagmaQuest",2}, EnemyPatterns = {"Military Spy"},
-        BossQuest = {"StartQuest","MagmaQuest",3}, BossPatterns = {"Magma Admiral"},
+        BossQuest = {"StartQuest","MagmaQuest",3}, BossPatterns = {"Magma General"},
         isBoss = true},
     {Name = "Fishman Lord",       Min = 425, Max = 450, Pos = Vector3.new(61353, 67, 1029),
         Quest = {"StartQuest","FishmanQuest",2}, EnemyPatterns = {"Fishman Commando"},
@@ -594,11 +652,11 @@ local islands = {
         isBoss = true},
     {Name = "Wysper / Sky Warlord", Min = 500, Max = 525, Pos = Vector3.new(-7637, 5546, -515),
         Quest = {"StartQuest","SkyExp1Quest",2}, EnemyPatterns = {"Shanda"},
-        BossQuest = {"StartQuest","SkyExp1Quest",3}, BossPatterns = {"Wysper","Sky Warlord"},
+        BossQuest = {"StartQuest","SkyExp1Quest",3}, BossPatterns = {"Sky Warlord","Sky Warlord"},
         isBoss = true},
-    {Name = "Thunder God",        Min = 575, Max = 625, Pos = Vector3.new(-7806, 5607, -1753),
+    {Name = "Lightning God",        Min = 575, Max = 625, Pos = Vector3.new(-7806, 5607, -1753),
         Quest = {"StartQuest","SkyExp2Quest",2}, EnemyPatterns = {"Royal Soldier"},
-        BossQuest = {"StartQuest","SkyExp2Quest",3}, BossPatterns = {"Thunder God","Lightning God"},
+        BossQuest = {"StartQuest","SkyExp2Quest",3}, BossPatterns = {"Lightning God","Lightning God"},
         isBoss = true},
     {Name = "Cyborg",             Min = 675, Max = 700, Pos = Vector3.new(6252, 9, 4941),
         Quest = {"StartQuest","FountainQuest",2}, EnemyPatterns = {"Galley Captain"},
@@ -1345,9 +1403,9 @@ local BOSS_CATALOG = {
         -- extras / markers (may not always be in EnemySpawns):
         "Chief Warden",
         "Swan",
-        "Magma Admiral",
-        "Wysper",
-        "Thunder God",
+        "Magma General",
+        "Sky Warlord",
+        "Lightning God",
         "Greybeard",
         "The Saw",
         "Bobby",
@@ -1392,14 +1450,14 @@ local BOSS_ALIASES = {
     ["Don Swan"] = { "Don Swan", "Swan" },
     ["Awakened Ice Admiral"] = { "Awakened Ice Admiral", "Ice Admiral" },
     ["Ice Admiral"] = { "Ice Admiral", "Awakened Ice Admiral" },
-    ["Lightning God"] = { "Lightning God", "Thunder God" },
-    ["Thunder God"] = { "Thunder God", "Lightning God" },
+    ["Lightning God"] = { "Lightning God", "Lightning God" },
+    ["Lightning God"] = { "Lightning God", "Lightning God" },
     ["rip_indra"] = { "rip_indra", "Rip Indra", "Indra" },
     ["Core"] = { "Core", "CORE" },
     ["Hydra Leader"] = { "Hydra Leader", "Island Empress" },
     ["Island Empress"] = { "Island Empress", "Hydra Leader" },
     ["The Gorilla King"] = { "The Gorilla King", "Gorilla King" },
-    ["Sky Warlord"] = { "Sky Warlord", "Wysper" },
+    ["Sky Warlord"] = { "Sky Warlord", "Sky Warlord" },
 }
 
 local function stripEnemyLabel(name)
@@ -2971,11 +3029,46 @@ function startFarm()
             end
             if not hrp then task.wait(0.5) continue end
 
+            -- Stats: always dump available points (not only on level-up)
+            if config.statEnabled then
+                local pts = getAvailableStatPoints()
+                if pts and pts > 0 then
+                    pcall(function()
+                        distributeStats(config.statsToAdd, config.pointsPerStat, true)
+                    end)
+                end
+            end
+
+            -- Quest finished -> take next (don't wait for level-up)
+            do
+                local active, title, body = getActiveQuestInfo()
+                local bodyL = string.lower(tostring(body or "") .. " " .. tostring(title or ""))
+                local finished = false
+                if questAccepted and not active then
+                    finished = true
+                end
+                if active and (
+                    string.find(bodyL, "quest completed")
+                    or string.find(bodyL, "completed!")
+                    or string.find(bodyL, "claim")
+                    or string.find(bodyL, "%(0/")  -- 0/N remaining sometimes
+                ) then
+                    finished = true
+                end
+                -- also: was fighting and no more matching enemies for THIS quest + active quest text doesn't match patterns
+                if finished then
+                    questAccepted = false
+                    lockedEnemy = nil
+                    heightLocked = false
+                    isBossTarget = false
+                    state = "QUEST"
+                    notifyUser("Quest", "Completed — taking next quest", 2)
+                    task.wait(0.4)
+                end
+            end
+
             if level ~= currentLevel then
                 currentLevel = level
-                if config.statEnabled and level > lastLevelForStats then
-                    distributeStats(config.statsToAdd, config.pointsPerStat, false)
-                end
                 lastLevelForStats = level
                 questAccepted = false
                 state = "ISLAND"
@@ -3259,6 +3352,105 @@ function stopFarm()
     notifyUser("Stopped", "Farm stopped.")
 end
 
+
+-- =============================================
+-- SEA1 ISLAND SECRETS (Update 30) — partial auto
+-- Pirate Village: Free the Windmill = cut 5 ropes with sword
+-- More secrets: toggle flies you to island; full puzzles still partial
+-- =============================================
+local secretsRunning = false
+local secretsTask = nil
+
+local function findRopeLikeParts(nearPos, radius)
+    local found = {}
+    radius = radius or 120
+    for _, d in ipairs(workspace:GetDescendants()) do
+        if d:IsA("BasePart") then
+            local n = string.lower(d.Name)
+            if string.find(n, "rope") or string.find(n, "rigging") or string.find(n, "cord")
+                or string.find(n, "line") or string.find(n, "cable") then
+                if nearPos and (d.Position - nearPos).Magnitude <= radius then
+                    table.insert(found, d)
+                end
+            end
+        end
+    end
+    return found
+end
+
+local function tryCutWindmillRopes()
+    -- Pirate Village windmill center ~ dock/village
+    local windmillPos = Vector3.new(-1140, 55, 3975)
+    pcall(function()
+        if not flying then enableFly() end
+        setFlyTarget(windmillPos, false)
+    end)
+    task.wait(2)
+    local ropes = findRopeLikeParts(windmillPos, 150)
+    if #ropes == 0 then
+        -- broader search on island
+        ropes = findRopeLikeParts(windmillPos, 250)
+    end
+    notifyUser("Secrets", "Windmill ropes found: " .. tostring(#ropes), 3)
+    for _, rope in ipairs(ropes) do
+        pcall(function()
+            if not flying then enableFly() end
+            setFlyTarget(rope.Position + Vector3.new(0, 3, 0), false)
+            task.wait(0.35)
+            -- equip sword and M1 / hit
+            local char = LocalPlayer.Character
+            if char then
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                local bp = LocalPlayer:FindFirstChild("Backpack")
+                if hum and bp then
+                    for _, t in ipairs(bp:GetChildren()) do
+                        if t:IsA("Tool") and (t.ToolTip == "Sword" or string.find(string.lower(t.Name), "sword")) then
+                            hum:EquipTool(t)
+                            break
+                        end
+                    end
+                end
+            end
+            fireVirtualClick()
+            -- also tool activate
+            pcall(function()
+                local tool = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
+                if tool then tool:Activate() end
+            end)
+            -- click detectors on rope
+            if fireclickdetector then
+                local cd = rope:FindFirstChildOfClass("ClickDetector") or rope.Parent and rope.Parent:FindFirstChildOfClass("ClickDetector")
+                if cd then fireclickdetector(cd) end
+            end
+            task.wait(0.25)
+        end)
+    end
+end
+
+local function startAutoSecrets()
+    if secretsRunning then return end
+    secretsRunning = true
+    notifyUser("Secrets", "Auto Secrets ON (Windmill first)", 3)
+    secretsTask = task.spawn(function()
+        while secretsRunning do
+            local ok, err = pcall(function()
+                if not config.autoSecrets then return end
+                tryCutWindmillRopes()
+                task.wait(8)
+            end)
+            if not ok then warn("[BF] secrets:", err) end
+            task.wait(1)
+        end
+    end)
+end
+
+local function stopAutoSecrets()
+    secretsRunning = false
+    if secretsTask then pcall(function() task.cancel(secretsTask) end) secretsTask = nil end
+    notifyUser("Secrets", "Auto Secrets OFF", 2)
+end
+
+
 -- =============================================
 -- VAXORIN UI CREATION (if successful)
 -- =============================================
@@ -3313,6 +3505,16 @@ if useVaxorin and window then
             if v then startFarm() else stopFarm() end
         end,
     })
+    mainSection:CreateToggle({
+        Name = "Auto Secrets (Sea1)",
+        CurrentValue = false,
+        Flag = "Farm.AutoSecrets", Save = true,
+        Callback = function(v)
+            config.autoSecrets = v
+            if v then startAutoSecrets() else stopAutoSecrets() end
+        end,
+    })
+
     mainSection:CreateToggle({
         Name = "Auto Sea Progress (1→2 / 2→3)",
         CurrentValue = false,
