@@ -319,16 +319,7 @@ local function fireLeftClickRemote(primaryPart)
 end
 
 local function fireVirtualClick()
-    pcall(function()
-        local vu = game:GetService("VirtualUser")
-        vu:CaptureController()
-        vu:Button1Down(Vector2.new(0, 0))
-    end)
-    pcall(function()
-        VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
-        task.wait()
-        VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
-    end)
+    -- disabled: constant clicking blocks UI / movement
 end
 
 -- Cobalt Assets path (updates often)
@@ -396,9 +387,7 @@ local function fireCombatHit(targets)
         fireAssetsHit(pair[2])
     end
 
-    -- 6) Click
-    fireVirtualClick()
-
+    -- NO mouse click spam — SendHitsToServer / RegisterHit is enough
     return true
 end
 
