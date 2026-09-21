@@ -548,7 +548,7 @@ local islands = {
         Quest = {"StartQuest","BuggyQuest1",2}, EnemyPatterns = {"Brute"},
         BossQuest = {"StartQuest","BuggyQuest1",3}, BossPatterns = {"Chef"},
         isBoss = true},
-    {Name = "Yeti", Min = 105, Max = 130, Pos = Vector3.new(1182, 104, -1617),
+    {Name = "Yeti", Min = 105, Max = 120, Pos = Vector3.new(1182, 104, -1617),
         Quest = {"StartQuest","SnowQuest",2}, EnemyPatterns = {"Snowman"},
         BossQuest = {"StartQuest","SnowQuest",3}, BossPatterns = {"Yeti"},
         isBoss = true},
