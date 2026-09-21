@@ -3039,45 +3039,56 @@ function startFarm()
                 end
             end
 
-            -- Quest finished -> take next (only if GUI was really showing, then completed/gone)
-            -- NOTE: hasActiveQuest() is often false even mid-quest → do NOT treat that as done
+            -- HUB-STYLE QUEST (MUX / FTS / redz):
+            --   Quest.Visible == false  →  accept StartQuest for current level
+            --   Quest.Visible == true   →  farm (if title matches mob pattern)
+            -- No "quest completed" text parsing — that was spamming.
             do
-                if not _questGuiSeenAt then _questGuiSeenAt = 0 end
-                if not _questCompleteCooldown then _questCompleteCooldown = 0 end
-                local active, title, body = getActiveQuestInfo()
-                local bodyL = string.lower(tostring(body or "") .. " " .. tostring(title or ""))
-                local finished = false
-
-                if active then
-                    _questGuiSeenAt = os.clock()
-                    -- explicit completion text only
-                    if string.find(bodyL, "quest completed")
-                        or string.find(bodyL, "completed!")
-                        or string.find(bodyL, "reward") and string.find(bodyL, "claim") then
-                        finished = true
+                local qVisible = false
+                pcall(function()
+                    local q = LocalPlayer.PlayerGui.Main.Quest
+                    qVisible = q and q.Visible == true
+                end)
+                if not qVisible then
+                    -- no active quest UI → need to take quest (once, with throttle)
+                    if not _lastQuestAcceptAt then _lastQuestAcceptAt = 0 end
+                    if (os.clock() - _lastQuestAcceptAt) > 3 then
+                        questAccepted = false
+                        if state == "COMBAT" or state == "PATROL" then
+                            state = "QUEST"
+                        end
                     end
-                    -- progress like 5/5 or 10/10 (done) but not 0/5
-                    local a, b = string.match(bodyL, "(%d+)%s*/%s*(%d+)")
-                    if a and b and tonumber(a) and tonumber(b) and tonumber(b) > 0 and tonumber(a) >= tonumber(b) then
-                        finished = true
+                else
+                    questAccepted = true
+                    -- wrong quest title for this island? abandon once
+                    local _, title, body = getActiveQuestInfo()
+                    local text = string.lower(tostring(title) .. " " .. tostring(body))
+                    local patterns = island and (island.EnemyPatterns or {}) or {}
+                    local matches = false
+                    for _, p in ipairs(patterns) do
+                        if string.find(text, string.lower(p), 1, true) then
+                            matches = true
+                            break
+                        end
                     end
-                elseif questAccepted and _questGuiSeenAt > 0 then
-                    -- GUI was visible earlier; gone for 2s+ → likely turned in / finished
-                    if (os.clock() - _questGuiSeenAt) >= 2.0 and (os.clock() - _questCompleteCooldown) > 5 then
-                        finished = true
+                    if island and island.isBoss and island.BossPatterns then
+                        for _, p in ipairs(island.BossPatterns) do
+                            if string.find(text, string.lower(p), 1, true) then
+                                matches = true
+                                break
+                            end
+                        end
                     end
-                end
-
-                if finished and (os.clock() - _questCompleteCooldown) > 5 then
-                    _questCompleteCooldown = os.clock()
-                    _questGuiSeenAt = 0
-                    questAccepted = false
-                    lockedEnemy = nil
-                    heightLocked = false
-                    isBossTarget = false
-                    state = "QUEST"
-                    notifyUser("Quest", "Completed — taking next quest", 2)
-                    task.wait(0.5)
+                    if patterns and #patterns > 0 and not matches and (os.clock() - (_lastQuestAcceptAt or 0)) > 8 then
+                        pcall(function()
+                            local rem = ReplicatedStorage:FindFirstChild("Remotes")
+                            local cf = rem and rem:FindFirstChild("CommF_")
+                            if cf then cf:InvokeServer("AbandonQuest") end
+                        end)
+                        questAccepted = false
+                        state = "QUEST"
+                        _lastQuestAcceptAt = os.clock()
+                    end
                 end
             end
 
@@ -3159,6 +3170,7 @@ function startFarm()
                         -- found and invoked.  Do not require PlayerGui.Main.Quest
                         -- to become visible before looking for the configured mob.
                         questAccepted = true
+                        _lastQuestAcceptAt = os.clock()
                         state = "COMBAT"
                         if desiredType == "boss" then
                             notifyUser("Boss Quest", "Boss detected – switched to boss quest.")
