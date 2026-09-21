@@ -3039,11 +3039,12 @@ function startFarm()
                 end
             end
 
-            -- Quest accept: ONLY inside state==QUEST with long cooldown.
-            -- Do NOT flip COMBAT→QUEST every frame when GUI is hidden (spam).
-            -- Hubs only call StartQuest when Visible==false; we throttle hard.
+            -- Quest: edge-detect Visible true→false = COMPLETED → take next once
+            -- Require GUI was stable-visible ≥2s before edge (anti-flicker)
             do
                 if not _lastQuestAcceptAt then _lastQuestAcceptAt = 0 end
+                if _prevQuestVisible == nil then _prevQuestVisible = false end
+                if not _questVisibleSince then _questVisibleSince = 0 end
                 local qVisible = false
                 pcall(function()
                     local main = LocalPlayer:FindFirstChild("PlayerGui")
@@ -3053,6 +3054,22 @@ function startFarm()
                 end)
                 if qVisible then
                     questAccepted = true
+                    if not _prevQuestVisible then
+                        _questVisibleSince = os.clock()
+                    end
+                    _prevQuestVisible = true
+                else
+                    if _prevQuestVisible then
+                        local stable = (os.clock() - (_questVisibleSince or 0)) >= 2.0
+                        _prevQuestVisible = false
+                        if stable and (os.clock() - _lastQuestAcceptAt) > 1.5 then
+                            questAccepted = false
+                            lockedEnemy = nil
+                            _lastQuestAcceptAt = 0
+                            state = "QUEST"
+                            notifyUser("Quest", "Done — next quest", 2)
+                        end
+                    end
                 end
             end
 
