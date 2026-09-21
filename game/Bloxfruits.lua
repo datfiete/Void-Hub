@@ -3039,56 +3039,20 @@ function startFarm()
                 end
             end
 
-            -- HUB-STYLE QUEST (MUX / FTS / redz):
-            --   Quest.Visible == false  →  accept StartQuest for current level
-            --   Quest.Visible == true   →  farm (if title matches mob pattern)
-            -- No "quest completed" text parsing — that was spamming.
+            -- Quest accept: ONLY inside state==QUEST with long cooldown.
+            -- Do NOT flip COMBAT→QUEST every frame when GUI is hidden (spam).
+            -- Hubs only call StartQuest when Visible==false; we throttle hard.
             do
+                if not _lastQuestAcceptAt then _lastQuestAcceptAt = 0 end
                 local qVisible = false
                 pcall(function()
-                    local q = LocalPlayer.PlayerGui.Main.Quest
+                    local main = LocalPlayer:FindFirstChild("PlayerGui")
+                        and LocalPlayer.PlayerGui:FindFirstChild("Main")
+                    local q = main and main:FindFirstChild("Quest")
                     qVisible = q and q.Visible == true
                 end)
-                if not qVisible then
-                    -- no active quest UI → need to take quest (once, with throttle)
-                    if not _lastQuestAcceptAt then _lastQuestAcceptAt = 0 end
-                    if (os.clock() - _lastQuestAcceptAt) > 3 then
-                        questAccepted = false
-                        if state == "COMBAT" or state == "PATROL" then
-                            state = "QUEST"
-                        end
-                    end
-                else
+                if qVisible then
                     questAccepted = true
-                    -- wrong quest title for this island? abandon once
-                    local _, title, body = getActiveQuestInfo()
-                    local text = string.lower(tostring(title) .. " " .. tostring(body))
-                    local patterns = island and (island.EnemyPatterns or {}) or {}
-                    local matches = false
-                    for _, p in ipairs(patterns) do
-                        if string.find(text, string.lower(p), 1, true) then
-                            matches = true
-                            break
-                        end
-                    end
-                    if island and island.isBoss and island.BossPatterns then
-                        for _, p in ipairs(island.BossPatterns) do
-                            if string.find(text, string.lower(p), 1, true) then
-                                matches = true
-                                break
-                            end
-                        end
-                    end
-                    if patterns and #patterns > 0 and not matches and (os.clock() - (_lastQuestAcceptAt or 0)) > 8 then
-                        pcall(function()
-                            local rem = ReplicatedStorage:FindFirstChild("Remotes")
-                            local cf = rem and rem:FindFirstChild("CommF_")
-                            if cf then cf:InvokeServer("AbandonQuest") end
-                        end)
-                        questAccepted = false
-                        state = "QUEST"
-                        _lastQuestAcceptAt = os.clock()
-                    end
                 end
             end
 
@@ -3151,9 +3115,23 @@ function startFarm()
             end
 
             if state == "QUEST" then
-                if hasActiveQuest() then
+                -- Already have quest UI → farm
+                local qVisible = false
+                pcall(function()
+                    local main = LocalPlayer.PlayerGui:FindFirstChild("Main")
+                    local q = main and main:FindFirstChild("Quest")
+                    qVisible = q and q.Visible == true
+                end)
+                if qVisible or hasActiveQuest() then
                     questAccepted = true
                     state = "COMBAT"
+                    continue
+                end
+
+                -- Cooldown: never spam StartQuest
+                if not _lastQuestAcceptAt then _lastQuestAcceptAt = 0 end
+                if (os.clock() - _lastQuestAcceptAt) < 12 then
+                    state = "COMBAT" -- farm without quest until cooldown ends
                     continue
                 end
 
@@ -3163,19 +3141,16 @@ function startFarm()
                 local questArgs = getQuestArgs(island, desiredType)
 
                 if questArgs then
+                    _lastQuestAcceptAt = os.clock()
                     local success = acceptQuestWrapper(questArgs)
                     if success then
                         currentQuestType = desiredType
-                        -- acceptQuest()/stackQuest() returning means the remote was
-                        -- found and invoked.  Do not require PlayerGui.Main.Quest
-                        -- to become visible before looking for the configured mob.
                         questAccepted = true
-                        _lastQuestAcceptAt = os.clock()
                         state = "COMBAT"
                         if desiredType == "boss" then
                             notifyUser("Boss Quest", "Boss detected – switched to boss quest.")
                         end
-                        task.wait(0.5)
+                        task.wait(1)
                     else
                         task.wait(2)
                     end
@@ -3193,16 +3168,26 @@ function startFarm()
                 --
                 -- If the quest really is not active, the QUEST state will retry it
                 -- after target detection has had a chance to find the configured mob.
-                local guiQuestActive = hasActiveQuest()
-                if not guiQuestActive and not questAccepted then
-                    local patternInfo = getPatterns(island, currentQuestType)
-                    local precheckTargets = getMatchingEnemies(island, patternInfo)
-                    if #precheckTargets == 0 then
-                        state = "QUEST"
-                        lockedEnemy = nil
-                        heightLocked = false
-                        isBossTarget = false
-                        continue
+                -- Only request a new quest if GUI is off for a while AND cooldown ready
+                local qVisible = false
+                pcall(function()
+                    local main = LocalPlayer.PlayerGui:FindFirstChild("Main")
+                    local q = main and main:FindFirstChild("Quest")
+                    qVisible = q and q.Visible == true
+                end)
+                if not qVisible and not questAccepted then
+                    if not _lastQuestAcceptAt then _lastQuestAcceptAt = 0 end
+                    if (os.clock() - _lastQuestAcceptAt) >= 12 then
+                        local patternInfo = getPatterns(island, currentQuestType)
+                        local precheckTargets = getMatchingEnemies(island, patternInfo)
+                        -- still farm if mobs exist; only go QUEST when empty + cooldown
+                        if #precheckTargets == 0 then
+                            state = "QUEST"
+                            lockedEnemy = nil
+                            heightLocked = false
+                            isBossTarget = false
+                            continue
+                        end
                     end
                 end
 
