@@ -539,7 +539,7 @@ local islands = {
     {Name = "Fountain 1",         Min = 625, Max = 650, Pos = Vector3.new(5572, 78, 4010), Quest = {"StartQuest","FountainQuest",1}, EnemyPatterns = {"Galley Pirate"}, isBoss = false},
     {Name = "Fountain 2",         Min = 650, Max = 675, Pos = Vector3.new(5634, 78, 4789), Quest = {"StartQuest","FountainQuest",2}, EnemyPatterns = {"Galley Captain"}, isBoss = false},
 
-    -- Sea1 Bosses (positions from dump)
+    -- Sea1 Bosses (positions from dump) — Mob Boss is NOT a real boss quest target
     {Name = "The Gorilla King", Min = 20, Max = 30, Pos = Vector3.new(-1194, 11, -550),
         Quest = {"StartQuest","JungleQuest",2}, EnemyPatterns = {"Gorilla"},
         BossQuest = {"StartQuest","JungleQuest",3}, BossPatterns = {"The Gorilla King", "Gorilla King"},
@@ -562,7 +562,7 @@ local islands = {
         isBoss = true},
     {Name = "Magma General", Min = 350, Max = 375, Pos = Vector3.new(-5626, 55, 8623),
         Quest = {"StartQuest","MagmaQuest",2}, EnemyPatterns = {"Military Spy"},
-        BossQuest = {"StartQuest","MagmaQuest",3}, BossPatterns = {"Magma General", "Magma General"},
+        BossQuest = {"StartQuest","MagmaQuest",3}, BossPatterns = {"Magma General"},
         isBoss = true},
     {Name = "Fishman Lord", Min = 425, Max = 450, Pos = Vector3.new(61353, 67, 1029),
         Quest = {"StartQuest","FishmanQuest",2}, EnemyPatterns = {"Fishman Commando"},
@@ -570,11 +570,11 @@ local islands = {
         isBoss = true},
     {Name = "Sky Warlord", Min = 500, Max = 525, Pos = Vector3.new(-6272, 5473, 1888),
         Quest = {"StartQuest","SkyExp1Quest",2}, EnemyPatterns = {"Shanda"},
-        BossQuest = {"StartQuest","SkyExp1Quest",3}, BossPatterns = {"Sky Warlord", "Sky Warlord"},
+        BossQuest = {"StartQuest","SkyExp1Quest",3}, BossPatterns = {"Sky Warlord"},
         isBoss = true},
     {Name = "Lightning God", Min = 575, Max = 625, Pos = Vector3.new(-7125, 5596, 112),
         Quest = {"StartQuest","SkyExp2Quest",2}, EnemyPatterns = {"Royal Soldier"},
-        BossQuest = {"StartQuest","SkyExp2Quest",3}, BossPatterns = {"Lightning God", "Lightning God"},
+        BossQuest = {"StartQuest","SkyExp2Quest",3}, BossPatterns = {"Lightning God"},
         isBoss = true},
     {Name = "Cyborg", Min = 675, Max = 700, Pos = Vector3.new(6252, 9, 4941),
         Quest = {"StartQuest","FountainQuest",2}, EnemyPatterns = {"Galley Captain"},
@@ -585,7 +585,7 @@ local islands = {
         BossQuest = nil, BossPatterns = {"Ice Admiral"},
         isBoss = true},
 
-    -- Sea2+ (kept)
+    -- Sea2 normals
     {Name = "Area1 Raider",       Min = 700, Max = 724, Pos = Vector3.new(-189, 40, 2354), Quest = {"StartQuest","Area1Quest",1}, EnemyPatterns = {"Raider"}, isBoss = false},
     {Name = "Area1 Mercenary",    Min = 725, Max = 774, Pos = Vector3.new(-1043, 73, 1411), Quest = {"StartQuest","Area1Quest",2}, EnemyPatterns = {"Mercenary"}, isBoss = false},
     {Name = "Area2 Swan Pirate",  Min = 775, Max = 799, Pos = Vector3.new(1019, 73, 1221), Quest = {"StartQuest","Area2Quest",1}, EnemyPatterns = {"Swan Pirate","Factory Staff"}, isBoss = false},
@@ -609,27 +609,7 @@ local islands = {
     {Name = "Sea Soldier",        Min = 1425, Max = 1449, Pos = Vector3.new(-3147, 22, -9793), Quest = {"StartQuest","ForgottenQuest",1}, EnemyPatterns = {"Sea Soldier"}, isBoss = false},
     {Name = "Water Fighter",      Min = 1450, Max = 1500, Pos = Vector3.new(-3414, 239, -10335), Quest = {"StartQuest","ForgottenQuest",2}, EnemyPatterns = {"Water Fighter"}, isBoss = false},
 
-    -- ========== SEA 1 — Bosses ==========
-    {Name = "Jungle (Boss)",      Min = 20,  Max = 30,  Pos = Vector3.new(-1620, 37, -448),
-        Quest = {"StartQuest","JungleQuest",2}, EnemyPatterns = {"Gorilla"},
-        BossQuest = {"StartQuest","JungleQuest",3}, BossPatterns = {"The Gorilla King"},
-        isBoss = true},
-    {Name = "Pirate Village Boss", Min = 55, Max = 60, Pos = Vector3.new(-1151, 45, 3868),
-        Quest = {"StartQuest","BuggyQuest1",2}, EnemyPatterns = {"Brute"},
-        BossQuest = {"StartQuest","BuggyQuest1",3}, BossPatterns = {"Chef"},
-        isBoss = true},
-    {Name = "Snow Boss",          Min = 105, Max = 120, Pos = Vector3.new(1375, 106, -1408),
-        Quest = {"StartQuest","SnowQuest",2}, EnemyPatterns = {"Snowman"},
-        BossQuest = {"StartQuest","SnowQuest",3}, BossPatterns = {"Yeti"},
-        isBoss = true},
-    {Name = "Marine Boss",        Min = 130, Max = 150, Pos = Vector3.new(-5011, 15, 4384),
-        Quest = {"StartQuest","MarineQuest2",1}, EnemyPatterns = {"Chief Petty Officer"},
-        BossQuest = {"StartQuest","MarineQuest2",2}, BossPatterns = {"Vice Admiral"},
-        isBoss = true},
-    {Name = "Warden",             Min = 220, Max = 250, Pos = Vector3.new(5623, 1, 734),
-        Quest = {"StartQuest","PrisonerQuest",2}, EnemyPatterns = {"Dangerous Prisoner"},
-        BossQuest = {"StartQuest","ImpelQuest",1}, BossPatterns = {"Warden"},
-        isBoss = true},
+    -- Sea1 bosses (deduped positions from dump)
     {Name = "Chief Warden",       Min = 230, Max = 250, Pos = Vector3.new(5117, 2, 483),
         Quest = {"StartQuest","PrisonerQuest",2}, EnemyPatterns = {"Dangerous Prisoner"},
         BossQuest = {"StartQuest","ImpelQuest",2}, BossPatterns = {"Chief Warden"},
@@ -638,28 +618,8 @@ local islands = {
         Quest = {"StartQuest","PrisonerQuest",2}, EnemyPatterns = {"Dangerous Prisoner"},
         BossQuest = {"StartQuest","ImpelQuest",3}, BossPatterns = {"Swan"},
         isBoss = true},
-    {Name = "Magma General",      Min = 350, Max = 374, Pos = Vector3.new(-5804, 98, 8797),
-        Quest = {"StartQuest","MagmaQuest",2}, EnemyPatterns = {"Military Spy"},
-        BossQuest = {"StartQuest","MagmaQuest",3}, BossPatterns = {"Magma General"},
-        isBoss = true},
-    {Name = "Fishman Lord",       Min = 425, Max = 450, Pos = Vector3.new(61353, 67, 1029),
-        Quest = {"StartQuest","FishmanQuest",2}, EnemyPatterns = {"Fishman Commando"},
-        BossQuest = {"StartQuest","FishmanQuest",3}, BossPatterns = {"Fishman Lord"},
-        isBoss = true},
-    {Name = "Wysper / Sky Warlord", Min = 500, Max = 525, Pos = Vector3.new(-7637, 5546, -515),
-        Quest = {"StartQuest","SkyExp1Quest",2}, EnemyPatterns = {"Shanda"},
-        BossQuest = {"StartQuest","SkyExp1Quest",3}, BossPatterns = {"Sky Warlord","Sky Warlord"},
-        isBoss = true},
-    {Name = "Lightning God",        Min = 575, Max = 625, Pos = Vector3.new(-7806, 5607, -1753),
-        Quest = {"StartQuest","SkyExp2Quest",2}, EnemyPatterns = {"Royal Soldier"},
-        BossQuest = {"StartQuest","SkyExp2Quest",3}, BossPatterns = {"Lightning God","Lightning God"},
-        isBoss = true},
-    {Name = "Cyborg",             Min = 675, Max = 700, Pos = Vector3.new(6252, 9, 4941),
-        Quest = {"StartQuest","FountainQuest",2}, EnemyPatterns = {"Galley Captain"},
-        BossQuest = {"StartQuest","FountainQuest",3}, BossPatterns = {"Cyborg"},
-        isBoss = true},
 
-    -- ========== SEA 2 — Bosses ==========
+    -- Sea2 bosses
     {Name = "Diamond",            Min = 750, Max = 775, Pos = Vector3.new(-1711, 206, -97),
         Quest = {"StartQuest","Area1Quest",2}, EnemyPatterns = {"Mercenary"},
         BossQuest = {"StartQuest","Area1Quest",3}, BossPatterns = {"Diamond"},
@@ -677,6 +637,7 @@ local islands = {
         BossQuest = {"StartQuest","ForgottenQuest",3}, BossPatterns = {"Tide Keeper"},
         isBoss = true},
 }
+
 
 table.sort(islands, function(a,b) return a.Min < b.Min end)
 
@@ -1387,7 +1348,7 @@ local BOSS_CATALOG = {
         "The Gorilla King",
         "Chef",
         "Yeti",
-        "Mob Boss",
+        "__NO_MOB_BOSS__",
         "Vice Admiral",
         "Saber Expert",
         "Warden",
@@ -3035,13 +2996,17 @@ function startFarm()
                 end
             end
 
-            -- Quest: edge-detect Visible true→false = COMPLETED → take next once
-            -- Require GUI was stable-visible ≥2s before edge (anti-flicker)
+            -- Quest: NEW quest ONLY after real completion.
+            -- Empty enemies ≠ completed (mobs respawn; do NOT re-accept).
+            -- Real complete = saw progress full (e.g. 5/5) while GUI visible,
+            -- then GUI stayed hidden ≥3s.
             do
                 if not _lastQuestAcceptAt then _lastQuestAcceptAt = 0 end
-                if _prevQuestVisible == nil then _prevQuestVisible = false end
-                if not _questVisibleSince then _questVisibleSince = 0 end
+                if _questHadFullProgress == nil then _questHadFullProgress = false end
+                if not _questHiddenSince then _questHiddenSince = nil end
+
                 local qVisible = false
+                local title, body = "", ""
                 pcall(function()
                     local main = LocalPlayer:FindFirstChild("PlayerGui")
                         and LocalPlayer.PlayerGui:FindFirstChild("Main")
@@ -3049,22 +3014,42 @@ function startFarm()
                     qVisible = q and q.Visible == true
                 end)
                 if qVisible then
+                    local _, t, b = getActiveQuestInfo()
+                    title, body = tostring(t or ""), tostring(b or "")
+                end
+                local text = string.lower(title .. " " .. body)
+
+                if qVisible then
                     questAccepted = true
-                    if not _prevQuestVisible then
-                        _questVisibleSince = os.clock()
-                    end
-                    _prevQuestVisible = true
-                else
-                    if _prevQuestVisible then
-                        local stable = (os.clock() - (_questVisibleSince or 0)) >= 2.0
-                        _prevQuestVisible = false
-                        if stable and (os.clock() - _lastQuestAcceptAt) > 1.5 then
-                            questAccepted = false
-                            lockedEnemy = nil
-                            _lastQuestAcceptAt = 0
-                            state = "QUEST"
-                            notifyUser("Quest", "Done — next quest", 2)
+                    _questHiddenSince = nil
+                    -- track full progress while visible
+                    local a, b = string.match(text, "(%d+)%s*/%s*(%d+)")
+                    if a and b then
+                        local na, nb = tonumber(a), tonumber(b)
+                        if na and nb and nb > 0 and na >= nb then
+                            _questHadFullProgress = true
                         end
+                    end
+                    if string.find(text, "quest completed") or string.find(text, "completed!") then
+                        _questHadFullProgress = true
+                    end
+                else
+                    -- GUI hidden: ONLY complete if we previously saw full progress
+                    if questAccepted and _questHadFullProgress then
+                        if not _questHiddenSince then
+                            _questHiddenSince = os.clock()
+                        elseif (os.clock() - _questHiddenSince) >= 3
+                            and (os.clock() - _lastQuestAcceptAt) >= 8 then
+                            questAccepted = false
+                            _questHadFullProgress = false
+                            _questHiddenSince = nil
+                            lockedEnemy = nil
+                            state = "QUEST"
+                        end
+                    else
+                        -- hidden without full progress = flicker / UI bug — ignore
+                        _questHiddenSince = nil
+                        -- keep questAccepted as-is so we never StartQuest mid-progress
                     end
                 end
             end
@@ -3128,23 +3113,22 @@ function startFarm()
             end
 
             if state == "QUEST" then
-                -- Already have quest UI → farm
                 local qVisible = false
                 pcall(function()
                     local main = LocalPlayer.PlayerGui:FindFirstChild("Main")
                     local q = main and main:FindFirstChild("Quest")
                     qVisible = q and q.Visible == true
                 end)
-                if qVisible or hasActiveQuest() then
+                -- Already on a quest → never StartQuest again (resets progress!)
+                if qVisible or questAccepted then
                     questAccepted = true
                     state = "COMBAT"
                     continue
                 end
 
-                -- Cooldown: never spam StartQuest
                 if not _lastQuestAcceptAt then _lastQuestAcceptAt = 0 end
-                if (os.clock() - _lastQuestAcceptAt) < 12 then
-                    state = "COMBAT" -- farm without quest until cooldown ends
+                if (os.clock() - _lastQuestAcceptAt) < 15 then
+                    state = "COMBAT"
                     continue
                 end
 
@@ -3181,28 +3165,8 @@ function startFarm()
                 --
                 -- If the quest really is not active, the QUEST state will retry it
                 -- after target detection has had a chance to find the configured mob.
-                -- Only request a new quest if GUI is off for a while AND cooldown ready
-                local qVisible = false
-                pcall(function()
-                    local main = LocalPlayer.PlayerGui:FindFirstChild("Main")
-                    local q = main and main:FindFirstChild("Quest")
-                    qVisible = q and q.Visible == true
-                end)
-                if not qVisible and not questAccepted then
-                    if not _lastQuestAcceptAt then _lastQuestAcceptAt = 0 end
-                    if (os.clock() - _lastQuestAcceptAt) >= 12 then
-                        local patternInfo = getPatterns(island, currentQuestType)
-                        local precheckTargets = getMatchingEnemies(island, patternInfo)
-                        -- still farm if mobs exist; only go QUEST when empty + cooldown
-                        if #precheckTargets == 0 then
-                            state = "QUEST"
-                            lockedEnemy = nil
-                            heightLocked = false
-                            isBossTarget = false
-                            continue
-                        end
-                    end
-                end
+                -- Never interrupt an accepted quest. Farm always.
+                -- New quest only via the 10s-hidden tracker above → state QUEST.
 
                 local bossEnemy = nil
                 if island.isBoss then bossEnemy = findBossInWorkspace(island) end
