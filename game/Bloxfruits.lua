@@ -3039,31 +3039,45 @@ function startFarm()
                 end
             end
 
-            -- Quest finished -> take next (don't wait for level-up)
+            -- Quest finished -> take next (only if GUI was really showing, then completed/gone)
+            -- NOTE: hasActiveQuest() is often false even mid-quest → do NOT treat that as done
             do
+                if not _questGuiSeenAt then _questGuiSeenAt = 0 end
+                if not _questCompleteCooldown then _questCompleteCooldown = 0 end
                 local active, title, body = getActiveQuestInfo()
                 local bodyL = string.lower(tostring(body or "") .. " " .. tostring(title or ""))
                 local finished = false
-                if questAccepted and not active then
-                    finished = true
+
+                if active then
+                    _questGuiSeenAt = os.clock()
+                    -- explicit completion text only
+                    if string.find(bodyL, "quest completed")
+                        or string.find(bodyL, "completed!")
+                        or string.find(bodyL, "reward") and string.find(bodyL, "claim") then
+                        finished = true
+                    end
+                    -- progress like 5/5 or 10/10 (done) but not 0/5
+                    local a, b = string.match(bodyL, "(%d+)%s*/%s*(%d+)")
+                    if a and b and tonumber(a) and tonumber(b) and tonumber(b) > 0 and tonumber(a) >= tonumber(b) then
+                        finished = true
+                    end
+                elseif questAccepted and _questGuiSeenAt > 0 then
+                    -- GUI was visible earlier; gone for 2s+ → likely turned in / finished
+                    if (os.clock() - _questGuiSeenAt) >= 2.0 and (os.clock() - _questCompleteCooldown) > 5 then
+                        finished = true
+                    end
                 end
-                if active and (
-                    string.find(bodyL, "quest completed")
-                    or string.find(bodyL, "completed!")
-                    or string.find(bodyL, "claim")
-                    or string.find(bodyL, "%(0/")  -- 0/N remaining sometimes
-                ) then
-                    finished = true
-                end
-                -- also: was fighting and no more matching enemies for THIS quest + active quest text doesn't match patterns
-                if finished then
+
+                if finished and (os.clock() - _questCompleteCooldown) > 5 then
+                    _questCompleteCooldown = os.clock()
+                    _questGuiSeenAt = 0
                     questAccepted = false
                     lockedEnemy = nil
                     heightLocked = false
                     isBossTarget = false
                     state = "QUEST"
                     notifyUser("Quest", "Completed — taking next quest", 2)
-                    task.wait(0.4)
+                    task.wait(0.5)
                 end
             end
 
