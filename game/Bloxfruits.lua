@@ -3504,51 +3504,111 @@ BF.buyRandomFruitOnce = function()
         BF.notifyUser("Gacha", "Need level 50+", 3)
         return false, "need level 50+"
     end
-    if (os.clock() - (BF._lastRandomFruitAt or 0)) < 5 then
+    if (os.clock() - (BF._lastRandomFruitAt or 0)) < 3 then
         return false, "throttle"
     end
 
-    local remotes = ReplicatedStorage:FindFirstChild("Remotes")
-    local comm = remotes and remotes:FindFirstChild("CommF_")
-    local results = {}
-    local okAny = false
-
-    local function try(label, fn)
-        local ok, ret = pcall(fn)
-        table.insert(results, label .. "=" .. tostring(ok and ret or ("err:" .. tostring(ret))))
-        if ok and ret ~= false and ret ~= nil then
-            okAny = true
-        elseif ok then
-            okAny = true -- remote accepted call
+    local function dumpVal(v, depth)
+        depth = depth or 0
+        if depth > 3 then return "..." end
+        local t = typeof(v)
+        if t == "table" then
+            local parts = {}
+            for k, val in pairs(v) do
+                table.insert(parts, tostring(k) .. "=" .. dumpVal(val, depth + 1))
+            end
+            return "{" .. table.concat(parts, ", ") .. "}"
         end
-        return ok, ret
-    end
-
-    if comm then
-        -- Most common hub patterns
-        try("Cousin/BuyItem", function() return comm:InvokeServer("Cousin", "BuyItem") end)
-        try("Cousin/Buy", function() return comm:InvokeServer("Cousin", "Buy") end)
-        try("Cousin/1", function() return comm:InvokeServer("Cousin", 1) end)
-        try("BuyFruit/Random", function() return comm:InvokeServer("BuyFruit", "Random") end)
-        try("BuyFruitRandom", function() return comm:InvokeServer("BuyFruitRandom") end)
+        return tostring(v)
     end
 
     local gacha = BF.getGachaRemote()
+    local boxInfo = nil
+    local okGet, retGet = false, nil
     if gacha then
-        try("GachaBuy", function()
-            return gacha:InvokeServer({
-                BoxName = "ZiolesGacha",
-                Context = "Buy",
-                SpokeNPC = "Blox Fruit Gacha",
-            })
-        end)
-        try("GachaGet", function()
+        okGet, retGet = pcall(function()
             return gacha:InvokeServer({
                 Context = "getGachaFromBoxName",
                 BoxName = "ZiolesGacha",
             })
         end)
-        try("GachaCheck", function()
+        if okGet and type(retGet) == "table" then
+            boxInfo = retGet
+            print("[BF] GachaGet table:", dumpVal(retGet))
+        else
+            print("[BF] GachaGet fail:", okGet, retGet)
+        end
+    else
+        print("[BF] Gacha remote missing")
+    end
+
+    local results = {}
+    local okAny = false
+    local function try(label, fn)
+        local ok, ret = pcall(fn)
+        local shown
+        if not ok then
+            shown = "ERR:" .. tostring(ret)
+        elseif type(ret) == "table" then
+            shown = "table" .. dumpVal(ret)
+        else
+            shown = tostring(ret)
+        end
+        table.insert(results, label .. "=" .. shown)
+        print("[BF] Gacha try", label, shown)
+        if ok then okAny = true end
+        return ok, ret
+    end
+
+    if gacha then
+        -- Purchase attempts using known contexts + data from getGachaFromBoxName
+        local contexts = { "Buy", "Purchase", "Roll", "Open", "Claim", "Spin", "BuyGacha", "BuyRandom" }
+        for _, ctx in ipairs(contexts) do
+            try("ctx:" .. ctx, function()
+                return gacha:InvokeServer({
+                    BoxName = "ZiolesGacha",
+                    Context = ctx,
+                    SpokeNPC = "Blox Fruit Gacha",
+                })
+            end)
+        end
+        -- pass box info through if server expects it
+        if boxInfo then
+            try("Buy+info", function()
+                local args = {
+                    BoxName = "ZiolesGacha",
+                    Context = "Buy",
+                    SpokeNPC = "Blox Fruit Gacha",
+                }
+                for k, v in pairs(boxInfo) do
+                    if args[k] == nil then args[k] = v end
+                end
+                return gacha:InvokeServer(args)
+            end)
+            try("Purchase+info", function()
+                local args = {
+                    BoxName = "ZiolesGacha",
+                    Context = "Purchase",
+                    SpokeNPC = "Blox Fruit Gacha",
+                }
+                for k, v in pairs(boxInfo) do
+                    if args[k] == nil then args[k] = v end
+                end
+                return gacha:InvokeServer(args)
+            end)
+            -- some APIs: Context from info
+            if boxInfo.Context or boxInfo.context then
+                local c = boxInfo.Context or boxInfo.context
+                try("info.Context", function()
+                    return gacha:InvokeServer({
+                        BoxName = "ZiolesGacha",
+                        Context = c,
+                        SpokeNPC = "Blox Fruit Gacha",
+                    })
+                end)
+            end
+        end
+        try("Check", function()
             return gacha:InvokeServer({
                 BoxName = "ZiolesGacha",
                 Context = "Check",
@@ -3557,12 +3617,18 @@ BF.buyRandomFruitOnce = function()
         end)
     end
 
+    -- legacy Cousin still tried (often dead after Update 30)
+    local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+    local comm = remotes and remotes:FindFirstChild("CommF_")
+    if comm then
+        try("Cousin/BuyItem", function() return comm:InvokeServer("Cousin", "BuyItem") end)
+    end
+
     BF._lastRandomFruitAt = os.clock()
     local msg = table.concat(results, " | ")
-    if #msg > 180 then msg = msg:sub(1, 180) .. "..." end
-    BF.notifyUser("Gacha", msg ~= "" and msg or "no remotes", 6)
-    print("[BF] Gacha:", msg)
-    return okAny, results
+    if #msg > 200 then msg = msg:sub(1, 200) .. "..." end
+    BF.notifyUser("Gacha", msg ~= "" and msg or "see F9", 8)
+    return okAny, results, boxInfo
 end
 
 BF.startAutoRandomFruit = function()
