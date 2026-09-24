@@ -177,6 +177,11 @@ local config = {
     fruitAutoCollect = false,
     fruitFilterCollect = true,   -- only auto-collect valuable fruits
     fruitFilterNotify = false,   -- if true, only notify valuable; false = notify all
+    enemyEspEnabled = false,
+    enemyEspMaxDist = 2000,
+    enemyEspShowName = true,
+    enemyEspShowHealth = true,
+    enemyEspBossColor = true,
     bossTimersEnabled = true,    -- show boss respawn board
     bossSpawnNotify = true,
     autoSeaProgress = false, -- off by default until stable
@@ -3669,6 +3674,166 @@ local function stopAutoSecrets()
 end
 
 
+
+-- =============================================
+-- ENEMY ESP (through walls) - Highlight + name/HP
+-- =============================================
+local enemyEspRunning = false
+local enemyEspTask = nil
+local enemyEspObjects = {} -- [model] = {hl=, bb=, nameLbl=, hpLbl=}
+
+local function clearEnemyEsp()
+    for model, data in pairs(enemyEspObjects) do
+        pcall(function()
+            if data.hl then data.hl:Destroy() end
+            if data.bb then data.bb:Destroy() end
+        end)
+        enemyEspObjects[model] = nil
+    end
+end
+
+local function isBossModel(model)
+    if not model then return false end
+    if model:GetAttribute("isBoss") == true then return true end
+    local n = string.lower(model.Name)
+    if string.find(n, "boss", 1, true) then return true end
+    return false
+end
+
+local function ensureEnemyEsp(model)
+    if enemyEspObjects[model] then return enemyEspObjects[model] end
+    local data = {}
+    pcall(function()
+        local hl = Instance.new("Highlight")
+        hl.Name = "BF_EnemyESP"
+        hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        hl.FillTransparency = 0.65
+        hl.OutlineTransparency = 0
+        if isBossModel(model) then
+            hl.FillColor = Color3.fromRGB(255, 60, 60)
+            hl.OutlineColor = Color3.fromRGB(255, 200, 50)
+        else
+            hl.FillColor = Color3.fromRGB(80, 180, 255)
+            hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+        end
+        hl.Adornee = model
+        hl.Parent = model
+        data.hl = hl
+    end)
+    pcall(function()
+        local root = model:FindFirstChild("HumanoidRootPart") or model:FindFirstChild("Head")
+        if not root then return end
+        local bb = Instance.new("BillboardGui")
+        bb.Name = "BF_EnemyESP_BB"
+        bb.AlwaysOnTop = true
+        bb.Size = UDim2.new(0, 160, 0, 40)
+        bb.StudsOffset = Vector3.new(0, 3.2, 0)
+        bb.MaxDistance = config.enemyEspMaxDist or 2000
+        bb.Adornee = root
+        bb.Parent = root
+
+        local nameLbl = Instance.new("TextLabel")
+        nameLbl.BackgroundTransparency = 1
+        nameLbl.Size = UDim2.new(1, 0, 0.5, 0)
+        nameLbl.Font = Enum.Font.GothamBold
+        nameLbl.TextSize = 14
+        nameLbl.TextColor3 = Color3.new(1, 1, 1)
+        nameLbl.TextStrokeTransparency = 0.4
+        nameLbl.Text = model.Name
+        nameLbl.Parent = bb
+
+        local hpLbl = Instance.new("TextLabel")
+        hpLbl.BackgroundTransparency = 1
+        hpLbl.Position = UDim2.new(0, 0, 0.5, 0)
+        hpLbl.Size = UDim2.new(1, 0, 0.5, 0)
+        hpLbl.Font = Enum.Font.Gotham
+        hpLbl.TextSize = 12
+        hpLbl.TextColor3 = Color3.fromRGB(120, 255, 120)
+        hpLbl.TextStrokeTransparency = 0.4
+        hpLbl.Text = ""
+        hpLbl.Parent = bb
+
+        data.bb = bb
+        data.nameLbl = nameLbl
+        data.hpLbl = hpLbl
+    end)
+    enemyEspObjects[model] = data
+    return data
+end
+
+local function updateEnemyEsp()
+    if not config.enemyEspEnabled then
+        clearEnemyEsp()
+        return
+    end
+    local folder = Workspace:FindFirstChild("Enemies")
+    if not folder then return end
+    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    local maxD = config.enemyEspMaxDist or 2000
+    local seen = {}
+
+    for _, model in ipairs(folder:GetChildren()) do
+        if model:IsA("Model") then
+            local hum = model:FindFirstChildOfClass("Humanoid")
+            local root = model:FindFirstChild("HumanoidRootPart")
+            if hum and root and hum.Health > 0 then
+                local dist = hrp and (root.Position - hrp.Position).Magnitude or 0
+                if not hrp or dist <= maxD then
+                    seen[model] = true
+                    local data = ensureEnemyEsp(model)
+                    if data then
+                        if data.nameLbl then
+                            data.nameLbl.Visible = config.enemyEspShowName ~= false
+                            data.nameLbl.Text = model.Name
+                        end
+                        if data.hpLbl then
+                            data.hpLbl.Visible = config.enemyEspShowHealth ~= false
+                            local maxH = math.max(hum.MaxHealth, 1)
+                            data.hpLbl.Text = string.format("%d / %d", math.floor(hum.Health), math.floor(maxH))
+                        end
+                        if data.hl and isBossModel(model) and config.enemyEspBossColor ~= false then
+                            data.hl.FillColor = Color3.fromRGB(255, 60, 60)
+                            data.hl.OutlineColor = Color3.fromRGB(255, 200, 50)
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    for model, data in pairs(enemyEspObjects) do
+        if not seen[model] or not model.Parent then
+            pcall(function()
+                if data.hl then data.hl:Destroy() end
+                if data.bb then data.bb:Destroy() end
+            end)
+            enemyEspObjects[model] = nil
+        end
+    end
+end
+
+local function startEnemyEsp()
+    if enemyEspRunning then return end
+    enemyEspRunning = true
+    config.enemyEspEnabled = true
+    enemyEspTask = task.spawn(function()
+        while enemyEspRunning do
+            pcall(updateEnemyEsp)
+            task.wait(0.35)
+        end
+        clearEnemyEsp()
+    end)
+    notifyUser("ESP", "Enemy ESP ON (through walls)", 2)
+end
+
+local function stopEnemyEsp()
+    enemyEspRunning = false
+    config.enemyEspEnabled = false
+    if enemyEspTask then pcall(function() task.cancel(enemyEspTask) end) enemyEspTask = nil end
+    clearEnemyEsp()
+    notifyUser("ESP", "Enemy ESP OFF", 2)
+end
+
 -- =============================================
 -- VAXORIN UI CREATION (if successful)
 -- =============================================
@@ -3839,6 +4004,38 @@ if useVaxorin and window then
         Callback = function()
             espBuilder:Open()
         end,
+    })
+
+    local enemyEspSection = espTab:CreateSection({Name = "Enemy ESP (Walls)"})
+    enemyEspSection:CreateToggle({
+        Name = "Enemy ESP",
+        CurrentValue = false,
+        Flag = "ESP.Enemy",
+        Save = true,
+        Callback = function(v)
+            if v then startEnemyEsp() else stopEnemyEsp() end
+        end,
+    })
+    enemyEspSection:CreateToggle({
+        Name = "Show Name",
+        CurrentValue = true,
+        Flag = "ESP.EnemyName",
+        Save = true,
+        Callback = function(v) config.enemyEspShowName = v end,
+    })
+    enemyEspSection:CreateToggle({
+        Name = "Show Health",
+        CurrentValue = true,
+        Flag = "ESP.EnemyHP",
+        Save = true,
+        Callback = function(v) config.enemyEspShowHealth = v end,
+    })
+    enemyEspSection:CreateSlider({
+        Name = "Max Distance",
+        Min = 200, Max = 5000, CurrentValue = 2000, Rounding = 50,
+        Flag = "ESP.EnemyDist",
+        Save = true,
+        Callback = function(v) config.enemyEspMaxDist = v end,
     })
 
     local RadarSection = MoneyTab:CreateSection({Name = "Radar Chests nearby"})
