@@ -3502,133 +3502,74 @@ BF.buyRandomFruitOnce = function()
     local lvl = BF.getPlayerLevel()
     if lvl < 50 then
         BF.notifyUser("Gacha", "Need level 50+", 3)
-        return false, "need level 50+"
+        return false, "level"
     end
-    if (os.clock() - (BF._lastRandomFruitAt or 0)) < 3 then
+    if (os.clock() - (BF._lastRandomFruitAt or 0)) < 2 then
         return false, "throttle"
     end
 
-    local function dumpVal(v, depth)
-        depth = depth or 0
-        if depth > 3 then return "..." end
-        local t = typeof(v)
-        if t == "table" then
-            local parts = {}
-            for k, val in pairs(v) do
-                table.insert(parts, tostring(k) .. "=" .. dumpVal(val, depth + 1))
-            end
-            return "{" .. table.concat(parts, ", ") .. "}"
-        end
-        return tostring(v)
-    end
-
     local gacha = BF.getGachaRemote()
-    local boxInfo = nil
-    local okGet, retGet = false, nil
-    if gacha then
-        okGet, retGet = pcall(function()
-            return gacha:InvokeServer({
-                Context = "getGachaFromBoxName",
-                BoxName = "ZiolesGacha",
-            })
-        end)
-        if okGet and type(retGet) == "table" then
-            boxInfo = retGet
-            print("[BF] GachaGet table:", dumpVal(retGet))
-        else
-            print("[BF] GachaGet fail:", okGet, retGet)
-        end
-    else
-        print("[BF] Gacha remote missing")
+    if not gacha then
+        BF.notifyUser("Gacha", "GachaNetworkRF not found", 4)
+        return false, "no remote"
     end
 
-    local results = {}
-    local okAny = false
-    local function try(label, fn)
-        local ok, ret = pcall(fn)
-        local shown
-        if not ok then
-            shown = "ERR:" .. tostring(ret)
-        elseif type(ret) == "table" then
-            shown = "table" .. dumpVal(ret)
-        else
-            shown = tostring(ret)
-        end
-        table.insert(results, label .. "=" .. shown)
-        print("[BF] Gacha try", label, shown)
-        if ok then okAny = true end
-        return ok, ret
-    end
-
-    if gacha then
-        -- Purchase attempts using known contexts + data from getGachaFromBoxName
-        local contexts = { "Buy", "Purchase", "Roll", "Open", "Claim", "Spin", "BuyGacha", "BuyRandom" }
-        for _, ctx in ipairs(contexts) do
-            try("ctx:" .. ctx, function()
-                return gacha:InvokeServer({
-                    BoxName = "ZiolesGacha",
-                    Context = ctx,
-                    SpokeNPC = "Blox Fruit Gacha",
-                })
-            end)
-        end
-        -- pass box info through if server expects it
-        if boxInfo then
-            try("Buy+info", function()
-                local args = {
-                    BoxName = "ZiolesGacha",
-                    Context = "Buy",
-                    SpokeNPC = "Blox Fruit Gacha",
-                }
-                for k, v in pairs(boxInfo) do
-                    if args[k] == nil then args[k] = v end
-                end
-                return gacha:InvokeServer(args)
-            end)
-            try("Purchase+info", function()
-                local args = {
-                    BoxName = "ZiolesGacha",
-                    Context = "Purchase",
-                    SpokeNPC = "Blox Fruit Gacha",
-                }
-                for k, v in pairs(boxInfo) do
-                    if args[k] == nil then args[k] = v end
-                end
-                return gacha:InvokeServer(args)
-            end)
-            -- some APIs: Context from info
-            if boxInfo.Context or boxInfo.context then
-                local c = boxInfo.Context or boxInfo.context
-                try("info.Context", function()
-                    return gacha:InvokeServer({
-                        BoxName = "ZiolesGacha",
-                        Context = c,
-                        SpokeNPC = "Blox Fruit Gacha",
-                    })
-                end)
+    -- Check status first (cooldown / money / level)
+    local okC, check = pcall(function()
+        return gacha:InvokeServer({
+            BoxName = "ZiolesGacha",
+            Context = "Check",
+            SpokeNPC = "Blox Fruit Gacha",
+        })
+    end)
+    if okC and type(check) == "table" then
+        local cd = check.Cooldown
+        if cd and cd.RequirementMet == false then
+            local left = ""
+            if type(cd.TimeEnds) == "number" then
+                local sec = math.max(0, math.floor(cd.TimeEnds - os.time()))
+                local m = math.floor(sec / 60)
+                local s = sec % 60
+                left = string.format(" (%d:%02d)", m, s)
             end
+            local msg = tostring(cd.ErrorMessage or check.ErrorMessage or "On cooldown")
+            BF.notifyUser("Gacha", msg .. left, 5)
+            print("[BF] Gacha CD:", msg, left)
+            return false, "cooldown"
         end
-        try("Check", function()
-            return gacha:InvokeServer({
-                BoxName = "ZiolesGacha",
-                Context = "Check",
-                SpokeNPC = "Blox Fruit Gacha",
-            })
-        end)
+        if check.RequirementsMet == false and check.ErrorMessage then
+            -- still try Purchase if only soft fail; but show reason
+            print("[BF] Gacha RequirementsMet=false:", check.ErrorMessage)
+        end
+        if check.Price then
+            print("[BF] Gacha price", check.Price.Value, "money", check.Price.Current, "ok", check.Price.RequirementMet)
+        end
     end
 
-    -- legacy Cousin still tried (often dead after Update 30)
-    local remotes = ReplicatedStorage:FindFirstChild("Remotes")
-    local comm = remotes and remotes:FindFirstChild("CommF_")
-    if comm then
-        try("Cousin/BuyItem", function() return comm:InvokeServer("Cousin", "BuyItem") end)
-    end
-
+    -- Working path (from live log): Context = "Purchase" -> true
+    local ok, ret = pcall(function()
+        return gacha:InvokeServer({
+            BoxName = "ZiolesGacha",
+            Context = "Purchase",
+            SpokeNPC = "Blox Fruit Gacha",
+        })
+    end)
     BF._lastRandomFruitAt = os.clock()
-    local msg = table.concat(results, " | ")
-    if #msg > 200 then msg = msg:sub(1, 200) .. "..." end
-    BF.notifyUser("Gacha", msg ~= "" and msg or "see F9", 8)
-    return okAny, results, boxInfo
+    print("[BF] Gacha Purchase:", ok, ret)
+
+    if ok and ret == true then
+        BF.notifyUser("Gacha", "Roll success! Check inventory", 5)
+        return true, ret
+    elseif ok and ret == false then
+        BF.notifyUser("Gacha", "Purchase denied (CD / money / region)", 5)
+        return false, ret
+    elseif ok then
+        BF.notifyUser("Gacha", "Purchase sent: " .. tostring(ret), 4)
+        return true, ret
+    else
+        BF.notifyUser("Gacha", "Purchase error: " .. tostring(ret), 5)
+        return false, ret
+    end
 end
 
 BF.startAutoRandomFruit = function()
