@@ -12,18 +12,22 @@ pcall(function()
 end)
 print("[BF] load ok - full autofarm script")
 
+-- Register budget: Luau max ~200 locals per function. Store API on one table.
+local BF = {}
+
+
 -- Load Vaxorin (or fallback UI)
 local useVaxorin = false
 local window = nil
 local notifierLabel = nil  -- fallback notification label
 
 -- Notification helper:
---   notifyUser(title, content)
---   notifyUser(title, content, duration)           -- seconds (default 3)
---   notifyUser(title, content, 0) or "sticky"     -- stays until closed / replaced
+--   BF.notifyUser(title, content)
+--   BF.notifyUser(title, content, duration)           -- seconds (default 3)
+--   BF.notifyUser(title, content, 0) or "sticky"     -- stays until closed / replaced
 -- Flood protection: same title+content won't re-fire within 2.5s
 local _notifyLast = {} -- key -> os.clock()
-local function notifyUser(title, content, duration)
+BF.notifyUser = function(title, content, duration)
     title = tostring(title or "")
     content = tostring(content or "")
     local sticky = false
@@ -131,20 +135,20 @@ if not useVaxorin or not window then
     toggleBtn.Font = Enum.Font.GothamBold
     toggleBtn.Parent = frame
     toggleBtn.MouseButton1Click:Connect(function()
-        if farmRunning then
-            stopFarm()
+        if BF.farmRunning then
+            BF.stopFarm()
             toggleBtn.Text = "Start Farm"
             toggleBtn.BackgroundColor3 = Color3.new(0.2, 0.8, 0.2)
             notifierLabel.Text = "Farm stopped"
         else
-            startFarm()
+            BF.startFarm()
             toggleBtn.Text = "Stop Farm"
             toggleBtn.BackgroundColor3 = Color3.new(0.8, 0.2, 0.2)
             notifierLabel.Text = "Farming..."
         end
     end)
 
-    notifyUser("UI Loaded", "Fallback UI active (Vaxorin unavailable).")
+    BF.notifyUser("UI Loaded", "Fallback UI active (Vaxorin unavailable).")
 end
 
 -- =============================================
@@ -199,13 +203,13 @@ local _hitBodyParts = {
     "RightUpperArm", "LeftUpperArm", "Head", "UpperTorso", "LowerTorso", "HumanoidRootPart",
 }
 
-local _SendHitsToServer = nil
-local _CombatController = nil
-local _m1Combo = 0
-local _comboDebounce = 0
+BF._SendHitsToServer = nil
+BF._CombatController = nil
+BF._m1Combo = 0
+BF._comboDebounce = 0
 
-local function resolveSendHits()
-    if _SendHitsToServer then return _SendHitsToServer end
+BF.resolveSendHits = function()
+    if BF._SendHitsToServer then return BF._SendHitsToServer end
     pcall(function()
         if not getsenv then return end
         local ps = LocalPlayer:FindFirstChild("PlayerScripts")
@@ -216,33 +220,33 @@ local function resolveSendHits()
                 if ok and type(env) == "table" then
                     local g = env._G or env
                     if type(g) == "table" and type(g.SendHitsToServer) == "function" then
-                        _SendHitsToServer = g.SendHitsToServer
+                        BF._SendHitsToServer = g.SendHitsToServer
                         return
                     end
                     if type(env.SendHitsToServer) == "function" then
-                        _SendHitsToServer = env.SendHitsToServer
+                        BF._SendHitsToServer = env.SendHitsToServer
                         return
                     end
                 end
             end
         end
     end)
-    return _SendHitsToServer
+    return BF._SendHitsToServer
 end
 
-local function resolveCombatController()
-    if _CombatController then return _CombatController end
+BF.resolveCombatController = function()
+    if BF._CombatController then return BF._CombatController end
     pcall(function()
         local c = ReplicatedStorage:FindFirstChild("Controllers")
         local mod = c and c:FindFirstChild("CombatController")
         if mod then
-            _CombatController = require(mod)
+            BF._CombatController = require(mod)
         end
     end)
-    return _CombatController
+    return BF._CombatController
 end
 
-local function getNetRemote(name)
+BF.getNetRemote = function(name)
     local modules = ReplicatedStorage:FindFirstChild("Modules")
     local net = modules and modules:FindFirstChild("Net")
     if not net then return nil end
@@ -257,11 +261,11 @@ local function getNetRemote(name)
     return direct
 end
 
-local function getCombatRemotes()
-    return getNetRemote("RegisterAttack"), getNetRemote("RegisterHit")
+BF.getCombatRemotes = function()
+    return BF.getNetRemote("RegisterAttack"), BF.getNetRemote("RegisterHit")
 end
 
-local function getEnemyHitPart(enemy)
+BF.getEnemyHitPart = function(enemy)
     if not enemy then return nil end
     local pick = _hitBodyParts[math.random(1, #_hitBodyParts)]
     local p = enemy:FindFirstChild(pick)
@@ -273,7 +277,7 @@ local function getEnemyHitPart(enemy)
     return enemy:FindFirstChildWhichIsA("BasePart")
 end
 
-local function buildBladeHits(targets)
+BF.buildBladeHits = function(targets)
     local hits = {}
     local primary = nil
     for _, enemy in ipairs(targets) do
@@ -281,7 +285,7 @@ local function buildBladeHits(targets)
             local hum = enemy:FindFirstChildOfClass("Humanoid")
             local root = enemy:FindFirstChild("HumanoidRootPart")
             if hum and root and hum.Health > 0 then
-                local part = getEnemyHitPart(enemy)
+                local part = BF.getEnemyHitPart(enemy)
                 if part then
                     table.insert(hits, { enemy, part })
                     if not primary then
@@ -294,23 +298,23 @@ local function buildBladeHits(targets)
     return primary, hits
 end
 
-local function getCombo()
-    local since = tick() - _comboDebounce
-    local combo = (since <= 0.5) and _m1Combo or 0
+BF.getCombo = function()
+    local since = tick() - BF._comboDebounce
+    local combo = (since <= 0.5) and BF._m1Combo or 0
     combo = (combo >= 4) and 1 or (combo + 1)
-    _comboDebounce = tick()
-    _m1Combo = combo
+    BF._comboDebounce = tick()
+    BF._m1Combo = combo
     return combo
 end
 
-local function fireLeftClickRemote(primaryPart)
+BF.fireLeftClickRemote = function(primaryPart)
     local char = LocalPlayer.Character
     if not char then return false end
     local tool = char:FindFirstChildOfClass("Tool")
     if not tool then return false end
     local remote = tool:FindFirstChild("LeftClickRemote")
     if not remote then return false end
-    local combo = getCombo()
+    local combo = BF.getCombo()
     local hrp = char:FindFirstChild("HumanoidRootPart")
     local ok = pcall(function()
         if primaryPart and hrp then
@@ -327,7 +331,7 @@ local function fireLeftClickRemote(primaryPart)
     return ok
 end
 
-local function fireVirtualClick()
+BF.fireVirtualClick = function()
     -- used only for secret rope cuts, not combat spam
     pcall(function()
         local vu = game:GetService("VirtualUser")
@@ -339,11 +343,11 @@ local function fireVirtualClick()
 end
 
 -- Cobalt Assets path (updates often)
-local _combatSessionHash = "160293a1"
-local _combatNumericId = 16110659
-local _combatKey = "XO%Xomcy~oxBc~"
+BF._combatSessionHash = "160293a1"
+BF._combatNumericId = 16110659
+BF._combatKey = "XO%Xomcy~oxBc~"
 
-local function fireAssetsHit(bodyPart)
+BF.fireAssetsHit = function(bodyPart)
     if not bodyPart then return false end
     local assets = ReplicatedStorage:FindFirstChild("Assets")
     if not assets then return false end
@@ -351,7 +355,7 @@ local function fireAssetsHit(bodyPart)
     for _, rem in ipairs(assets:GetChildren()) do
         if rem:IsA("RemoteEvent") then
             local ok = pcall(function()
-                rem:FireServer(_combatKey, _combatNumericId, bodyPart, {}, nil, _combatSessionHash)
+                rem:FireServer(BF._combatKey, BF._combatNumericId, bodyPart, {}, nil, BF._combatSessionHash)
             end)
             if ok then fired = true end
         end
@@ -360,7 +364,7 @@ local function fireAssetsHit(bodyPart)
 end
 
 -- QuantumOnyx-style: all living targets within 70 studs of player -> one bladeHits packet
-local function expandTargetsInHitRange(targets, maxDist)
+BF.expandTargetsInHitRange = function(targets, maxDist)
     maxDist = maxDist or 70
     local char = LocalPlayer.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
@@ -398,19 +402,19 @@ local function expandTargetsInHitRange(targets, maxDist)
     return list
 end
 
-local function fireCombatHit(targets)
+BF.fireCombatHit = function(targets)
     if not targets or #targets == 0 then return false end
-    targets = expandTargetsInHitRange(targets, 70)
-    local primary, hits = buildBladeHits(targets)
+    targets = BF.expandTargetsInHitRange(targets, 70)
+    local primary, hits = BF.buildBladeHits(targets)
     if not primary or #hits == 0 then return false end
 
     -- QuantumOnyx: RegisterAttack + SendHitsToServer(closest, full list)
-    local RegisterAttack, RegisterHit = getCombatRemotes()
+    local RegisterAttack, RegisterHit = BF.getCombatRemotes()
     if RegisterAttack then
         pcall(function() RegisterAttack:FireServer(0.05) end)
     end
 
-    local send = resolveSendHits()
+    local send = BF.resolveSendHits()
     if send then
         pcall(function() send(primary, hits) end)
     end
@@ -418,10 +422,10 @@ local function fireCombatHit(targets)
         pcall(function() RegisterHit:FireServer(primary, hits) end)
     end
 
-    fireLeftClickRemote(primary)
+    BF.fireLeftClickRemote(primary)
 
     pcall(function()
-        local cc = resolveCombatController()
+        local cc = BF.resolveCombatController()
         local tool = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
         if cc and tool and type(cc.Attack) == "function" then
             cc:Attack(tool)
@@ -429,7 +433,7 @@ local function fireCombatHit(targets)
     end)
 
     for _, pair in ipairs(hits) do
-        fireAssetsHit(pair[2])
+        BF.fireAssetsHit(pair[2])
     end
 
     return true
@@ -437,13 +441,13 @@ end
 
 -- Cluster / Bring (hub-style, less immortal desync):
 -- 1) sethiddenproperty SimulationRadius so client can own NPC physics
--- 2) Bring same-name mobs to a FIXED stack point (first target), not under flying player
+-- 2) Bring same-name mobs to a FIXED stack point (first target), not under BF.flying player
 -- 3) Player stands above that point and multi-hits
 -- Constant CFrame under a moving flyer = server position desync = red markers, 0 damage
-local clusterStackPos = nil
-local lastBringAt = 0
+BF.clusterStackPos = nil
+BF.lastBringAt = 0
 
-local function ensureSimRadius()
+BF.ensureSimRadius = function()
     pcall(function()
         sethiddenproperty(LocalPlayer, "SimulationRadius", 10000)
     end)
@@ -452,27 +456,27 @@ local function ensureSimRadius()
     end)
 end
 
-local function collectNearbyTargets(allTargets, playerRoot, lockedEnemy, maxCount, radius)
-    ensureSimRadius()
+BF.collectNearbyTargets = function(allTargets, playerRoot, lockedEnemy, maxCount, radius)
+    BF.ensureSimRadius()
     local list = {}
     local seen = {}
     local now = os.clock()
-    local shouldBring = (now - lastBringAt) >= 0.06
+    local shouldBring = (now - BF.lastBringAt) >= 0.06
     if shouldBring then
-        lastBringAt = now
+        BF.lastBringAt = now
     end
 
     -- Fixed stack: locked enemy position (or first valid target), refresh slowly
     if lockedEnemy and lockedEnemy.Parent then
         local lr = lockedEnemy:FindFirstChild("HumanoidRootPart")
         if lr then
-            if not clusterStackPos or (clusterStackPos - lr.Position).Magnitude > 40 then
-                clusterStackPos = lr.Position
+            if not BF.clusterStackPos or (BF.clusterStackPos - lr.Position).Magnitude > 40 then
+                BF.clusterStackPos = lr.Position
             end
         end
     end
-    if not clusterStackPos then
-        clusterStackPos = playerRoot.Position - Vector3.new(0, 6, 0)
+    if not BF.clusterStackPos then
+        BF.clusterStackPos = playerRoot.Position - Vector3.new(0, 6, 0)
     end
 
     local function add(enemy, index, doPull)
@@ -485,7 +489,7 @@ local function collectNearbyTargets(allTargets, playerRoot, lockedEnemy, maxCoun
         if not root or not head or not hum or hum.Health <= 0 then
             return
         end
-        local dist = (root.Position - clusterStackPos).Magnitude
+        local dist = (root.Position - BF.clusterStackPos).Magnitude
         if dist > radius then
             return
         end
@@ -499,7 +503,7 @@ local function collectNearbyTargets(allTargets, playerRoot, lockedEnemy, maxCoun
                     can = isnetworkowner(root)
                 end
                 if can then
-                    root.CFrame = CFrame.new(clusterStackPos + Vector3.new(sx, 0, sz))
+                    root.CFrame = CFrame.new(BF.clusterStackPos + Vector3.new(sx, 0, sz))
                     root.AssemblyLinearVelocity = Vector3.zero
                     root.AssemblyAngularVelocity = Vector3.zero
                     if hum then
@@ -524,7 +528,7 @@ local function collectNearbyTargets(allTargets, playerRoot, lockedEnemy, maxCoun
         if root then
             table.insert(scored, {
                 enemy = enemy,
-                d = (root.Position - clusterStackPos).Magnitude,
+                d = (root.Position - BF.clusterStackPos).Magnitude,
             })
         end
     end
@@ -679,11 +683,11 @@ table.sort(islands, function(a,b) return a.Min < b.Min end)
 -- =============================================
 -- NOCLIP & FLY
 -- =============================================
-local noclipConnection = nil
+BF.noclipConnection = nil
 
-local function enableNoclip()
-    if noclipConnection then return end
-    noclipConnection = RunService.Heartbeat:Connect(function()
+BF.enableNoclip = function()
+    if BF.noclipConnection then return end
+    BF.noclipConnection = RunService.Heartbeat:Connect(function()
         local character = LocalPlayer.Character
         if not character then return end
         for _, part in ipairs(character:GetDescendants()) do
@@ -694,10 +698,10 @@ local function enableNoclip()
     end)
 end
 
-local function disableNoclip()
-    if noclipConnection then
-        noclipConnection:Disconnect()
-        noclipConnection = nil
+BF.disableNoclip = function()
+    if BF.noclipConnection then
+        BF.noclipConnection:Disconnect()
+        BF.noclipConnection = nil
     end
     local character = LocalPlayer.Character
     if character then
@@ -709,38 +713,38 @@ local function disableNoclip()
     end
 end
 
-local flyTarget = nil
-local flyConnection = nil
-local flying = false
-local hoverY = nil
-local _bossFlyUnlock = false
+BF.flyTarget = nil
+BF.flyConnection = nil
+BF.flying = false
+BF.hoverY = nil
+BF._bossFlyUnlock = false
 
 -- Keep the player on a stable horizontal flight plane.  The old implementation
 -- always added upward velocity, which made the character arc and slowly sink.
-local function enableFly()
-    if flying then return end
+BF.enableFly = function()
+    if BF.flying then return end
     local character = LocalPlayer.Character
     if not character then return end
     local humanoid = character:FindFirstChild("Humanoid")
     local hrp = character:FindFirstChild("HumanoidRootPart")
     if not humanoid or not hrp then return end
 
-    flying = true
-    hoverY = hrp.Position.Y
+    BF.flying = true
+    BF.hoverY = hrp.Position.Y
     humanoid.PlatformStand = true
-    enableNoclip()
+    BF.enableNoclip()
 
-    flyConnection = RunService.Heartbeat:Connect(function()
-        if not flying then return end
+    BF.flyConnection = RunService.Heartbeat:Connect(function()
+        if not BF.flying then return end
 
         local currentCharacter = LocalPlayer.Character
         local currentHrp = currentCharacter and currentCharacter:FindFirstChild("HumanoidRootPart")
         local currentHumanoid = currentCharacter and currentCharacter:FindFirstChild("Humanoid")
         if not currentHrp or not currentHumanoid or currentHumanoid.Health <= 0 then return end
 
-        if not hoverY then hoverY = currentHrp.Position.Y end
+        if not BF.hoverY then BF.hoverY = currentHrp.Position.Y end
 
-        local target = flyTarget
+        local target = BF.flyTarget
         if target then
             local delta = target - currentHrp.Position
             local horizontal = Vector3.new(delta.X, 0, delta.Z)
@@ -767,23 +771,23 @@ local function enableFly()
             currentHrp.AssemblyAngularVelocity = Vector3.zero
         else
             -- Hover exactly where we are instead of using a fixed upward velocity.
-            hoverY = hoverY or currentHrp.Position.Y
-            local verticalError = hoverY - currentHrp.Position.Y
+            BF.hoverY = BF.hoverY or currentHrp.Position.Y
+            local verticalError = BF.hoverY - currentHrp.Position.Y
             currentHrp.AssemblyLinearVelocity = Vector3.new(0, math.clamp(verticalError * 6, -20, 20), 0)
             currentHrp.AssemblyAngularVelocity = Vector3.zero
         end
     end)
 end
 
-local function disableFly()
-    if not flying then return end
-    flying = false
-    if flyConnection then
-        flyConnection:Disconnect()
-        flyConnection = nil
+BF.disableFly = function()
+    if not BF.flying then return end
+    BF.flying = false
+    if BF.flyConnection then
+        BF.flyConnection:Disconnect()
+        BF.flyConnection = nil
     end
-    flyTarget = nil
-    hoverY = nil
+    BF.flyTarget = nil
+    BF.hoverY = nil
 
     local character = LocalPlayer.Character
     if character then
@@ -795,46 +799,46 @@ local function disableFly()
         local humanoid = character:FindFirstChild("Humanoid")
         if humanoid then humanoid.PlatformStand = false end
     end
-    disableNoclip()
+    BF.disableNoclip()
 end
 
-local function setFlyTarget(position, preserveHeight)
+BF.setFlyTarget = function(position, preserveHeight)
     -- While a selected boss is UP/? and hunt is active, Auto Farm must not steal the target.
-    -- Boss hunt sets _bossFlyUnlock for its own calls.
-    if bossHuntOwnsFly and type(bossHuntOwnsFly) == "function" and bossHuntOwnsFly() then
-        if not _bossFlyUnlock then
+    -- Boss hunt sets BF._bossFlyUnlock for its own calls.
+    if bossHuntOwnsFly and type(bossHuntOwnsFly) == "function" and BF.bossHuntOwnsFly() then
+        if not BF._bossFlyUnlock then
             return
         end
     end
-    if not flying then enableFly() end
+    if not BF.flying then BF.enableFly() end
     if not position then
-        flyTarget = nil
+        BF.flyTarget = nil
         return
     end
 
-    if preserveHeight and hoverY then
-        position = Vector3.new(position.X, hoverY, position.Z)
+    if preserveHeight and BF.hoverY then
+        position = Vector3.new(position.X, BF.hoverY, position.Z)
     else
-        hoverY = position.Y
+        BF.hoverY = position.Y
     end
-    flyTarget = position
+    BF.flyTarget = position
 end
 
-local function setHoverHeight(y)
-    if bossHuntOwnsFly and type(bossHuntOwnsFly) == "function" and bossHuntOwnsFly() then
-        if not _bossFlyUnlock then
+BF.setHoverHeight = function(y)
+    if bossHuntOwnsFly and type(bossHuntOwnsFly) == "function" and BF.bossHuntOwnsFly() then
+        if not BF._bossFlyUnlock then
             return
         end
     end
-    hoverY = y
-    if flyTarget then
-        flyTarget = Vector3.new(flyTarget.X, y, flyTarget.Z)
+    BF.hoverY = y
+    if BF.flyTarget then
+        BF.flyTarget = Vector3.new(BF.flyTarget.X, y, BF.flyTarget.Z)
     end
 end
 
 -- Blox Fruits has an underwater entrance/whirlpool.  Servers can name the
 -- object differently, so check both parts and models for common whirlpool names.
-local function findWhirlpool()
+BF.findWhirlpool = function()
     local character = LocalPlayer.Character
     local hrp = character and character:FindFirstChild("HumanoidRootPart")
     if not hrp then return nil end
@@ -879,7 +883,7 @@ local function findWhirlpool()
     return best
 end
 
-local function isUnderwaterIsland(island)
+BF.isUnderwaterIsland = function(island)
     if not island then return false end
     return island.Name:lower():find("underwater", 1, true) ~= nil
         or island.Name:lower():find("submerged", 1, true) ~= nil
@@ -888,7 +892,7 @@ end
 -- =============================================
 -- QUEST STACK & HELPERS
 -- =============================================
-local function acceptQuest(questArgs)
+BF.acceptQuest = function(questArgs)
     if not questArgs then return false end
     local remote = ReplicatedStorage:FindFirstChild("Remotes")
     if remote then
@@ -901,7 +905,7 @@ local function acceptQuest(questArgs)
     return false
 end
 
-local function stackQuest(questArgs, count)
+BF.stackQuest = function(questArgs, count)
     if not questArgs or count < 1 then return false end
     local remote = ReplicatedStorage:FindFirstChild("Remotes")
     if not remote then return false end
@@ -914,23 +918,23 @@ local function stackQuest(questArgs, count)
     return true
 end
 
-local function acceptQuestWrapper(questArgs)
+BF.acceptQuestWrapper = function(questArgs)
     if questArgs and questArgs[2] and type(activeQuestMatches) == "function" then
         local ok, matched = pcall(function()
-            return activeQuestMatches(tostring(questArgs[2]))
+            return BF.activeQuestMatches(tostring(questArgs[2]))
         end)
         if ok and matched then
             return true
         end
     end
     if config.questStack and questArgs then
-        return stackQuest(questArgs, config.stackCount)
+        return BF.stackQuest(questArgs, config.stackCount)
     else
-        return acceptQuest(questArgs)
+        return BF.acceptQuest(questArgs)
     end
 end
 
-local function abandonQuest()
+BF.abandonQuest = function()
     local remote = ReplicatedStorage:FindFirstChild("Remotes")
     if remote then
         local commF = remote:FindFirstChild("CommF_")
@@ -945,7 +949,7 @@ end
 -- =============================================
 -- AUTO EQUIP
 -- =============================================
-local function autoEquipWeapon()
+BF.autoEquipWeapon = function()
     if not config.autoEquip then return end
     local character = LocalPlayer.Character
     if not character then return end
@@ -975,8 +979,8 @@ end
 -- =============================================
 -- FRUIT NOTIFIER (SIMPLE)
 -- =============================================
-local fruitNotifierRunning = false
-local fruitNotified = {} -- instance or name key -> true (already announced)
+BF.fruitNotifierRunning = false
+BF.fruitNotified = {} -- instance or name key -> true (already announced)
 
 -- Valuable fruits for filter (auto-collect / optional notify)
 local FRUIT_WHITELIST = {
@@ -988,7 +992,7 @@ local FRUIT_WHITELIST = {
     "east dragon", "west dragon", "dough-dough", "dragon-dragon",
 }
 
-local function isValuableFruit(name)
+BF.isValuableFruit = function(name)
     local n = string.lower(tostring(name or ""))
     for _, w in ipairs(FRUIT_WHITELIST) do
         if string.find(n, w, 1, true) then return true end
@@ -996,7 +1000,7 @@ local function isValuableFruit(name)
     return false
 end
 
-local function getFruitHandle(obj)
+BF.getFruitHandle = function(obj)
     if not obj then return nil end
     if obj:IsA("BasePart") then return obj end
     local h = obj:FindFirstChild("Handle")
@@ -1004,7 +1008,7 @@ local function getFruitHandle(obj)
     return obj:FindFirstChildWhichIsA("BasePart", true)
 end
 
-local function isWorldFruit(obj)
+BF.isWorldFruit = function(obj)
     if not obj then return false end
     -- Tool on ground
     if obj:IsA("Tool") then
@@ -1013,24 +1017,24 @@ local function isWorldFruit(obj)
             return false -- held by player
         end
         if parent and parent:IsA("Backpack") then return false end
-        return getFruitHandle(obj) ~= nil
+        return BF.getFruitHandle(obj) ~= nil
     end
     -- Fruit model / spawn marker
     local n = string.lower(obj.Name)
     if string.find(n, "fruit", 1, true) then
-        return getFruitHandle(obj) ~= nil or obj:IsA("Model") or obj:IsA("BasePart")
+        return BF.getFruitHandle(obj) ~= nil or obj:IsA("Model") or obj:IsA("BasePart")
     end
     return false
 end
 
-local function fruitScan()
+BF.fruitScan = function()
     if not config.fruitNotifier and not config.fruitAutoCollect then return end
 
     local candidates = {}
 
     -- 1) Workspace root tools/fruits
     for _, v in ipairs(Workspace:GetChildren()) do
-        if isWorldFruit(v) then
+        if BF.isWorldFruit(v) then
             table.insert(candidates, v)
         end
     end
@@ -1041,20 +1045,20 @@ local function fruitScan()
         local fs = wo and wo:FindFirstChild("FruitSpawns")
         if not fs then return end
         for _, v in ipairs(fs:GetChildren()) do
-            if isWorldFruit(v) or v:IsA("BasePart") or v:IsA("Model") then
+            if BF.isWorldFruit(v) or v:IsA("BasePart") or v:IsA("Model") then
                 table.insert(candidates, v)
             end
         end
         -- nested
         for _, v in ipairs(fs:GetDescendants()) do
-            if v:IsA("Tool") and isWorldFruit(v) then
+            if v:IsA("Tool") and BF.isWorldFruit(v) then
                 table.insert(candidates, v)
             end
         end
     end)
 
     for _, v in ipairs(candidates) do
-        local handle = getFruitHandle(v)
+        local handle = BF.getFruitHandle(v)
         local pos = handle and handle.Position
         if (not pos) and v:IsA("Model") then
             local okp, piv = pcall(function() return v:GetPivot().Position end)
@@ -1063,17 +1067,17 @@ local function fruitScan()
         if pos then
             local displayName = v.Name
             local key = tostring(v) .. "|" .. displayName
-            local valuable = isValuableFruit(displayName)
+            local valuable = BF.isValuableFruit(displayName)
 
-            if not fruitNotified[key] then
-                fruitNotified[key] = true
+            if not BF.fruitNotified[key] then
+                BF.fruitNotified[key] = true
                 local shouldNotify = config.fruitNotifier
                 if shouldNotify and config.fruitFilterNotify and not valuable then
                     shouldNotify = false
                 end
                 if shouldNotify then
                     local tag = valuable and " [VAL]" or ""
-                    notifyUser("Fruit Detected", displayName .. tag, 4)
+                    BF.notifyUser("Fruit Detected", displayName .. tag, 4)
                 end
             end
 
@@ -1081,7 +1085,7 @@ local function fruitScan()
             if canCollect then
                 local owns = false
                 pcall(function()
-                    if type(bossHuntOwnsFly) == "function" then owns = bossHuntOwnsFly() end
+                    if type(bossHuntOwnsFly) == "function" then owns = BF.bossHuntOwnsFly() end
                 end)
                 if owns then canCollect = false end
             end
@@ -1089,7 +1093,7 @@ local function fruitScan()
                 canCollect = false
             end
             if canCollect then
-                pcall(function() setFlyTarget(pos + Vector3.new(0, 5, 0), false) end)
+                pcall(function() BF.setFlyTarget(pos + Vector3.new(0, 5, 0), false) end)
                 task.wait(0.4)
                 local character = LocalPlayer.Character
                 local hrp = character and character:FindFirstChild("HumanoidRootPart")
@@ -1105,7 +1109,7 @@ local function fruitScan()
                         task.wait(0.1)
                         VirtualInputManager:SendKeyEvent(false, "E", false, game)
                     end)
-                    notifyUser("Fruit", "Collected " .. displayName, 2)
+                    BF.notifyUser("Fruit", "Collected " .. displayName, 2)
                 end
                 break
             end
@@ -1113,31 +1117,31 @@ local function fruitScan()
     end
 
     if os.clock() % 30 < 2 then
-        for k in pairs(fruitNotified) do
-            fruitNotified[k] = nil
+        for k in pairs(BF.fruitNotified) do
+            BF.fruitNotified[k] = nil
         end
     end
 end
 
-local function startFruitNotifier()
-    if fruitNotifierRunning then return end
-    fruitNotifierRunning = true
+BF.startFruitNotifier = function()
+    if BF.fruitNotifierRunning then return end
+    BF.fruitNotifierRunning = true
     task.spawn(function()
-        while fruitNotifierRunning do
+        while BF.fruitNotifierRunning do
             pcall(fruitScan)
             task.wait(2) -- never Heartbeat+wait spam
         end
     end)
 end
 
-local function stopFruitNotifier()
-    fruitNotifierRunning = false
+BF.stopFruitNotifier = function()
+    BF.fruitNotifierRunning = false
 end
 
 -- =============================================
 -- HELPERS
 -- =============================================
-local function getPlayerLevel()
+BF.getPlayerLevel = function()
     local leaderstats = LocalPlayer:FindFirstChild("leaderstats")
     if leaderstats then
         local level = leaderstats:FindFirstChild("Level")
@@ -1153,7 +1157,7 @@ local function getPlayerLevel()
     return 0
 end
 
-local function getAvailableStatPoints()
+BF.getAvailableStatPoints = function()
     local data = LocalPlayer:FindFirstChild("Data")
     if data then
         local points = data:FindFirstChild("Points")
@@ -1162,7 +1166,7 @@ local function getAvailableStatPoints()
     return 0
 end
 
-local function getIslandForLevel(level)
+BF.getIslandForLevel = function(level)
     local candidates = {}
     for _, island in ipairs(islands) do
         if level >= island.Min and level <= island.Max then
@@ -1191,7 +1195,7 @@ end
 
 -- TrackedQuestFrame = has quest; gone = no quest / completed
 -- Text: TrackedQuestFrame.Frame.header.textLabel ContentText e.g. "Defeat 8 Brutes"
-local function getTrackedQuestLabel()
+BF.getTrackedQuestLabel = function()
     local pg = LocalPlayer:FindFirstChild("PlayerGui")
     if not pg then return nil end
     local tqf = pg:FindFirstChild("TrackedQuestFrame")
@@ -1211,17 +1215,17 @@ local function getTrackedQuestLabel()
     return nil
 end
 
-local function hasActiveQuest()
+BF.hasActiveQuest = function()
     local pg = LocalPlayer:FindFirstChild("PlayerGui")
     if not pg then return false end
     return pg:FindFirstChild("TrackedQuestFrame") ~= nil
 end
 
-local function getActiveQuestInfo()
-    if not hasActiveQuest() then
+BF.getActiveQuestInfo = function()
+    if not BF.hasActiveQuest() then
         return false, "", ""
     end
-    local label = getTrackedQuestLabel()
+    local label = BF.getTrackedQuestLabel()
     local text = ""
     if label then
         text = tostring(label.ContentText or label.Text or "")
@@ -1229,8 +1233,8 @@ local function getActiveQuestInfo()
     return true, text, text
 end
 
-local function activeQuestMatches(...)
-    local active, title, body = getActiveQuestInfo()
+BF.activeQuestMatches = function(...)
+    local active, title, body = BF.getActiveQuestInfo()
     if not active then return false end
     local hay = string.lower(title .. " " .. body)
     for i = 1, select("#", ...) do
@@ -1241,7 +1245,7 @@ local function activeQuestMatches(...)
 end
 
 -- Derive farm patterns from tracked quest text when possible
-local function getPatternsFromQuestText(text, fallbackPatterns)
+BF.getPatternsFromQuestText = function(text, fallbackPatterns)
     text = string.lower(tostring(text or ""))
     if text == "" then return fallbackPatterns end
     -- "Defeat 8 Brutes" / "Defeat Bandits" etc.
@@ -1275,7 +1279,7 @@ end
 -- =============================================
 -- BOSS DETECTION
 -- =============================================
-local function findBossInWorkspace(island)
+BF.findBossInWorkspace = function(island)
     if not island.isBoss then return nil end
     local container = Workspace:FindFirstChild("Enemies")
     if not container then return nil end
@@ -1293,20 +1297,20 @@ local function findBossInWorkspace(island)
     return nil
 end
 
-local function bossExists(island)
-    return findBossInWorkspace(island) ~= nil
+BF.bossExists = function(island)
+    return BF.findBossInWorkspace(island) ~= nil
 end
 
-local function getDesiredQuestType(island)
+BF.getDesiredQuestType = function(island)
     if not island.isBoss then return "normal" end
-    if bossExists(island) then return "boss" else return "normal" end
+    if BF.bossExists(island) then return "boss" else return "normal" end
 end
 
-local function getQuestArgs(island, questType)
+BF.getQuestArgs = function(island, questType)
     if questType == "boss" then return island.BossQuest else return island.Quest end
 end
 
-local function getPatterns(island, questType)
+BF.getPatterns = function(island, questType)
     if questType == "boss" then
         return { patterns = island.BossPatterns, includeBossAttr = true }
     else
@@ -1317,7 +1321,7 @@ end
 -- =============================================
 -- ENEMY TARGETING
 -- =============================================
-local function enemyMatchesPatterns(enemy, patternInfo)
+BF.enemyMatchesPatterns = function(enemy, patternInfo)
     if not enemy or not enemy:IsA("Model") then return false end
     local humanoid = enemy:FindFirstChildOfClass("Humanoid")
     local root = enemy:FindFirstChild("HumanoidRootPart")
@@ -1371,12 +1375,12 @@ local function enemyMatchesPatterns(enemy, patternInfo)
     return false
 end
 
-local function getMatchingEnemies(island, patternInfo)
+BF.getMatchingEnemies = function(island, patternInfo)
     local container = Workspace:FindFirstChild("Enemies")
     if not container then return {} end
     local enemies = {}
     for _, enemy in ipairs(container:GetChildren()) do
-        if enemyMatchesPatterns(enemy, patternInfo) then
+        if BF.enemyMatchesPatterns(enemy, patternInfo) then
             table.insert(enemies, enemy)
         end
     end
@@ -1386,7 +1390,7 @@ end
 -- =============================================
 -- FAST REMOTE ATTACK (no mouse)
 -- =============================================
-local function selectAttackWeapon()
+BF.selectAttackWeapon = function()
     if config.attackMode == "Sword" then
         VirtualInputManager:SendKeyEvent(true, "1", false, game)
         task.wait(0.01)
@@ -1402,7 +1406,7 @@ local function selectAttackWeapon()
     end
 end
 
-local function attackTargets(targets, speed, hits)
+BF.attackTargets = function(targets, speed, hits)
     if not targets or #targets == 0 then return end
 
     local validTargets = {}
@@ -1426,7 +1430,7 @@ local function attackTargets(targets, speed, hits)
         end
     end
 
-    selectAttackWeapon()
+    BF.selectAttackWeapon()
 
     -- speed is delay between multi-hit packets; clamp so it never stalls
     local delay = tonumber(speed) or 0.01
@@ -1445,16 +1449,16 @@ local function attackTargets(targets, speed, hits)
         end
         if #alive == 0 then break end
         -- one RegisterHit packet hits the WHOLE cluster
-        fireCombatHit(alive)
+        BF.fireCombatHit(alive)
         task.wait(delay)
     end
 end
 
-local function attackEnemy(target, speed, hits)
-    attackTargets({target}, speed, hits)
+BF.attackEnemy = function(target, speed, hits)
+    BF.attackTargets({target}, speed, hits)
 end
 
-local function heal()
+BF.heal = function()
     local character = LocalPlayer.Character
     if not character then return end
     local humanoid = character:FindFirstChild("Humanoid")
@@ -1469,7 +1473,7 @@ end
 -- =============================================
 -- STATS SYSTEM
 -- =============================================
-local function addStatPoints(statName, points)
+BF.addStatPoints = function(statName, points)
     if points <= 0 then return end
     local remote = ReplicatedStorage:FindFirstChild("Remotes")
     if remote then
@@ -1480,14 +1484,14 @@ local function addStatPoints(statName, points)
     end
 end
 
-local function distributeStats(statsList, pointsPerStat, silent)
+BF.distributeStats = function(statsList, pointsPerStat, silent)
     if not statsList or #statsList == 0 then
-        if not silent then notifyUser("Stats Error", "No stats selected.") end
+        if not silent then BF.notifyUser("Stats Error", "No stats selected.") end
         return
     end
-    local available = getAvailableStatPoints()
+    local available = BF.getAvailableStatPoints()
     if available <= 0 then
-        if not silent then notifyUser("No Stat Points", "You have 0 stat points available.") end
+        if not silent then BF.notifyUser("No Stat Points", "You have 0 stat points available.") end
         return
     end
     local totalNeeded = #statsList * pointsPerStat
@@ -1495,14 +1499,14 @@ local function distributeStats(statsList, pointsPerStat, silent)
     if totalNeeded > available then
         pointsToAdd = math.floor(available / #statsList)
         if pointsToAdd == 0 then
-            if not silent then notifyUser("Not Enough Points", "You have " .. available .. " points, need at least " .. #statsList .. " to add 1 to each stat.") end
+            if not silent then BF.notifyUser("Not Enough Points", "You have " .. available .. " points, need at least " .. #statsList .. " to add 1 to each stat.") end
             return
         end
     end
     local added = 0
     for _, stat in ipairs(statsList) do
         if available >= added + pointsToAdd then
-            addStatPoints(stat, pointsToAdd)
+            BF.addStatPoints(stat, pointsToAdd)
             added = added + pointsToAdd
         else
             break
@@ -1510,7 +1514,7 @@ local function distributeStats(statsList, pointsPerStat, silent)
     end
     local remaining = available - added
     if not silent and added > 0 then
-        notifyUser("Stats Added", "Added " .. pointsToAdd .. " to " .. table.concat(statsList, ", ") .. ". Remaining: " .. remaining)
+        BF.notifyUser("Stats Added", "Added " .. pointsToAdd .. " to " .. table.concat(statsList, ", ") .. ". Remaining: " .. remaining)
     end
 end
 
@@ -1597,7 +1601,7 @@ local BOSS_ALIASES = {
     ["Sky Warlord"] = { "Sky Warlord", "Sky Warlord" },
 }
 
-local function stripEnemyLabel(name)
+BF.stripEnemyLabel = function(name)
     -- "Diamond [Lv. 750] [Boss]" -> "Diamond"
     name = tostring(name or "")
     name = string.gsub(name, "%s*%[Lv%.%s*%d+%]%s*", " ")
@@ -1606,7 +1610,7 @@ local function stripEnemyLabel(name)
     return (string.match(name, "^%s*(.-)%s*$")) or name
 end
 
-local function collectBossesFromEnemySpawns()
+BF.collectBossesFromEnemySpawns = function()
     local list = {}
     local seen = {}
     local origin = workspace:FindFirstChild("_WorldOrigin")
@@ -1622,7 +1626,7 @@ local function collectBossesFromEnemySpawns()
         end)
         local label = display or n
         if type(label) == "string" and string.find(label, "[Boss]", 1, true) then
-            local short = stripEnemyLabel(label)
+            local short = BF.stripEnemyLabel(label)
             if short ~= "" and not seen[string.lower(short)] then
                 seen[string.lower(short)] = true
                 table.insert(list, short)
@@ -1633,7 +1637,7 @@ local function collectBossesFromEnemySpawns()
     return list
 end
 
-local function averageSpawnPosition(enemyShortName)
+BF.averageSpawnPosition = function(enemyShortName)
     local origin = workspace:FindFirstChild("_WorldOrigin")
     local spawns = origin and origin:FindFirstChild("EnemySpawns")
     if not spawns then
@@ -1649,7 +1653,7 @@ local function averageSpawnPosition(enemyShortName)
                 local d = part:GetAttribute("DisplayName")
                 if d then label = d end
             end)
-            local short = string.lower(stripEnemyLabel(label))
+            local short = string.lower(BF.stripEnemyLabel(label))
             if short == want or string.find(short, want, 1, true) or string.find(want, short, 1, true) then
                 sum = sum + part.Position
                 count = count + 1
@@ -1662,22 +1666,22 @@ local function averageSpawnPosition(enemyShortName)
     return sum / count
 end
 
-local bossTimerGui = nil
-local bossTimerLabel = nil
-local bossTimerRunning = false
-local bossTimerTask = nil
-local lastBossStatus = {} -- name -> "SPAWNED" | "RESPAWNING" | "UNKNOWN"
+BF.bossTimerGui = nil
+BF.bossTimerLabel = nil
+BF.bossTimerRunning = false
+BF.bossTimerTask = nil
+BF.lastBossStatus = {} -- name -> "SPAWNED" | "RESPAWNING" | "UNKNOWN"
 -- Timer UI can blink out of workspace for a frame; require stable absence before SPAWNED
-local pendingSpawnConfirm = {} -- name -> os.clock() when timer first disappeared while we thought CD
+BF.pendingSpawnConfirm = {} -- name -> os.clock() when timer first disappeared while we thought CD
 local SPAWN_CONFIRM_DELAY = 1.0
-local selectedBosses = {}
-local unknownProbeDone = {}
-local bossListFrame = nil
-local bossAutoHuntEnabled = true
-local activeBossHuntTask = nil
-local activeBossHuntName = nil
+BF.selectedBosses = {}
+BF.unknownProbeDone = {}
+BF.bossListFrame = nil
+BF.bossAutoHuntEnabled = true
+BF.activeBossHuntTask = nil
+BF.activeBossHuntName = nil
 
-local function normalizeSea(mapAttr)
+BF.normalizeSea = function(mapAttr)
     local s = string.lower(tostring(mapAttr or ""))
     if string.find(s, "3", 1, true) or s == "sea3" or string.find(s, "third", 1, true) then
         return "Sea3"
@@ -1694,11 +1698,11 @@ local function normalizeSea(mapAttr)
     return tostring(mapAttr)
 end
 
-local function getCurrentSea()
-    return normalizeSea(workspace:GetAttribute("MAP"))
+BF.getCurrentSea = function()
+    return BF.normalizeSea(workspace:GetAttribute("MAP"))
 end
 
-local function cleanTimerText(raw)
+BF.cleanTimerText = function(raw)
     local s = tostring(raw or "")
     -- strip rich-text / html-like tags from TextLabel
     s = string.gsub(s, "<[^>]+>", "")
@@ -1713,7 +1717,7 @@ local function cleanTimerText(raw)
     return s
 end
 
-local function findBossTimerLabel(marker)
+BF.findBossTimerLabel = function(marker)
     if not marker then
         return nil
     end
@@ -1738,7 +1742,7 @@ local function findBossTimerLabel(marker)
     return nil
 end
 
-local function nameMatches(bossName, candidate)
+BF.nameMatches = function(bossName, candidate)
     if not candidate then
         return false
     end
@@ -1762,7 +1766,7 @@ local function nameMatches(bossName, candidate)
     return false
 end
 
-local function scanMarkerMap()
+BF.scanMarkerMap = function()
     -- returns map: upperKey -> { status, time, markerName }
     local map = {}
     local origin = workspace:FindFirstChild("_WorldOrigin")
@@ -1773,10 +1777,10 @@ local function scanMarkerMap()
         local name = child.Name
         if type(name) == "string" and string.find(name, "Respawn Marker", 1, true) then
             local bossFromMarker = string.gsub(name, "%s*Respawn Marker%s*$", "")
-            local timerLabel = findBossTimerLabel(child)
+            local timerLabel = BF.findBossTimerLabel(child)
             local status, timeText
             if timerLabel and timerLabel.Parent then
-                local cleaned = cleanTimerText(timerLabel.Text)
+                local cleaned = BF.cleanTimerText(timerLabel.Text)
                 if cleaned ~= "" then
                     status = "RESPAWNING"
                     timeText = cleaned
@@ -1800,13 +1804,13 @@ local function scanMarkerMap()
     return map
 end
 
-local function enemyAliveMatching(bossName)
+BF.enemyAliveMatching = function(bossName)
     local enemies = workspace:FindFirstChild("Enemies")
     if not enemies then
         return false
     end
     for _, model in ipairs(enemies:GetChildren()) do
-        if nameMatches(bossName, model.Name) then
+        if BF.nameMatches(bossName, model.Name) then
             local hum = model:FindFirstChildOfClass("Humanoid")
             if hum and hum.Health > 0 then
                 return true
@@ -1816,17 +1820,17 @@ local function enemyAliveMatching(bossName)
     return false
 end
 
-local function lookupMarker(markerMap, bossName)
+BF.lookupMarker = function(markerMap, bossName)
     for key, data in pairs(markerMap) do
-        if type(data) == "table" and data.Status and nameMatches(bossName, data.MarkerName or key) then
+        if type(data) == "table" and data.Status and BF.nameMatches(bossName, data.MarkerName or key) then
             return data
         end
     end
     return nil
 end
 
-local function scanBossesForSea()
-    local sea = getCurrentSea()
+BF.scanBossesForSea = function()
+    local sea = BF.getCurrentSea()
     local catalog = {}
     local seen = {}
 
@@ -1843,7 +1847,7 @@ local function scanBossesForSea()
     end
 
     -- 1) live from EnemySpawns ([Boss] parts) - authoritative for this server/sea
-    for _, name in ipairs(collectBossesFromEnemySpawns()) do
+    for _, name in ipairs(BF.collectBossesFromEnemySpawns()) do
         addBoss(name)
     end
 
@@ -1867,30 +1871,30 @@ local function scanBossesForSea()
         end
     end
 
-    local markerMap = scanMarkerMap()
+    local markerMap = BF.scanMarkerMap()
     local results = {}
     local now = os.clock()
     for _, bossName in ipairs(catalog) do
         local status, timeText
-        if enemyAliveMatching(bossName) then
+        if BF.enemyAliveMatching(bossName) then
             status = "SPAWNED"
             timeText = "-"
-            pendingSpawnConfirm[bossName] = nil
+            BF.pendingSpawnConfirm[bossName] = nil
         else
-            local m = lookupMarker(markerMap, bossName)
+            local m = BF.lookupMarker(markerMap, bossName)
             if m then
                 if m.Status == "RESPAWNING" then
                     -- timer visible again -> cancel any pending spawn confirm
                     status = "RESPAWNING"
                     timeText = m.Time
-                    pendingSpawnConfirm[bossName] = nil
+                    BF.pendingSpawnConfirm[bossName] = nil
                 else
                     -- marker exists but no timer text (often "SPAWNED", but can be a 1-frame glitch)
-                    local prev = lastBossStatus[bossName]
-                    if prev == "RESPAWNING" or pendingSpawnConfirm[bossName] then
-                        local t0 = pendingSpawnConfirm[bossName]
+                    local prev = BF.lastBossStatus[bossName]
+                    if prev == "RESPAWNING" or BF.pendingSpawnConfirm[bossName] then
+                        local t0 = BF.pendingSpawnConfirm[bossName]
                         if not t0 then
-                            pendingSpawnConfirm[bossName] = now
+                            BF.pendingSpawnConfirm[bossName] = now
                             status = "RESPAWNING"
                             timeText = "..."
                         elseif (now - t0) < SPAWN_CONFIRM_DELAY then
@@ -1899,21 +1903,21 @@ local function scanBossesForSea()
                         else
                             status = "SPAWNED"
                             timeText = "-"
-                            pendingSpawnConfirm[bossName] = nil
+                            BF.pendingSpawnConfirm[bossName] = nil
                         end
                     else
                         status = "SPAWNED"
                         timeText = "-"
-                        pendingSpawnConfirm[bossName] = nil
+                        BF.pendingSpawnConfirm[bossName] = nil
                     end
                 end
             else
                 -- no marker at all
-                local prev = lastBossStatus[bossName]
-                if prev == "RESPAWNING" or pendingSpawnConfirm[bossName] then
-                    local t0 = pendingSpawnConfirm[bossName]
+                local prev = BF.lastBossStatus[bossName]
+                if prev == "RESPAWNING" or BF.pendingSpawnConfirm[bossName] then
+                    local t0 = BF.pendingSpawnConfirm[bossName]
                     if not t0 then
-                        pendingSpawnConfirm[bossName] = now
+                        BF.pendingSpawnConfirm[bossName] = now
                         status = "RESPAWNING"
                         timeText = "..."
                     elseif (now - t0) < SPAWN_CONFIRM_DELAY then
@@ -1923,7 +1927,7 @@ local function scanBossesForSea()
                         -- confirmed gone: SPAWNED (sticky), not ?
                         status = "SPAWNED"
                         timeText = "-"
-                        pendingSpawnConfirm[bossName] = nil
+                        BF.pendingSpawnConfirm[bossName] = nil
                     end
                 elseif prev == "SPAWNED" then
                     status = "SPAWNED"
@@ -1931,7 +1935,7 @@ local function scanBossesForSea()
                 else
                     status = "UNKNOWN"
                     timeText = "-"
-                    pendingSpawnConfirm[bossName] = nil
+                    BF.pendingSpawnConfirm[bossName] = nil
                 end
             end
         end
@@ -1955,13 +1959,13 @@ local function scanBossesForSea()
 end
 
 -- keep old name used by UI buttons
-local function scanBossMarkers()
-    local pack = scanBossesForSea()
+BF.scanBossMarkers = function()
+    local pack = BF.scanBossesForSea()
     return pack.List, pack.Sea
 end
 
-local function formatBossBoard(list, sea)
-    sea = sea or getCurrentSea()
+BF.formatBossBoard = function(list, sea)
+    sea = sea or BF.getCurrentSea()
     local lines = {}
     table.insert(lines, "Sea: " .. tostring(sea))
     table.insert(lines, string.rep("-", 32))
@@ -1987,7 +1991,7 @@ local function formatBossBoard(list, sea)
     return table.concat(lines, "\n")
 end
 
-local function makeDraggable(handle, target)
+BF.makeDraggable = function(handle, target)
     -- Stable drag: use UserInputService so it does not fight ScrollingFrame
     local UserInputService = game:GetService("UserInputService")
     local dragging = false
@@ -2038,26 +2042,26 @@ local function makeDraggable(handle, target)
 end
 
 -- True while a selected boss is UP/? and hunt owns movement
-local function bossHuntOwnsFly()
-    if not bossAutoHuntEnabled then
+BF.bossHuntOwnsFly = function()
+    if not BF.bossAutoHuntEnabled then
         return false
     end
-    if activeBossHuntName and selectedBosses[activeBossHuntName] then
+    if BF.activeBossHuntName and BF.selectedBosses[BF.activeBossHuntName] then
         return true
     end
     return false
 end
 
-local function flyToBossPosition(bossName)
-    _bossFlyUnlock = true
-    local pos = averageSpawnPosition(bossName)
+BF.flyToBossPosition = function(bossName)
+    BF._bossFlyUnlock = true
+    local pos = BF.averageSpawnPosition(bossName)
     if not pos then
         local origin = workspace:FindFirstChild("_WorldOrigin")
         if origin then
             for _, child in ipairs(origin:GetChildren()) do
                 if string.find(child.Name, "Respawn Marker", 1, true) then
                     local bn = string.gsub(child.Name, "%s*Respawn Marker%s*$", "")
-                    if nameMatches(bossName, bn) then
+                    if BF.nameMatches(bossName, bn) then
                         local part = child:IsA("BasePart") and child or child:FindFirstChildWhichIsA("BasePart", true)
                         if part then
                             pos = part.Position
@@ -2069,34 +2073,34 @@ local function flyToBossPosition(bossName)
         end
     end
     if not pos then
-        _bossFlyUnlock = false
-        notifyUser("Boss Hunt", bossName .. ": no position", 2)
+        BF._bossFlyUnlock = false
+        BF.notifyUser("Boss Hunt", bossName .. ": no position", 2)
         return false
     end
-    setFlyTarget(pos + Vector3.new(0, 12, 0), false)
-    _bossFlyUnlock = false
+    BF.setFlyTarget(pos + Vector3.new(0, 12, 0), false)
+    BF._bossFlyUnlock = false
     return true
 end
 
 -- Try accept boss quest from islands table BossQuest / patterns
-local function tryAcceptBossQuest(bossName)
+BF.tryAcceptBossQuest = function(bossName)
     for _, island in ipairs(islands) do
         local patterns = island.BossPatterns or (island.isBoss and island.EnemyPatterns) or {}
         local hit = false
         for _, p in ipairs(patterns) do
-            if nameMatches(bossName, p) then
+            if BF.nameMatches(bossName, p) then
                 hit = true
                 break
             end
         end
-        if not hit and nameMatches(bossName, island.Name) then
+        if not hit and BF.nameMatches(bossName, island.Name) then
             hit = true
         end
         if hit then
             local args = island.BossQuest or island.Quest
             if args then
                 pcall(function()
-                    acceptQuestWrapper(args)
+                    BF.acceptQuestWrapper(args)
                 end)
                 return true
             end
@@ -2105,7 +2109,7 @@ local function tryAcceptBossQuest(bossName)
     return false
 end
 
-local function findBossModelByName(bossName)
+BF.findBossModelByName = function(bossName)
     local enemies = workspace:FindFirstChild("Enemies")
     if not enemies then
         return nil
@@ -2114,7 +2118,7 @@ local function findBossModelByName(bossName)
     local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
     local origin = hrp and hrp.Position or Vector3.zero
     for _, model in ipairs(enemies:GetChildren()) do
-        if nameMatches(bossName, model.Name) then
+        if BF.nameMatches(bossName, model.Name) then
             local hum = model:FindFirstChildOfClass("Humanoid")
             local root = model:FindFirstChild("HumanoidRootPart")
             if hum and hum.Health > 0 and root then
@@ -2129,48 +2133,48 @@ local function findBossModelByName(bossName)
     return best
 end
 
-local function stopActiveBossHunt(reason)
-    if activeBossHuntTask then
+BF.stopActiveBossHunt = function(reason)
+    if BF.activeBossHuntTask then
         pcall(function()
-            task.cancel(activeBossHuntTask)
+            task.cancel(BF.activeBossHuntTask)
         end)
     end
-    activeBossHuntTask = nil
-    if activeBossHuntName and selectedBosses[activeBossHuntName] == "hunting" then
-        selectedBosses[activeBossHuntName] = true
+    BF.activeBossHuntTask = nil
+    if BF.activeBossHuntName and BF.selectedBosses[BF.activeBossHuntName] == "hunting" then
+        BF.selectedBosses[BF.activeBossHuntName] = true
     end
-    activeBossHuntName = nil
+    BF.activeBossHuntName = nil
 end
 
-local function startBossHuntCombat(bossName)
-    if activeBossHuntName == bossName and activeBossHuntTask then
+BF.startBossHuntCombat = function(bossName)
+    if BF.activeBossHuntName == bossName and BF.activeBossHuntTask then
         return
     end
-    stopActiveBossHunt(nil)
-    activeBossHuntName = bossName
-    selectedBosses[bossName] = "hunting"
-    flyToBossPosition(bossName)
-    tryAcceptBossQuest(bossName)
-    notifyUser("Boss Hunt", "Engaging " .. bossName, 2)
+    BF.stopActiveBossHunt(nil)
+    BF.activeBossHuntName = bossName
+    BF.selectedBosses[bossName] = "hunting"
+    BF.flyToBossPosition(bossName)
+    BF.tryAcceptBossQuest(bossName)
+    BF.notifyUser("Boss Hunt", "Engaging " .. bossName, 2)
 
-    activeBossHuntTask = task.spawn(function()
+    BF.activeBossHuntTask = task.spawn(function()
         local deadline = os.clock() + 180
         local speed = (config and config.bossAttackSpeed) or 0.002
         local hits = (config and config.bossHitsPerCycle) or 35
         local above = math.clamp((config and config.aboveHeight) or 8, 4, 14)
         local questTriedAt = 0
 
-        while bossTimerRunning and selectedBosses[bossName] and os.clock() < deadline do
-            if not flying then
+        while BF.bossTimerRunning and BF.selectedBosses[bossName] and os.clock() < deadline do
+            if not BF.flying then
                 pcall(enableFly)
             end
             -- re-try quest every ~8s while hunting
             if os.clock() - questTriedAt > 8 then
                 questTriedAt = os.clock()
-                tryAcceptBossQuest(bossName)
+                BF.tryAcceptBossQuest(bossName)
             end
 
-            local boss = findBossModelByName(bossName)
+            local boss = BF.findBossModelByName(bossName)
             if boss then
                 local root = boss:FindFirstChild("HumanoidRootPart")
                 local hum = boss:FindFirstChildOfClass("Humanoid")
@@ -2179,12 +2183,12 @@ local function startBossHuntCombat(bossName)
                     local hrp = character and character:FindFirstChild("HumanoidRootPart")
                     if hrp then
                         local dist = (hrp.Position - root.Position).Magnitude
-                        _bossFlyUnlock = true
-                        setFlyTarget(root.Position + Vector3.new(0, above, 0), false)
-                        _bossFlyUnlock = false
+                        BF._bossFlyUnlock = true
+                        BF.setFlyTarget(root.Position + Vector3.new(0, above, 0), false)
+                        BF._bossFlyUnlock = false
                         if dist <= ((config and config.attackRange) or 30) + 10 then
                             pcall(function()
-                                attackEnemy(boss, speed, hits)
+                                BF.attackEnemy(boss, speed, hits)
                             end)
                         end
                     end
@@ -2192,28 +2196,28 @@ local function startBossHuntCombat(bossName)
                     break
                 end
             else
-                flyToBossPosition(bossName)
+                BF.flyToBossPosition(bossName)
                 task.wait(0.35)
             end
             task.wait(0.05)
         end
 
-        if selectedBosses[bossName] == "hunting" then
-            selectedBosses[bossName] = true
+        if BF.selectedBosses[bossName] == "hunting" then
+            BF.selectedBosses[bossName] = true
         end
-        if activeBossHuntName == bossName then
-            activeBossHuntTask = nil
-            activeBossHuntName = nil
+        if BF.activeBossHuntName == bossName then
+            BF.activeBossHuntTask = nil
+            BF.activeBossHuntName = nil
         end
-        notifyUser("Boss Hunt", bossName .. " hunt ended", 2)
+        BF.notifyUser("Boss Hunt", bossName .. " hunt ended", 2)
     end)
 end
 
 -- Stable list: create buttons once, only update text/colors (fixes click delay)
-local bossRowButtons = {} -- name -> TextButton
+BF.bossRowButtons = {} -- name -> TextButton
 
-local function rebuildBossListRows(list)
-    if not bossListFrame then
+BF.rebuildBossListRows = function(list)
+    if not BF.bossListFrame then
         return
     end
 
@@ -2221,8 +2225,8 @@ local function rebuildBossListRows(list)
     local y = 0
     for _, row in ipairs(list or {}) do
         seen[row.Name] = true
-        local sel = selectedBosses[row.Name] ~= nil
-        local hunting = selectedBosses[row.Name] == "hunting"
+        local sel = BF.selectedBosses[row.Name] ~= nil
+        local hunting = BF.selectedBosses[row.Name] == "hunting"
         local tag = "[?]"
         local tagColor = Color3.fromRGB(180, 180, 100)
         if row.Status == "SPAWNED" then
@@ -2234,7 +2238,7 @@ local function rebuildBossListRows(list)
         end
         local mark = sel and "[x]" or "[ ]"
 
-        local btn = bossRowButtons[row.Name]
+        local btn = BF.bossRowButtons[row.Name]
         if not btn or not btn.Parent then
             btn = Instance.new("TextButton")
             btn.Name = row.Name
@@ -2246,24 +2250,24 @@ local function rebuildBossListRows(list)
             btn.TextSize = 13
             btn.TextXAlignment = Enum.TextXAlignment.Left
             btn.TextColor3 = Color3.fromRGB(230, 230, 235)
-            btn.Parent = bossListFrame
+            btn.Parent = BF.bossListFrame
             local c = Instance.new("UICorner")
             c.CornerRadius = UDim.new(0, 5)
             c.Parent = btn
             local name = row.Name
             btn.MouseButton1Click:Connect(function()
-                if selectedBosses[name] then
-                    selectedBosses[name] = nil
-                    unknownProbeDone[name] = nil
-                    if activeBossHuntName == name then
-                        stopActiveBossHunt("deselected")
+                if BF.selectedBosses[name] then
+                    BF.selectedBosses[name] = nil
+                    BF.unknownProbeDone[name] = nil
+                    if BF.activeBossHuntName == name then
+                        BF.stopActiveBossHunt("deselected")
                     end
                 else
-                    selectedBosses[name] = true
-                    unknownProbeDone[name] = nil
+                    BF.selectedBosses[name] = true
+                    BF.unknownProbeDone[name] = nil
                 end
                 -- instant visual feedback
-                local isOn = selectedBosses[name] ~= nil
+                local isOn = BF.selectedBosses[name] ~= nil
                 btn.BackgroundColor3 = isOn and Color3.fromRGB(40, 90, 55) or Color3.fromRGB(24, 26, 34)
                 local t = btn.Text
                 if isOn then
@@ -2273,7 +2277,7 @@ local function rebuildBossListRows(list)
                     end
                 end
             end)
-            bossRowButtons[row.Name] = btn
+            BF.bossRowButtons[row.Name] = btn
         end
 
         btn.Position = UDim2.new(0, 2, 0, y)
@@ -2283,54 +2287,54 @@ local function rebuildBossListRows(list)
     end
 
     -- remove rows no longer in list
-    for name, btn in pairs(bossRowButtons) do
+    for name, btn in pairs(BF.bossRowButtons) do
         if not seen[name] then
             pcall(function() btn:Destroy() end)
-            bossRowButtons[name] = nil
+            BF.bossRowButtons[name] = nil
         end
     end
-    bossListFrame.CanvasSize = UDim2.new(0, 0, 0, y + 10)
+    BF.bossListFrame.CanvasSize = UDim2.new(0, 0, 0, y + 10)
 end
 
-local function processBossHuntActions(list)
-    if not bossAutoHuntEnabled then
+BF.processBossHuntActions = function(list)
+    if not BF.bossAutoHuntEnabled then
         return
     end
     for _, row in ipairs(list or {}) do
-        local sel = selectedBosses[row.Name]
+        local sel = BF.selectedBosses[row.Name]
         if sel then
             if row.Status == "SPAWNED" then
                 -- UP: take control from farm, fight
-                if sel ~= "hunting" or activeBossHuntName ~= row.Name then
-                    startBossHuntCombat(row.Name)
+                if sel ~= "hunting" or BF.activeBossHuntName ~= row.Name then
+                    BF.startBossHuntCombat(row.Name)
                 end
             elseif row.Status == "UNKNOWN" then
                 -- ?: probe once (fly + try attack if found)
-                if not unknownProbeDone[row.Name] then
-                    unknownProbeDone[row.Name] = true
-                    startBossHuntCombat(row.Name)
+                if not BF.unknownProbeDone[row.Name] then
+                    BF.unknownProbeDone[row.Name] = true
+                    BF.startBossHuntCombat(row.Name)
                 end
             elseif row.Status == "RESPAWNING" then
                 -- DOWN / on CD: release fly to Auto Farm
-                if activeBossHuntName == row.Name then
-                    stopActiveBossHunt("on cooldown")
+                if BF.activeBossHuntName == row.Name then
+                    BF.stopActiveBossHunt("on cooldown")
                 end
                 if sel == "hunting" then
-                    selectedBosses[row.Name] = true
+                    BF.selectedBosses[row.Name] = true
                 end
                 -- allow a new probe next time it goes ?
-                unknownProbeDone[row.Name] = nil
+                BF.unknownProbeDone[row.Name] = nil
             end
-        elseif activeBossHuntName == row.Name then
-            stopActiveBossHunt("deselected")
+        elseif BF.activeBossHuntName == row.Name then
+            BF.stopActiveBossHunt("deselected")
         end
     end
 end
 
-local function ensureBossTimerGui()
+BF.ensureBossTimerGui = function()
     local pg = LocalPlayer:FindFirstChild("PlayerGui") or LocalPlayer:WaitForChild("PlayerGui", 5)
     if not pg then return end
-    if bossTimerGui and bossTimerGui.Parent then return end
+    if BF.bossTimerGui and BF.bossTimerGui.Parent then return end
     local sg = Instance.new("ScreenGui")
     sg.Name = "BF_BossTimers"
     sg.ResetOnSpawn = false
@@ -2365,7 +2369,7 @@ local function ensureBossTimerGui()
     local tc = Instance.new("UICorner")
     tc.CornerRadius = UDim.new(0, 6)
     tc.Parent = title
-    makeDraggable(title, frame)
+    BF.makeDraggable(title, frame)
 
     local hint = Instance.new("TextLabel")
     hint.Size = UDim2.new(1, -12, 0, 30)
@@ -2389,57 +2393,57 @@ local function ensureBossTimerGui()
     scroll.CanvasSize = UDim2.new(0, 0, 0, 600)
     scroll.Parent = frame
 
-    bossTimerGui = sg
-    bossListFrame = scroll
-    bossTimerLabel = nil
+    BF.bossTimerGui = sg
+    BF.bossListFrame = scroll
+    BF.bossTimerLabel = nil
 end
 
-local function destroyBossTimerGui()
-    if bossTimerGui then
+BF.destroyBossTimerGui = function()
+    if BF.bossTimerGui then
         pcall(function()
-            bossTimerGui:Destroy()
+            BF.bossTimerGui:Destroy()
         end)
     end
-    bossTimerGui = nil
-    bossTimerLabel = nil
-    bossListFrame = nil
-    bossRowButtons = {}
+    BF.bossTimerGui = nil
+    BF.bossTimerLabel = nil
+    BF.bossListFrame = nil
+    BF.bossRowButtons = {}
 end
 
-local function stopBossTimers()
-    bossTimerRunning = false
-    bossTimerTask = nil
-    stopActiveBossHunt("timers off")
-    destroyBossTimerGui()
+BF.stopBossTimers = function()
+    BF.bossTimerRunning = false
+    BF.bossTimerTask = nil
+    BF.stopActiveBossHunt("timers off")
+    BF.destroyBossTimerGui()
 end
 
-local function startBossTimers()
-    if bossTimerRunning then
+BF.startBossTimers = function()
+    if BF.bossTimerRunning then
         return
     end
-    bossTimerRunning = true
-    ensureBossTimerGui()
-    bossTimerTask = task.spawn(function()
-        while bossTimerRunning do
-            local list, sea = {}, getCurrentSea()
+    BF.bossTimerRunning = true
+    BF.ensureBossTimerGui()
+    BF.bossTimerTask = task.spawn(function()
+        while BF.bossTimerRunning do
+            local list, sea = {}, BF.getCurrentSea()
             local ok, pack = pcall(scanBossesForSea)
             if ok and type(pack) == "table" then
                 list = pack.List or {}
-                sea = pack.Sea or getCurrentSea()
+                sea = pack.Sea or BF.getCurrentSea()
             end
             pcall(rebuildBossListRows, list)
             pcall(processBossHuntActions, list)
             if config.bossSpawnNotify then
                 for _, row in ipairs(list or {}) do
-                    local prev = lastBossStatus[row.Name]
+                    local prev = BF.lastBossStatus[row.Name]
                     if row.Status == "SPAWNED" and prev == "RESPAWNING" then
-                        notifyUser("Boss Spawned", row.Name .. " is UP!")
+                        BF.notifyUser("Boss Spawned", row.Name .. " is UP!")
                     end
-                    lastBossStatus[row.Name] = row.Status
+                    BF.lastBossStatus[row.Name] = row.Status
                 end
             else
                 for _, row in ipairs(list or {}) do
-                    lastBossStatus[row.Name] = row.Status
+                    BF.lastBossStatus[row.Name] = row.Status
                 end
             end
             task.wait(1)
@@ -2452,19 +2456,19 @@ end
 -- =============================================
 
 -- ========== AUTO SEA (minimal, staged) ==========
-local seaProgressRunning = false
-local sea1Stage, sea2Stage = "idle", "idle"
+BF.seaProgressRunning = false
+BF.sea1Stage, BF.sea2Stage = "idle", "idle"
 
-local function _seaFly(pos)
+BF._seaFly = function(pos)
     if not pos then return end
     pcall(function()
-        if not flying then enableFly() end
-        setFlyTarget(pos + Vector3.new(0, 8, 0), false)
+        if not BF.flying then BF.enableFly() end
+        BF.setFlyTarget(pos + Vector3.new(0, 8, 0), false)
     end)
     task.wait(3)
 end
 
-local function _seaComm(...)
+BF._seaComm = function(...)
     local args = { ... }
     local r = ReplicatedStorage:FindFirstChild("Remotes")
     local f = r and r:FindFirstChild("CommF_")
@@ -2476,7 +2480,7 @@ local function _seaComm(...)
 end
 
 -- returns true if we saw the target alive and then it died / despawned
-local function _seaFindAlive(nameSub)
+BF._seaFindAlive = function(nameSub)
     local en = workspace:FindFirstChild("Enemies")
     if not en then return nil end
     for _, m in ipairs(en:GetChildren()) do
@@ -2490,20 +2494,20 @@ local function _seaFindAlive(nameSub)
     return nil
 end
 
-local function _seaKill(nameSub, seconds)
+BF._seaKill = function(nameSub, seconds)
     local t0 = os.clock()
     local sawAlive = false
     local confirmedDead = false
-    while os.clock() - t0 < (seconds or 60) and seaProgressRunning do
-        local tgt = _seaFindAlive(nameSub)
+    while os.clock() - t0 < (seconds or 60) and BF.seaProgressRunning do
+        local tgt = BF._seaFindAlive(nameSub)
         if tgt then
             sawAlive = true
             local root = tgt:FindFirstChild("HumanoidRootPart")
             if root then
                 pcall(function()
-                    if not flying then enableFly() end
-                    setFlyTarget(root.Position + Vector3.new(0, 10, 0), false)
-                    attackEnemy(tgt, config.bossAttackSpeed or 0.002, config.bossHitsPerCycle or 35)
+                    if not BF.flying then BF.enableFly() end
+                    BF.setFlyTarget(root.Position + Vector3.new(0, 10, 0), false)
+                    BF.attackEnemy(tgt, config.bossAttackSpeed or 0.002, config.bossHitsPerCycle or 35)
                 end)
             end
         elseif sawAlive then
@@ -2514,78 +2518,78 @@ local function _seaKill(nameSub, seconds)
         task.wait(0.12)
     end
     -- final check
-    if sawAlive and not _seaFindAlive(nameSub) then
+    if sawAlive and not BF._seaFindAlive(nameSub) then
         confirmedDead = true
     end
     return confirmedDead
 end
 
-local function startSeaProgress()
-    if seaProgressRunning then return end
-    seaProgressRunning = true
+BF.startSeaProgress = function()
+    if BF.seaProgressRunning then return end
+    BF.seaProgressRunning = true
     task.spawn(function()
-        while seaProgressRunning do
+        while BF.seaProgressRunning do
             local ok, err = pcall(function()
                 if not config.autoSeaProgress then return end
-                local level = getPlayerLevel()
+                local level = BF.getPlayerLevel()
                 local map = tostring(workspace:GetAttribute("MAP") or "")
                 local sea = string.lower(map)
 
                 -- ========== RECONCILE STAGE FROM WORLD ==========
-                -- Never trust only sea2Stage; fix mismatches every tick.
-                local jeremyAlive = _seaFindAlive("Jeremy") ~= nil
-                local donAlive = _seaFindAlive("Don Swan") ~= nil
-                local indraAlive = (_seaFindAlive("indra") or _seaFindAlive("rip_indra") or _seaFindAlive("rip indra")) ~= nil
-                local onSwanQuest = activeQuestMatches("swan", "50") and activeQuestMatches("pirate", "swan", "bartilo")
+                -- Never trust only BF.sea2Stage; fix mismatches every tick.
+                local jeremyAlive = BF._seaFindAlive("Jeremy") ~= nil
+                local donAlive = BF._seaFindAlive("Don Swan") ~= nil
+                local indraAlive = (BF._seaFindAlive("indra") or BF._seaFindAlive("rip_indra") or BF._seaFindAlive("rip indra")) ~= nil
+                local onSwanQuest = BF.activeQuestMatches("swan", "50") and BF.activeQuestMatches("pirate", "swan", "bartilo")
                 -- softer swan quest detect
-                if activeQuestMatches("swan") and activeQuestMatches("50") then
+                if BF.activeQuestMatches("swan") and BF.activeQuestMatches("50") then
                     onSwanQuest = true
-                elseif activeQuestMatches("swan pirate") then
+                elseif BF.activeQuestMatches("swan pirate") then
                     onSwanQuest = true
                 end
 
                 -- If we think we're past Jeremy but he's still alive -> force stage j
-                if jeremyAlive and (sea2Stage == "prisoners" or sea2Stage == "don" or sea2Stage == "king") then
-                    sea2Stage = "j"
-                    notifyUser("Sea", "Jeremy still alive -> back to stage j", 3)
+                if jeremyAlive and (BF.sea2Stage == "prisoners" or BF.sea2Stage == "don" or BF.sea2Stage == "king") then
+                    BF.sea2Stage = "j"
+                    BF.notifyUser("Sea", "Jeremy still alive -> back to stage j", 3)
                 end
                 -- If on swan quest text, force swan stage
-                if onSwanQuest and sea2Stage ~= "swan" and sea2Stage ~= "idle" then
-                    if sea2Stage == "j" or sea2Stage == "prisoners" then
+                if onSwanQuest and BF.sea2Stage ~= "swan" and BF.sea2Stage ~= "idle" then
+                    if BF.sea2Stage == "j" or BF.sea2Stage == "prisoners" then
                         -- allow if user already advanced; only force if clearly still stage1
-                        if activeQuestMatches("50") then
-                            sea2Stage = "swan"
+                        if BF.activeQuestMatches("50") then
+                            BF.sea2Stage = "swan"
                         end
                     end
                 end
 
-                local stageLabel = tostring(sea2Stage)
+                local stageLabel = tostring(BF.sea2Stage)
                 if jeremyAlive then stageLabel = stageLabel .. " | Jeremy ALIVE" end
                 if donAlive then stageLabel = stageLabel .. " | Don ALIVE" end
-                notifyUser("Sea Stage", stageLabel .. " | " .. map .. " lv" .. tostring(level), 2)
+                BF.notifyUser("Sea Stage", stageLabel .. " | " .. map .. " lv" .. tostring(level), 2)
 
                 -- ========== SEA1 -> SEA2 ==========
                 if level >= 700 and (sea == "" or sea == "sea1" or string.find(sea, "1"))
                     and not string.find(sea, "2") and not string.find(sea, "3")
-                    and sea1Stage ~= "done" then
-                    if sea1Stage == "idle" then
-                        notifyUser("Sea", "Sea1: Detective", 3)
-                        _seaFly(Vector3.new(4850, 20, 750))
-                        _seaComm("TalkDetective")
-                        sea1Stage = "ice"
-                    elseif sea1Stage == "ice" then
-                        _seaFly(Vector3.new(-1166, 13, -2447))
-                        _seaKill("Ice Admiral", 90)
-                        sea1Stage = "cap"
-                    elseif sea1Stage == "cap" then
-                        _seaFly(Vector3.new(-285, 9, 5360))
-                        _seaComm("TravelDressrosa")
-                        _seaComm("TravelToSea2")
+                    and BF.sea1Stage ~= "done" then
+                    if BF.sea1Stage == "idle" then
+                        BF.notifyUser("Sea", "Sea1: Detective", 3)
+                        BF._seaFly(Vector3.new(4850, 20, 750))
+                        BF._seaComm("TalkDetective")
+                        BF.sea1Stage = "ice"
+                    elseif BF.sea1Stage == "ice" then
+                        BF._seaFly(Vector3.new(-1166, 13, -2447))
+                        BF._seaKill("Ice Admiral", 90)
+                        BF.sea1Stage = "cap"
+                    elseif BF.sea1Stage == "cap" then
+                        BF._seaFly(Vector3.new(-285, 9, 5360))
+                        BF._seaComm("TravelDressrosa")
+                        BF._seaComm("TravelToSea2")
                         task.wait(2)
                         map = tostring(workspace:GetAttribute("MAP") or "")
                         if string.find(string.lower(map), "2") then
-                            sea1Stage = "done"
-                            notifyUser("Sea", "Sea 2!", 4)
+                            BF.sea1Stage = "done"
+                            BF.notifyUser("Sea", "Sea 2!", 4)
                         end
                     end
                     return
@@ -2594,65 +2598,65 @@ local function startSeaProgress()
                 -- ========== SEA2 -> SEA3 ==========
                 if not (string.find(sea, "2") or sea == "") then
                     if string.find(sea, "3") then
-                        sea2Stage = "done"
+                        BF.sea2Stage = "done"
                     end
                     return
                 end
-                if sea2Stage == "done" then return end
+                if BF.sea2Stage == "done" then return end
 
                 -- Stage machine (one action per tick, always fly to correct place first)
-                if sea2Stage == "idle" then
-                    if hasActiveQuest() and not activeQuestMatches("swan", "bartilo", "50", "pirate") then
+                if BF.sea2Stage == "idle" then
+                    if BF.hasActiveQuest() and not BF.activeQuestMatches("swan", "bartilo", "50", "pirate") then
                         return
                     end
-                    if not activeQuestMatches("swan", "50") then
-                        _seaComm("StartQuest", "BartiloQuest", 1)
+                    if not BF.activeQuestMatches("swan", "50") then
+                        BF._seaComm("StartQuest", "BartiloQuest", 1)
                         task.wait(0.5)
                     end
-                    sea2Stage = "swan"
-                    notifyUser("Sea", "-> stage swan", 3)
+                    BF.sea2Stage = "swan"
+                    BF.notifyUser("Sea", "-> stage swan", 3)
 
-                elseif sea2Stage == "swan" then
-                    _seaFly(Vector3.new(1019, 73, 1221))
-                    if activeQuestMatches("swan", "50", "pirate") or activeQuestMatches("swan") then
-                        _seaKill("Swan Pirate", 35)
+                elseif BF.sea2Stage == "swan" then
+                    BF._seaFly(Vector3.new(1019, 73, 1221))
+                    if BF.activeQuestMatches("swan", "50", "pirate") or BF.activeQuestMatches("swan") then
+                        BF._seaKill("Swan Pirate", 35)
                     else
                         -- quest cleared -> Jeremy
-                        _seaComm("StartQuest", "BartiloQuest", 2)
+                        BF._seaComm("StartQuest", "BartiloQuest", 2)
                         task.wait(0.4)
-                        sea2Stage = "j"
-                        notifyUser("Sea", "-> stage j (Jeremy)", 3)
+                        BF.sea2Stage = "j"
+                        BF.notifyUser("Sea", "-> stage j (Jeremy)", 3)
                     end
 
-                elseif sea2Stage == "j" then
+                elseif BF.sea2Stage == "j" then
                     -- MUST stay here until Jeremy confirmed dead
-                    _seaFly(Vector3.new(2338, 451, 700))
+                    BF._seaFly(Vector3.new(2338, 451, 700))
                     if jeremyAlive then
-                        local dead = _seaKill("Jeremy", 90)
+                        local dead = BF._seaKill("Jeremy", 90)
                         if dead then
-                            sea2Stage = "prisoners"
-                            notifyUser("Sea", "Jeremy dead -> stage prisoners", 3)
+                            BF.sea2Stage = "prisoners"
+                            BF.notifyUser("Sea", "Jeremy dead -> stage prisoners", 3)
                         else
-                            notifyUser("Sea", "Jeremy still fighting...", 2)
+                            BF.notifyUser("Sea", "Jeremy still fighting...", 2)
                         end
                     else
                         -- not on map: wait / hop, do NOT skip to don
-                        notifyUser("Sea", "Jeremy not in Enemies - waiting (stage j)", 2)
+                        BF.notifyUser("Sea", "Jeremy not in Enemies - waiting (stage j)", 2)
                         task.wait(3)
                         -- if still missing after a few ticks, optional skip only if level high and user wants
                         -- stay on j
                     end
 
-                elseif sea2Stage == "prisoners" then
+                elseif BF.sea2Stage == "prisoners" then
                     -- Colosseum / free gladiators / King cell - STAY HERE, don't skip
                     local colPos = Vector3.new(-1836, 7, -2742)
-                    notifyUser("Sea", "Stage prisoners: flying to Colosseum", 2)
-                    _seaFly(colPos)
+                    BF.notifyUser("Sea", "Stage prisoners: BF.flying to Colosseum", 2)
+                    BF._seaFly(colPos)
                     -- verify we moved roughly near colosseum
                     pcall(function()
                         local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
                         if hrp and (hrp.Position - colPos).Magnitude > 200 then
-                            _seaFly(colPos)
+                            BF._seaFly(colPos)
                             task.wait(2)
                         end
                     end)
@@ -2669,45 +2673,45 @@ local function startSeaProgress()
                             end
                         end
                     end)
-                    _seaComm("StartQuest", "BartiloQuest", 3)
+                    BF._seaComm("StartQuest", "BartiloQuest", 3)
                     task.wait(4)
                     -- only leave prisoners when Jeremy is gone AND we've spent time at colosseum
                     if not jeremyAlive then
-                        sea2Stage = "don"
-                        notifyUser("Sea", "-> stage don (Don Swan)", 3)
+                        BF.sea2Stage = "don"
+                        BF.notifyUser("Sea", "-> stage don (Don Swan)", 3)
                     end
 
-                elseif sea2Stage == "don" then
+                elseif BF.sea2Stage == "don" then
                     if jeremyAlive then
-                        sea2Stage = "j"
+                        BF.sea2Stage = "j"
                         return
                     end
                     local donPos = Vector3.new(2289, 18, 663)
-                    notifyUser("Sea", "Stage don: Don Swan", 2)
-                    _seaFly(donPos)
-                    _seaComm("TalkTrevor")
-                    _seaComm("Trevor")
+                    BF.notifyUser("Sea", "Stage don: Don Swan", 2)
+                    BF._seaFly(donPos)
+                    BF._seaComm("TalkTrevor")
+                    BF._seaComm("Trevor")
                     if donAlive then
-                        local dead = _seaKill("Don Swan", 120)
+                        local dead = BF._seaKill("Don Swan", 120)
                         if dead then
-                            sea2Stage = "king"
-                            notifyUser("Sea", "Don Swan dead -> stage king", 3)
+                            BF.sea2Stage = "king"
+                            BF.notifyUser("Sea", "Don Swan dead -> stage king", 3)
                         end
                     else
-                        notifyUser("Sea", "Don Swan not spawned (fruit door?)", 2)
+                        BF.notifyUser("Sea", "Don Swan not spawned (fruit door?)", 2)
                         if level >= 1500 then
                             -- allow try king if already killed before on this account
-                            sea2Stage = "king"
+                            BF.sea2Stage = "king"
                         end
                     end
 
-                elseif sea2Stage == "king" then
+                elseif BF.sea2Stage == "king" then
                     local colPos = Vector3.new(-1836, 7, -2742)
-                    notifyUser("Sea", "Stage king: King Red Head", 2)
-                    _seaFly(colPos)
-                    _seaComm("KingRedHead")
-                    _seaComm("TalkKingRedHead")
-                    _seaComm("IndraRaid")
+                    BF.notifyUser("Sea", "Stage king: King Red Head", 2)
+                    BF._seaFly(colPos)
+                    BF._seaComm("KingRedHead")
+                    BF._seaComm("TalkKingRedHead")
+                    BF._seaComm("IndraRaid")
                     pcall(function()
                         if fireproximityprompt then
                             for _, d in ipairs(workspace:GetDescendants()) do
@@ -2724,45 +2728,45 @@ local function startSeaProgress()
                         end
                     end)
                     task.wait(3)
-                    sea2Stage = "indra"
-                    notifyUser("Sea", "-> stage indra", 3)
+                    BF.sea2Stage = "indra"
+                    BF.notifyUser("Sea", "-> stage indra", 3)
 
-                elseif sea2Stage == "indra" then
-                    notifyUser("Sea", "Stage indra: rip_indra", 2)
-                    local indra = _seaFindAlive("indra") or _seaFindAlive("rip_indra") or _seaFindAlive("rip")
+                elseif BF.sea2Stage == "indra" then
+                    BF.notifyUser("Sea", "Stage indra: rip_indra", 2)
+                    local indra = BF._seaFindAlive("indra") or BF._seaFindAlive("rip_indra") or BF._seaFindAlive("rip")
                     if indra then
                         local hum = indra:FindFirstChildOfClass("Humanoid")
                         local root = indra:FindFirstChild("HumanoidRootPart")
                         if root then
                             pcall(function()
-                                if not flying then enableFly() end
-                                setFlyTarget(root.Position + Vector3.new(0, 12, 0), false)
-                                attackEnemy(indra, config.bossAttackSpeed or 0.002, config.bossHitsPerCycle or 40)
+                                if not BF.flying then BF.enableFly() end
+                                BF.setFlyTarget(root.Position + Vector3.new(0, 12, 0), false)
+                                BF.attackEnemy(indra, config.bossAttackSpeed or 0.002, config.bossHitsPerCycle or 40)
                             end)
                         end
                         if hum and hum.MaxHealth > 0 and (hum.Health / hum.MaxHealth) <= 0.55 then
-                            sea2Stage = "captain"
-                            notifyUser("Sea", "Indra ~50% -> captain", 3)
+                            BF.sea2Stage = "captain"
+                            BF.notifyUser("Sea", "Indra ~50% -> captain", 3)
                         end
                     else
-                        local deadish = _seaKill("indra", 40)
-                        if deadish or not (_seaFindAlive("indra") or _seaFindAlive("rip")) then
-                            sea2Stage = "captain"
-                            notifyUser("Sea", "-> stage captain", 3)
+                        local deadish = BF._seaKill("indra", 40)
+                        if deadish or not (BF._seaFindAlive("indra") or BF._seaFindAlive("rip")) then
+                            BF.sea2Stage = "captain"
+                            BF.notifyUser("Sea", "-> stage captain", 3)
                         end
                     end
 
-                elseif sea2Stage == "captain" then
-                    notifyUser("Sea", "Stage captain: Mr Captain", 2)
-                    _seaFly(Vector3.new(-3350, 73, -1010))
-                    _seaComm("TravelZou")
-                    _seaComm("TravelToSea3")
-                    _seaComm("MrCaptain")
+                elseif BF.sea2Stage == "captain" then
+                    BF.notifyUser("Sea", "Stage captain: Mr Captain", 2)
+                    BF._seaFly(Vector3.new(-3350, 73, -1010))
+                    BF._seaComm("TravelZou")
+                    BF._seaComm("TravelToSea3")
+                    BF._seaComm("MrCaptain")
                     task.wait(2)
                     map = tostring(workspace:GetAttribute("MAP") or "")
                     if string.find(string.lower(map), "3") then
-                        sea2Stage = "done"
-                        notifyUser("Sea", "Sea 3 unlocked!", 4)
+                        BF.sea2Stage = "done"
+                        BF.notifyUser("Sea", "Sea 3 unlocked!", 4)
                     end
                 end
             end)
@@ -2774,8 +2778,8 @@ local function startSeaProgress()
     end)
 end
 
-local function stopSeaProgress()
-    seaProgressRunning = false
+BF.stopSeaProgress = function()
+    BF.seaProgressRunning = false
 end
 
 
@@ -2787,9 +2791,9 @@ end
 -- Remote: CommF_ "RaidsNpc","Select", <RaidName>
 -- In-raid detect: PlayerGui.Main.TopHUDList.RaidTimer (or similar)
 -- =============================================
-local raidRunning = false
-local raidTask = nil
-local lastRaidChipAt = 0
+BF.raidRunning = false
+BF.raidTask = nil
+BF.lastRaidChipAt = 0
 
 local RAID_TYPES = {
     "Flame", "Ice", "Quake", "Light", "Dark", "Magma", "Sand",
@@ -2801,12 +2805,12 @@ local RAID_LAB_SEA2 = Vector3.new(-6520, 308, -4812) -- chip insert pad (user)
 local RAID_LAB_SEA3 = Vector3.new(-5550, 314, -2980) -- Castle on the Sea (approx)
 
 -- ========== RAID CORE (hub-style Locations + death/end handling) ==========
-local function getRaidLocations()
+BF.getRaidLocations = function()
     local wo = workspace:FindFirstChild("_WorldOrigin")
     return wo and wo:FindFirstChild("Locations")
 end
 
-local function raidTimerVisible()
+BF.raidTimerVisible = function()
     local ok, vis = pcall(function()
         local main = LocalPlayer:FindFirstChild("PlayerGui") and LocalPlayer.PlayerGui:FindFirstChild("Main")
         if not main then return false end
@@ -2819,7 +2823,7 @@ local function raidTimerVisible()
     return ok and vis == true
 end
 
-local function isPlayerDead()
+BF.isPlayerDead = function()
     local char = LocalPlayer.Character
     if not char then return true end
     local hum = char:FindFirstChildOfClass("Humanoid")
@@ -2827,10 +2831,10 @@ local function isPlayerDead()
     return false
 end
 
-local function isInRaid()
+BF.isInRaid = function()
     -- Timer HUD OR any Island part under Locations
-    if raidTimerVisible() then return true end
-    local locs = getRaidLocations()
+    if BF.raidTimerVisible() then return true end
+    local locs = BF.getRaidLocations()
     if not locs then return false end
     for _, ch in ipairs(locs:GetChildren()) do
         local n = string.lower(ch.Name)
@@ -2841,7 +2845,7 @@ local function isInRaid()
     return false
 end
 
-local function getPartCFrame(obj)
+BF.getPartCFrame = function(obj)
     if not obj then return nil end
     local cf = nil
     pcall(function()
@@ -2858,14 +2862,14 @@ local function getPartCFrame(obj)
 end
 
 -- Prefer highest Island N; also accept "Island1" / loose names
-local function getActiveRaidIsland()
-    local locs = getRaidLocations()
+BF.getActiveRaidIsland = function()
+    local locs = BF.getRaidLocations()
     if not locs then return nil, 0, nil end
 
     for i = 5, 1, -1 do
         local island = locs:FindFirstChild("Island " .. i) or locs:FindFirstChild("Island" .. i)
         if island then
-            local cf = getPartCFrame(island)
+            local cf = BF.getPartCFrame(island)
             if cf then return island, i, cf end
         end
     end
@@ -2875,7 +2879,7 @@ local function getActiveRaidIsland()
     for _, ch in ipairs(locs:GetChildren()) do
         local n = string.lower(ch.Name)
         if string.find(n, "island") then
-            local cf = getPartCFrame(ch)
+            local cf = BF.getPartCFrame(ch)
             if cf then
                 local num = tonumber(string.match(ch.Name, "%d+")) or 1
                 if num >= bestScore then
@@ -2887,7 +2891,7 @@ local function getActiveRaidIsland()
     return best, bestI, bestCf
 end
 
-local function getRaidEnemiesNear(pos, radius)
+BF.getRaidEnemiesNear = function(pos, radius)
     local list = {}
     local en = workspace:FindFirstChild("Enemies")
     if not en then return list end
@@ -2904,30 +2908,30 @@ local function getRaidEnemiesNear(pos, radius)
     return list
 end
 
-local function getAllRaidEnemies()
-    return getRaidEnemiesNear(nil, 1e9)
+BF.getAllRaidEnemies = function()
+    return BF.getRaidEnemiesNear(nil, 1e9)
 end
 
-local raidOrbitAngle = 0
-local raidHoverY = 22
-local raidDodgeAmp = 35 -- side-to-side dodge distance (not stuck mid-island)
-local currentRaidIslandIndex = 0
-local raidEndedAt = 0
+BF.raidOrbitAngle = 0
+BF.raidHoverY = 22
+BF.raidDodgeAmp = 35 -- side-to-side dodge distance (not stuck mid-island)
+BF.currentRaidIslandIndex = 0
+BF.raidEndedAt = 0
 local RAID_REENTRY_COOLDOWN = 8
 
 -- Stay over the island, but STRAFE left/right (real dodge), not tiny circle in the center
-local function raidFlyToPos(pos)
+BF.raidFlyToPos = function(pos)
     if not pos then return end
     pcall(function()
-        _bossFlyUnlock = true
-        if not flying then enableFly() end
+        BF._bossFlyUnlock = true
+        if not BF.flying then BF.enableFly() end
 
         -- smooth left-right + slight forward/back (figure-8-ish)
-        raidOrbitAngle = raidOrbitAngle + 0.07
-        local ox = math.sin(raidOrbitAngle) * raidDodgeAmp
-        local oz = math.sin(raidOrbitAngle * 0.5) * (raidDodgeAmp * 0.45)
-        local target = Vector3.new(pos.X + ox, pos.Y + raidHoverY, pos.Z + oz)
-        setFlyTarget(target, false)
+        BF.raidOrbitAngle = BF.raidOrbitAngle + 0.07
+        local ox = math.sin(BF.raidOrbitAngle) * BF.raidDodgeAmp
+        local oz = math.sin(BF.raidOrbitAngle * 0.5) * (BF.raidDodgeAmp * 0.45)
+        local target = Vector3.new(pos.X + ox, pos.Y + BF.raidHoverY, pos.Z + oz)
+        BF.setFlyTarget(target, false)
 
         local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
         if hrp then
@@ -2937,35 +2941,35 @@ local function raidFlyToPos(pos)
                 hrp.AssemblyLinearVelocity = Vector3.new(v.X * 0.35, v.Y * 0.5, v.Z * 0.35)
             elseif flat.Magnitude > 160 then
                 hrp.AssemblyLinearVelocity = Vector3.zero
-                setFlyTarget(target, false)
+                BF.setFlyTarget(target, false)
             end
         end
-        _bossFlyUnlock = false
+        BF._bossFlyUnlock = false
     end)
 end
 
-local function raidKillLoop()
-    if isPlayerDead() then
+BF.raidKillLoop = function()
+    if BF.isPlayerDead() then
         return false
     end
 
-    ensureSimRadius()
+    BF.ensureSimRadius()
 
-    local island, idx, cf = getActiveRaidIsland()
+    local island, idx, cf = BF.getActiveRaidIsland()
     local focusPos = cf and cf.Position or nil
 
     -- Fallback: no Locations parts -> use living enemies as focus (still progress raid)
     if not focusPos then
-        local all = getAllRaidEnemies()
+        local all = BF.getAllRaidEnemies()
         if #all > 0 then
             local sum = Vector3.zero
             for _, m in ipairs(all) do
                 sum = sum + m.HumanoidRootPart.Position
             end
             focusPos = sum / #all
-            if currentRaidIslandIndex ~= -1 then
-                currentRaidIslandIndex = -1
-                notifyUser("Raid", "No Island parts - following enemies", 2)
+            if BF.currentRaidIslandIndex ~= -1 then
+                BF.currentRaidIslandIndex = -1
+                BF.notifyUser("Raid", "No Island parts - following enemies", 2)
             end
         end
     end
@@ -2975,16 +2979,16 @@ local function raidKillLoop()
         return false
     end
 
-    if idx > 0 and idx ~= currentRaidIslandIndex then
-        currentRaidIslandIndex = idx
-        notifyUser("Raid", "Island " .. idx, 2)
+    if idx > 0 and idx ~= BF.currentRaidIslandIndex then
+        BF.currentRaidIslandIndex = idx
+        BF.notifyUser("Raid", "Island " .. idx, 2)
     end
 
-    raidFlyToPos(focusPos)
+    BF.raidFlyToPos(focusPos)
 
-    local aura = getRaidEnemiesNear(focusPos, 250)
+    local aura = BF.getRaidEnemiesNear(focusPos, 250)
     if #aura == 0 then
-        aura = getAllRaidEnemies()
+        aura = BF.getAllRaidEnemies()
     end
     if #aura == 0 then
         return false
@@ -3005,32 +3009,32 @@ local function raidKillLoop()
     end)
 
     pcall(function()
-        attackTargets(aura, config.raidAttackSpeed or 0.001, config.raidHitsPerCycle or 40)
+        BF.attackTargets(aura, config.raidAttackSpeed or 0.001, config.raidHitsPerCycle or 40)
     end)
     return true
 end
 
-local function startAutoRaid()
-    if raidRunning then return end
-    raidRunning = true
-    raidEndedAt = 0
-    currentRaidIslandIndex = 0
-    notifyUser("Raid", "Auto Raid ON (" .. tostring(config.raidType) .. ")", 3)
-    raidTask = task.spawn(function()
-        while raidRunning do
+BF.startAutoRaid = function()
+    if BF.raidRunning then return end
+    BF.raidRunning = true
+    BF.raidEndedAt = 0
+    BF.currentRaidIslandIndex = 0
+    BF.notifyUser("Raid", "Auto Raid ON (" .. tostring(config.raidType) .. ")", 3)
+    BF.raidTask = task.spawn(function()
+        while BF.raidRunning do
             local ok, err = pcall(function()
                 if not config.autoRaid then return end
 
                 -- DEAD: wait for respawn, do not fly to old raid
-                if isPlayerDead() then
-                    notifyUser("Raid", "Dead - waiting respawn", 2)
+                if BF.isPlayerDead() then
+                    BF.notifyUser("Raid", "Dead - waiting respawn", 2)
                     task.wait(1)
                     return
                 end
 
-                if isInRaid() then
-                    raidEndedAt = 0
-                    local fighting = raidKillLoop()
+                if BF.isInRaid() then
+                    BF.raidEndedAt = 0
+                    local fighting = BF.raidKillLoop()
                     if not fighting then
                         task.wait(0.8)
                     end
@@ -3038,19 +3042,19 @@ local function startAutoRaid()
                 end
 
                 -- Raid ended (timer gone, no islands)
-                currentRaidIslandIndex = 0
-                if raidEndedAt == 0 then
-                    raidEndedAt = os.clock()
-                    notifyUser("Raid", "Raid ended - cooldown then new chip", 3)
+                BF.currentRaidIslandIndex = 0
+                if BF.raidEndedAt == 0 then
+                    BF.raidEndedAt = os.clock()
+                    BF.notifyUser("Raid", "Raid ended - cooldown then new chip", 3)
                 end
                 -- short cooldown so we don't path back into a finishing raid
-                if os.clock() - raidEndedAt < RAID_REENTRY_COOLDOWN then
+                if os.clock() - BF.raidEndedAt < RAID_REENTRY_COOLDOWN then
                     task.wait(0.5)
                     return
                 end
 
-                if getPlayerLevel() < 1100 then
-                    notifyUser("Raid", "Need level 1100+", 3)
+                if BF.getPlayerLevel() < 1100 then
+                    BF.notifyUser("Raid", "Need level 1100+", 3)
                     task.wait(10)
                     return
                 end
@@ -3059,14 +3063,14 @@ local function startAutoRaid()
                 if not hasMicrochip() then
                     buyRaidChip()
                     if not hasMicrochip() then
-                        notifyUser("Raid", "No Microchip - lobby / CD", 3)
+                        BF.notifyUser("Raid", "No Microchip - lobby / CD", 3)
                         goToRaidLobby()
                         task.wait(4)
                         return
                     end
                 end
 
-                notifyUser("Raid", "Lobby -> start", 2)
+                BF.notifyUser("Raid", "Lobby -> start", 2)
                 goToRaidLobby()
                 tryStartRaid()
                 task.wait(2.5)
@@ -3079,50 +3083,50 @@ local function startAutoRaid()
     end)
 end
 
-local function stopAutoRaid()
-    raidRunning = false
+BF.stopAutoRaid = function()
+    BF.raidRunning = false
     config.autoRaid = false
-    notifyUser("Raid", "Auto Raid OFF", 2)
+    BF.notifyUser("Raid", "Auto Raid OFF", 2)
 end
 
 
-local farmRunning = false
-local farmTask = nil
-local lastIslandName = ""
-local respawnConnection = nil
-local equipCheckConnection = nil
+BF.farmRunning = false
+BF.farmTask = nil
+BF.lastIslandName = ""
+BF.respawnConnection = nil
+BF.equipCheckConnection = nil
 
-local function setupRespawnRecovery()
-    if respawnConnection then respawnConnection:Disconnect() end
-    respawnConnection = LocalPlayer.CharacterAdded:Connect(function(character)
-        if not farmRunning then return end
+BF.setupRespawnRecovery = function()
+    if BF.respawnConnection then BF.respawnConnection:Disconnect() end
+    BF.respawnConnection = LocalPlayer.CharacterAdded:Connect(function(character)
+        if not BF.farmRunning then return end
         local humanoid = character:WaitForChild("Humanoid", 10)
         local hrp = character:WaitForChild("HumanoidRootPart", 10)
-        if humanoid and hrp and farmRunning then
+        if humanoid and hrp and BF.farmRunning then
             task.wait(0.5)
-            if flying then disableFly() end
-            enableFly()
+            if BF.flying then BF.disableFly() end
+            BF.enableFly()
         end
     end)
 end
 
-function startFarm()
-    if farmRunning then return end
-    farmRunning = true
-    setupRespawnRecovery()
-    enableFly()
-    if config.fruitNotifier then startFruitNotifier() end
+BF.startFarm = function()
+    if BF.farmRunning then return end
+    BF.farmRunning = true
+    BF.setupRespawnRecovery()
+    BF.enableFly()
+    if config.fruitNotifier then BF.startFruitNotifier() end
 
     if config.autoEquip then
-        equipCheckConnection = RunService.Heartbeat:Connect(function()
-            if farmRunning then autoEquipWeapon() end
+        BF.equipCheckConnection = RunService.Heartbeat:Connect(function()
+            if BF.farmRunning then BF.autoEquipWeapon() end
         end)
     end
 
-    farmTask = task.spawn(function()
+    BF.farmTask = task.spawn(function()
         local state = "ISLAND"
         local questAccepted = false
-        local currentLevel = getPlayerLevel()
+        local currentLevel = BF.getPlayerLevel()
         local lockedEnemy = nil
         local heightLocked = false
         local lockedY = 0
@@ -3132,9 +3136,9 @@ function startFarm()
         local underwaterEntryDone = false
         local underwaterEntryStarted = false
 
-        while farmRunning do
+        while BF.farmRunning do
             -- Boss hunt (UP/?) fully owns movement + combat; farm waits
-            if bossHuntOwnsFly and type(bossHuntOwnsFly) == "function" and bossHuntOwnsFly() then
+            if bossHuntOwnsFly and type(bossHuntOwnsFly) == "function" and BF.bossHuntOwnsFly() then
                 task.wait(0.2)
                 continue
             end
@@ -3142,8 +3146,8 @@ function startFarm()
             if not character then task.wait(0.5) continue end
             local humanoid = character:FindFirstChild("Humanoid")
             if not humanoid or humanoid.Health <= 0 then task.wait(0.5) continue end
-            if not flying then enableFly() end
-            if config.autoHeal then heal() end
+            if not BF.flying then BF.enableFly() end
+            if config.autoHeal then BF.heal() end
             local characters = workspace:FindFirstChild("Characters")
             local localCharacter = characters and characters:FindFirstChild(LocalPlayer.Name)
             local busoHumanoid = localCharacter and localCharacter:FindFirstChild("Humanoid")
@@ -3153,8 +3157,8 @@ function startFarm()
                 if commF then pcall(function() commF:InvokeServer("Buso") end) end
             end
 
-            local level = getPlayerLevel()
-            local island = getIslandForLevel(level)
+            local level = BF.getPlayerLevel()
+            local island = BF.getIslandForLevel(level)
             local hrp = character:FindFirstChild("HumanoidRootPart")
 
             -- Level 700-725: make sure the normal Raider pattern is selected.
@@ -3168,10 +3172,10 @@ function startFarm()
 
             -- Stats: always dump available points (not only on level-up)
             if config.statEnabled then
-                local pts = getAvailableStatPoints()
+                local pts = BF.getAvailableStatPoints()
                 if pts and pts > 0 then
                     pcall(function()
-                        distributeStats(config.statsToAdd, config.pointsPerStat, true)
+                        BF.distributeStats(config.statsToAdd, config.pointsPerStat, true)
                     end)
                 end
             end
@@ -3181,7 +3185,7 @@ function startFarm()
             --        missing = no quest -> accept once (cooldown)
             do
                 if not _lastQuestAcceptAt then _lastQuestAcceptAt = 0 end
-                if hasActiveQuest() then
+                if BF.hasActiveQuest() then
                     questAccepted = true
                 else
                     -- frame gone = finished or none -> may take new quest
@@ -3202,38 +3206,38 @@ function startFarm()
                 isBossTarget = false
                 underwaterEntryDone = false
                 underwaterEntryStarted = false
-                if not hasActiveQuest() then
+                if not BF.hasActiveQuest() then
                     questAccepted = false
                     currentQuestType = "normal"
                     state = "ISLAND"
                 end
-                if island.Name ~= lastIslandName then
-                    lastIslandName = island.Name
-                    notifyUser("New Island", "Now farming: " .. island.Name)
+                if island.Name ~= BF.lastIslandName then
+                    BF.lastIslandName = island.Name
+                    BF.notifyUser("New Island", "Now farming: " .. island.Name)
                 end
             end
 
             if state == "ISLAND" then
-                local underwater = isUnderwaterIsland(island)
+                local underwater = BF.isUnderwaterIsland(island)
 
                 -- Underwater route: deliberately visit the whirlpool first rather
-                -- than flying directly across the ocean to the island coordinates.
+                -- than BF.flying directly across the ocean to the island coordinates.
                 if underwater and not underwaterEntryDone then
-                    local whirlpool = findWhirlpool()
+                    local whirlpool = BF.findWhirlpool()
                     if whirlpool then
                         underwaterEntryStarted = true
                         if whirlpool.Distance > 65 then
-                            setFlyTarget(whirlpool.Position + Vector3.new(0, 6, 0), false)
+                            BF.setFlyTarget(whirlpool.Position + Vector3.new(0, 6, 0), false)
                             task.wait(0.08)
                             continue
                         end
 
                         -- Stay over the whirlpool briefly so its entrance/teleport
                         -- trigger has time to fire. Do not fly away immediately.
-                        setFlyTarget(whirlpool.Position + Vector3.new(0, 4, 0), false)
+                        BF.setFlyTarget(whirlpool.Position + Vector3.new(0, 4, 0), false)
                         task.wait(0.6)
                         underwaterEntryDone = true
-                        setHoverHeight(hrp.Position.Y)
+                        BF.setHoverHeight(hrp.Position.Y)
                         continue
                     else
                         -- If the server has no named whirlpool object, fall back to
@@ -3244,11 +3248,11 @@ function startFarm()
 
                 local targetPos = island.Pos + Vector3.new(0, 25, 0)
                 if (hrp.Position - targetPos).Magnitude > 50 then
-                    setFlyTarget(targetPos, false)
+                    BF.setFlyTarget(targetPos, false)
                     task.wait(0.08)
                     continue
                 else
-                    setHoverHeight(hrp.Position.Y)
+                    BF.setHoverHeight(hrp.Position.Y)
                     state = "QUEST"
                     continue
                 end
@@ -3256,7 +3260,7 @@ function startFarm()
 
             if state == "QUEST" then
                 -- TrackedQuestFrame present = already have quest
-                if hasActiveQuest() then
+                if BF.hasActiveQuest() then
                     questAccepted = true
                     state = "COMBAT"
                     continue
@@ -3268,13 +3272,13 @@ function startFarm()
                 end
 
                 local bossEnemy = nil
-                if island.isBoss then bossEnemy = findBossInWorkspace(island) end
+                if island.isBoss then bossEnemy = BF.findBossInWorkspace(island) end
                 local desiredType = bossEnemy and "boss" or "normal"
-                local questArgs = getQuestArgs(island, desiredType)
+                local questArgs = BF.getQuestArgs(island, desiredType)
 
                 if questArgs then
                     _lastQuestAcceptAt = os.clock()
-                    local success = acceptQuestWrapper(questArgs)
+                    local success = BF.acceptQuestWrapper(questArgs)
                     if success then
                         currentQuestType = desiredType
                         questAccepted = true
@@ -3301,7 +3305,7 @@ function startFarm()
                 -- New quest only via the 10s-hidden tracker above -> state QUEST.
 
                 local bossEnemy = nil
-                if island.isBoss then bossEnemy = findBossInWorkspace(island) end
+                if island.isBoss then bossEnemy = BF.findBossInWorkspace(island) end
                 -- no AbandonQuest mid-run
 
                 if bossEnemy and bossEnemy.Parent and bossEnemy:FindFirstChildOfClass("Humanoid")
@@ -3310,16 +3314,16 @@ function startFarm()
                     isBossTarget = true
                 else
                     isBossTarget = false
-                    local patternInfo = getPatterns(island, currentQuestType)
+                    local patternInfo = BF.getPatterns(island, currentQuestType)
                     -- Prefer mob name from TrackedQuestFrame ("Defeat 8 Brutes")
-                    if hasActiveQuest() then
-                        local _, qtext = getActiveQuestInfo()
-                        local fromQuest = getPatternsFromQuestText(qtext, patternInfo.patterns)
+                    if BF.hasActiveQuest() then
+                        local _, qtext = BF.getActiveQuestInfo()
+                        local fromQuest = BF.getPatternsFromQuestText(qtext, patternInfo.patterns)
                         if fromQuest and #fromQuest > 0 then
                             patternInfo = { patterns = fromQuest, includeBossAttr = false }
                         end
                     end
-                    local allTargets = getMatchingEnemies(island, patternInfo)
+                    local allTargets = BF.getMatchingEnemies(island, patternInfo)
                     if #allTargets == 0 then
                         lockedEnemy = nil
                         state = "PATROL"
@@ -3359,7 +3363,7 @@ function startFarm()
 
                         if distToTarget > config.attackRange then
                             local hover = math.clamp(config.aboveHeight or 8, 4, 14)
-                            setFlyTarget(targetPos + Vector3.new(0, hover, 0), false)
+                            BF.setFlyTarget(targetPos + Vector3.new(0, hover, 0), false)
                             heightLocked = false
                             task.wait(0.03)
                         else
@@ -3371,17 +3375,17 @@ function startFarm()
                                 if playerRoot then
                                     -- Stay CLOSE above the real enemy (too high => server ignores hits)
                                     local hover = math.clamp(config.aboveHeight or 8, 4, 12)
-                                    setFlyTarget(targetPos + Vector3.new(0, hover, 0), false)
+                                    BF.setFlyTarget(targetPos + Vector3.new(0, hover, 0), false)
                                     heightLocked = false
 
-                                    local patternInfo = getPatterns(island, currentQuestType)
-                                    local allTargets = getMatchingEnemies(island, patternInfo)
+                                    local patternInfo = BF.getPatterns(island, currentQuestType)
+                                    local allTargets = BF.getMatchingEnemies(island, patternInfo)
                                     local maxN = config.maxClusterSize or 15
                                     -- Pull range (large) vs attack range (small) were mixed before
                                     local radius = config.clusterRange or 150
                                     if radius < 80 then radius = 80 end
 
-                                    local clusterTargets = collectNearbyTargets(
+                                    local clusterTargets = BF.collectNearbyTargets(
                                         allTargets,
                                         playerRoot,
                                         lockedEnemy,
@@ -3391,31 +3395,31 @@ function startFarm()
 
                                     if #clusterTargets > 0 then
                                         -- stand above the fixed stack (not a moving flyer underpoint)
-                                        if clusterStackPos then
+                                        if BF.clusterStackPos then
                                             local hover = math.clamp(config.aboveHeight or 8, 4, 12)
-                                            setFlyTarget(clusterStackPos + Vector3.new(0, hover, 0), false)
+                                            BF.setFlyTarget(BF.clusterStackPos + Vector3.new(0, hover, 0), false)
                                         end
-                                        attackTargets(clusterTargets, speed, hits)
+                                        BF.attackTargets(clusterTargets, speed, hits)
                                     else
-                                        attackEnemy(lockedEnemy, speed, hits)
+                                        BF.attackEnemy(lockedEnemy, speed, hits)
                                     end
                                 else
-                                    attackEnemy(lockedEnemy, speed, hits)
+                                    BF.attackEnemy(lockedEnemy, speed, hits)
                                 end
                             else
                                 -- single target: also keep height moderate for valid hits
                                 local hover = math.clamp(config.aboveHeight or 8, 4, 14)
-                                setFlyTarget(targetPos + Vector3.new(0, hover, 0), false)
-                                attackEnemy(lockedEnemy, speed, hits)
+                                BF.setFlyTarget(targetPos + Vector3.new(0, hover, 0), false)
+                                BF.attackEnemy(lockedEnemy, speed, hits)
                             end
                         end
                     else
                         lockedEnemy = nil
-                        clusterStackPos = nil
+                        BF.clusterStackPos = nil
                     end
                 else
                     lockedEnemy = nil
-                    clusterStackPos = nil
+                    BF.clusterStackPos = nil
                 end
                 continue
             end
@@ -3428,21 +3432,21 @@ function startFarm()
                 -- No enemy: stay at the current safe Y. The old code used a
                 -- target of nil plus a fixed +Y velocity, which caused the slow fall.
                 if heightLocked then
-                    setFlyTarget(Vector3.new(hrp.Position.X, lockedY, hrp.Position.Z), false)
+                    BF.setFlyTarget(Vector3.new(hrp.Position.X, lockedY, hrp.Position.Z), false)
                 else
-                    if not hoverY then hoverY = hrp.Position.Y end
-                    setFlyTarget(Vector3.new(hrp.Position.X, hoverY, hrp.Position.Z), false)
+                    if not BF.hoverY then BF.hoverY = hrp.Position.Y end
+                    BF.setFlyTarget(Vector3.new(hrp.Position.X, BF.hoverY, hrp.Position.Z), false)
                 end
 
                 local bossEnemy = nil
-                if island.isBoss then bossEnemy = findBossInWorkspace(island) end
+                if island.isBoss then bossEnemy = BF.findBossInWorkspace(island) end
                 if bossEnemy then
                     lockedEnemy = bossEnemy
                     isBossTarget = true
                     state = "COMBAT"
                 else
-                    local patternInfo = getPatterns(island, currentQuestType)
-                    local enemies = getMatchingEnemies(island, patternInfo)
+                    local patternInfo = BF.getPatterns(island, currentQuestType)
+                    local enemies = BF.getMatchingEnemies(island, patternInfo)
                     if #enemies > 0 then
                         state = "COMBAT"
                     else
@@ -3455,24 +3459,24 @@ function startFarm()
             task.wait(0.1)
         end
 
-        if equipCheckConnection then
-            equipCheckConnection:Disconnect()
-            equipCheckConnection = nil
+        if BF.equipCheckConnection then
+            BF.equipCheckConnection:Disconnect()
+            BF.equipCheckConnection = nil
         end
-        if fruitNotifierRunning then stopFruitNotifier() end
-        disableFly()
+        if BF.fruitNotifierRunning then BF.stopFruitNotifier() end
+        BF.disableFly()
     end)
 end
 
-function stopFarm()
-    farmRunning = false
-    if farmTask then task.cancel(farmTask) farmTask = nil end
-    if respawnConnection then respawnConnection:Disconnect() end
-    if equipCheckConnection then equipCheckConnection:Disconnect() equipCheckConnection = nil end
-    if fruitNotifierRunning then stopFruitNotifier() end
-    fruitTarget = nil
-    disableFly()
-    notifyUser("Stopped", "Farm stopped.")
+BF.stopFarm = function()
+    BF.farmRunning = false
+    if BF.farmTask then task.cancel(BF.farmTask) BF.farmTask = nil end
+    if BF.respawnConnection then BF.respawnConnection:Disconnect() end
+    if BF.equipCheckConnection then BF.equipCheckConnection:Disconnect() BF.equipCheckConnection = nil end
+    if BF.fruitNotifierRunning then BF.stopFruitNotifier() end
+    BF.fruitTarget = nil
+    BF.disableFly()
+    BF.notifyUser("Stopped", "Farm stopped.")
 end
 
 
@@ -3483,24 +3487,24 @@ end
 -- New: Modules.Net RF/GachaNetworkRF ZiolesGacha
 -- Cooldown ~2 hours, Level 50+
 -- =============================================
-local randomFruitRunning = false
-local randomFruitTask = nil
-local _lastRandomFruitAt = 0
+BF.randomFruitRunning = false
+BF.randomFruitTask = nil
+BF._lastRandomFruitAt = 0
 
-local function getGachaRemote()
+BF.getGachaRemote = function()
     local modules = ReplicatedStorage:FindFirstChild("Modules")
     local net = modules and modules:FindFirstChild("Net")
     if not net then return nil end
     return net:FindFirstChild("RF/GachaNetworkRF") or net:FindFirstChild("GachaNetworkRF")
 end
 
-local function buyRandomFruitOnce()
-    local lvl = getPlayerLevel()
+BF.buyRandomFruitOnce = function()
+    local lvl = BF.getPlayerLevel()
     if lvl < 50 then
-        notifyUser("Gacha", "Need level 50+", 3)
+        BF.notifyUser("Gacha", "Need level 50+", 3)
         return false, "need level 50+"
     end
-    if (os.clock() - _lastRandomFruitAt) < 5 then
+    if (os.clock() - BF._lastRandomFruitAt) < 5 then
         return false, "throttle"
     end
 
@@ -3525,7 +3529,7 @@ local function buyRandomFruitOnce()
     end
 
     -- Update 30 path if present
-    local gacha = getGachaRemote()
+    local gacha = BF.getGachaRemote()
     if gacha then
         local ok2, ret2 = pcall(function()
             return gacha:InvokeServer({
@@ -3546,21 +3550,21 @@ local function buyRandomFruitOnce()
         end)
     end
 
-    _lastRandomFruitAt = os.clock()
+    BF._lastRandomFruitAt = os.clock()
     if okAny then
-        notifyUser("Gacha", "Buy sent | ret=" .. tostring(result), 4)
+        BF.notifyUser("Gacha", "Buy sent | ret=" .. tostring(result), 4)
     else
-        notifyUser("Gacha", "No remote found (CommF_/GachaNetworkRF)", 4)
+        BF.notifyUser("Gacha", "No remote found (CommF_/GachaNetworkRF)", 4)
     end
     return okAny, result
 end
 
-local function startAutoRandomFruit()
-    if randomFruitRunning then return end
-    randomFruitRunning = true
-    notifyUser("Gacha", "Auto Random Fruit ON", 3)
-    randomFruitTask = task.spawn(function()
-        while randomFruitRunning do
+BF.startAutoRandomFruit = function()
+    if BF.randomFruitRunning then return end
+    BF.randomFruitRunning = true
+    BF.notifyUser("Gacha", "Auto Random Fruit ON", 3)
+    BF.randomFruitTask = task.spawn(function()
+        while BF.randomFruitRunning do
             if config.autoRandomFruit then
                 pcall(buyRandomFruitOnce)
             end
@@ -3570,10 +3574,10 @@ local function startAutoRandomFruit()
     end)
 end
 
-local function stopAutoRandomFruit()
-    randomFruitRunning = false
-    if randomFruitTask then pcall(function() task.cancel(randomFruitTask) end) randomFruitTask = nil end
-    notifyUser("Gacha", "Auto Random Fruit OFF", 2)
+BF.stopAutoRandomFruit = function()
+    BF.randomFruitRunning = false
+    if BF.randomFruitTask then pcall(function() task.cancel(BF.randomFruitTask) end) BF.randomFruitTask = nil end
+    BF.notifyUser("Gacha", "Auto Random Fruit OFF", 2)
 end
 
 -- =============================================
@@ -3581,10 +3585,10 @@ end
 -- Pirate Village: Free the Windmill = cut 5 ropes with sword
 -- More secrets: toggle flies you to island; full puzzles still partial
 -- =============================================
-local secretsRunning = false
-local secretsTask = nil
+BF.secretsRunning = false
+BF.secretsTask = nil
 
-local function findRopeLikeParts(nearPos, radius)
+BF.findRopeLikeParts = function(nearPos, radius)
     local found = {}
     radius = radius or 120
     for _, d in ipairs(workspace:GetDescendants()) do
@@ -3601,24 +3605,24 @@ local function findRopeLikeParts(nearPos, radius)
     return found
 end
 
-local function tryCutWindmillRopes()
+BF.tryCutWindmillRopes = function()
     -- Pirate Village windmill center ~ dock/village
     local windmillPos = Vector3.new(-1140, 55, 3975)
     pcall(function()
-        if not flying then enableFly() end
-        setFlyTarget(windmillPos, false)
+        if not BF.flying then BF.enableFly() end
+        BF.setFlyTarget(windmillPos, false)
     end)
     task.wait(2)
-    local ropes = findRopeLikeParts(windmillPos, 150)
+    local ropes = BF.findRopeLikeParts(windmillPos, 150)
     if #ropes == 0 then
         -- broader search on island
-        ropes = findRopeLikeParts(windmillPos, 250)
+        ropes = BF.findRopeLikeParts(windmillPos, 250)
     end
-    notifyUser("Secrets", "Windmill ropes found: " .. tostring(#ropes), 3)
+    BF.notifyUser("Secrets", "Windmill ropes found: " .. tostring(#ropes), 3)
     for _, rope in ipairs(ropes) do
         pcall(function()
-            if not flying then enableFly() end
-            setFlyTarget(rope.Position + Vector3.new(0, 3, 0), false)
+            if not BF.flying then BF.enableFly() end
+            BF.setFlyTarget(rope.Position + Vector3.new(0, 3, 0), false)
             task.wait(0.35)
             -- equip sword and M1 / hit
             local char = LocalPlayer.Character
@@ -3634,7 +3638,7 @@ local function tryCutWindmillRopes()
                     end
                 end
             end
-            fireVirtualClick()
+            BF.fireVirtualClick()
             -- also tool activate
             pcall(function()
                 local tool = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
@@ -3650,15 +3654,15 @@ local function tryCutWindmillRopes()
     end
 end
 
-local function startAutoSecrets()
-    if secretsRunning then return end
-    secretsRunning = true
-    notifyUser("Secrets", "Auto Secrets ON (Windmill first)", 3)
-    secretsTask = task.spawn(function()
-        while secretsRunning do
+BF.startAutoSecrets = function()
+    if BF.secretsRunning then return end
+    BF.secretsRunning = true
+    BF.notifyUser("Secrets", "Auto Secrets ON (Windmill first)", 3)
+    BF.secretsTask = task.spawn(function()
+        while BF.secretsRunning do
             local ok, err = pcall(function()
                 if not config.autoSecrets then return end
-                tryCutWindmillRopes()
+                BF.tryCutWindmillRopes()
                 task.wait(8)
             end)
             if not ok then warn("[BF] secrets:", err) end
@@ -3667,10 +3671,10 @@ local function startAutoSecrets()
     end)
 end
 
-local function stopAutoSecrets()
-    secretsRunning = false
-    if secretsTask then pcall(function() task.cancel(secretsTask) end) secretsTask = nil end
-    notifyUser("Secrets", "Auto Secrets OFF", 2)
+BF.stopAutoSecrets = function()
+    BF.secretsRunning = false
+    if BF.secretsTask then pcall(function() task.cancel(BF.secretsTask) end) BF.secretsTask = nil end
+    BF.notifyUser("Secrets", "Auto Secrets OFF", 2)
 end
 
 
@@ -3678,21 +3682,21 @@ end
 -- =============================================
 -- ENEMY ESP (through walls) - Highlight + name/HP
 -- =============================================
-local enemyEspRunning = false
-local enemyEspTask = nil
-local enemyEspObjects = {} -- [model] = {hl=, bb=, nameLbl=, hpLbl=}
+BF.enemyEspRunning = false
+BF.enemyEspTask = nil
+BF.enemyEspObjects = {} -- [model] = {hl=, bb=, nameLbl=, hpLbl=}
 
-local function clearEnemyEsp()
-    for model, data in pairs(enemyEspObjects) do
+BF.clearEnemyEsp = function()
+    for model, data in pairs(BF.enemyEspObjects) do
         pcall(function()
             if data.hl then data.hl:Destroy() end
             if data.bb then data.bb:Destroy() end
         end)
-        enemyEspObjects[model] = nil
+        BF.enemyEspObjects[model] = nil
     end
 end
 
-local function isBossModel(model)
+BF.isBossModel = function(model)
     if not model then return false end
     if model:GetAttribute("isBoss") == true then return true end
     local n = string.lower(model.Name)
@@ -3700,8 +3704,8 @@ local function isBossModel(model)
     return false
 end
 
-local function ensureEnemyEsp(model)
-    if enemyEspObjects[model] then return enemyEspObjects[model] end
+BF.ensureEnemyEsp = function(model)
+    if BF.enemyEspObjects[model] then return BF.enemyEspObjects[model] end
     local data = {}
     pcall(function()
         local hl = Instance.new("Highlight")
@@ -3709,7 +3713,7 @@ local function ensureEnemyEsp(model)
         hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
         hl.FillTransparency = 0.65
         hl.OutlineTransparency = 0
-        if isBossModel(model) then
+        if BF.isBossModel(model) then
             hl.FillColor = Color3.fromRGB(255, 60, 60)
             hl.OutlineColor = Color3.fromRGB(255, 200, 50)
         else
@@ -3757,13 +3761,13 @@ local function ensureEnemyEsp(model)
         data.nameLbl = nameLbl
         data.hpLbl = hpLbl
     end)
-    enemyEspObjects[model] = data
+    BF.enemyEspObjects[model] = data
     return data
 end
 
-local function updateEnemyEsp()
+BF.updateEnemyEsp = function()
     if not config.enemyEspEnabled then
-        clearEnemyEsp()
+        BF.clearEnemyEsp()
         return
     end
     local folder = Workspace:FindFirstChild("Enemies")
@@ -3780,7 +3784,7 @@ local function updateEnemyEsp()
                 local dist = hrp and (root.Position - hrp.Position).Magnitude or 0
                 if not hrp or dist <= maxD then
                     seen[model] = true
-                    local data = ensureEnemyEsp(model)
+                    local data = BF.ensureEnemyEsp(model)
                     if data then
                         if data.nameLbl then
                             data.nameLbl.Visible = config.enemyEspShowName ~= false
@@ -3791,7 +3795,7 @@ local function updateEnemyEsp()
                             local maxH = math.max(hum.MaxHealth, 1)
                             data.hpLbl.Text = string.format("%d / %d", math.floor(hum.Health), math.floor(maxH))
                         end
-                        if data.hl and isBossModel(model) and config.enemyEspBossColor ~= false then
+                        if data.hl and BF.isBossModel(model) and config.enemyEspBossColor ~= false then
                             data.hl.FillColor = Color3.fromRGB(255, 60, 60)
                             data.hl.OutlineColor = Color3.fromRGB(255, 200, 50)
                         end
@@ -3801,37 +3805,37 @@ local function updateEnemyEsp()
         end
     end
 
-    for model, data in pairs(enemyEspObjects) do
+    for model, data in pairs(BF.enemyEspObjects) do
         if not seen[model] or not model.Parent then
             pcall(function()
                 if data.hl then data.hl:Destroy() end
                 if data.bb then data.bb:Destroy() end
             end)
-            enemyEspObjects[model] = nil
+            BF.enemyEspObjects[model] = nil
         end
     end
 end
 
-local function startEnemyEsp()
-    if enemyEspRunning then return end
-    enemyEspRunning = true
+BF.startEnemyEsp = function()
+    if BF.enemyEspRunning then return end
+    BF.enemyEspRunning = true
     config.enemyEspEnabled = true
-    enemyEspTask = task.spawn(function()
-        while enemyEspRunning do
+    BF.enemyEspTask = task.spawn(function()
+        while BF.enemyEspRunning do
             pcall(updateEnemyEsp)
             task.wait(0.35)
         end
-        clearEnemyEsp()
+        BF.clearEnemyEsp()
     end)
-    notifyUser("ESP", "Enemy ESP ON (through walls)", 2)
+    BF.notifyUser("ESP", "Enemy ESP ON (through walls)", 2)
 end
 
-local function stopEnemyEsp()
-    enemyEspRunning = false
+BF.stopEnemyEsp = function()
+    BF.enemyEspRunning = false
     config.enemyEspEnabled = false
-    if enemyEspTask then pcall(function() task.cancel(enemyEspTask) end) enemyEspTask = nil end
-    clearEnemyEsp()
-    notifyUser("ESP", "Enemy ESP OFF", 2)
+    if BF.enemyEspTask then pcall(function() task.cancel(BF.enemyEspTask) end) BF.enemyEspTask = nil end
+    BF.clearEnemyEsp()
+    BF.notifyUser("ESP", "Enemy ESP OFF", 2)
 end
 
 -- =============================================
@@ -3852,7 +3856,7 @@ if useVaxorin and window then
         Flag = "Raid.Enabled", Save = true,
         Callback = function(v)
             config.autoRaid = v
-            if v then startAutoRaid() else stopAutoRaid() end
+            if v then BF.startAutoRaid() else BF.stopAutoRaid() end
         end,
     })
     raidSection:CreateDropdown({
@@ -3885,7 +3889,7 @@ if useVaxorin and window then
         CurrentValue = false,
         Flag = "Farm.Enabled", Save = true,
         Callback = function(v)
-            if v then startFarm() else stopFarm() end
+            if v then BF.startFarm() else BF.stopFarm() end
         end,
     })
     mainSection:CreateToggle({
@@ -3894,7 +3898,7 @@ if useVaxorin and window then
         Flag = "Farm.AutoSecrets", Save = true,
         Callback = function(v)
             config.autoSecrets = v
-            if v then startAutoSecrets() else stopAutoSecrets() end
+            if v then BF.startAutoSecrets() else BF.stopAutoSecrets() end
         end,
     })
 
@@ -3904,7 +3908,7 @@ if useVaxorin and window then
         Flag = "Farm.AutoSeaProgress", Save = true,
         Callback = function(v)
             config.autoSeaProgress = v
-            if v then startSeaProgress() else stopSeaProgress() end
+            if v then BF.startSeaProgress() else BF.stopSeaProgress() end
         end,
     })
     mainSection:CreateToggle({
@@ -3970,8 +3974,8 @@ if useVaxorin and window then
     mainSection:CreateButton({
         Name = "Emergency Stop",
         Callback = function()
-            stopFarm()
-            notifyUser("Stopped", "Landed.")
+            BF.stopFarm()
+            BF.notifyUser("Stopped", "Landed.")
         end,
     })
 
@@ -4013,7 +4017,7 @@ if useVaxorin and window then
         Flag = "ESP.Enemy",
         Save = true,
         Callback = function(v)
-            if v then startEnemyEsp() else stopEnemyEsp() end
+            if v then BF.startEnemyEsp() else BF.stopEnemyEsp() end
         end,
     })
     enemyEspSection:CreateToggle({
@@ -4129,7 +4133,7 @@ if useVaxorin and window then
     statsSection:CreateButton({
         Name = "Add Points Now",
         Callback = function()
-            distributeStats(config.statsToAdd, config.pointsPerStat, false)
+            BF.distributeStats(config.statsToAdd, config.pointsPerStat, false)
         end,
     })
 
@@ -4161,9 +4165,9 @@ if useVaxorin and window then
         Callback = function(v)
             config.bossTimersEnabled = v
             if v then
-                startBossTimers()
+                BF.startBossTimers()
             else
-                stopBossTimers()
+                BF.stopBossTimers()
             end
         end,
     })
@@ -4179,12 +4183,12 @@ if useVaxorin and window then
     bossSection:CreateButton({
         Name = "Refresh Once (print F9)",
         Callback = function()
-            local list = scanBossMarkers()
-            print("[BF] Sea:", getCurrentSea())
+            local list = BF.scanBossMarkers()
+            print("[BF] Sea:", BF.getCurrentSea())
             for _, row in ipairs(list) do
                 print("[BF]", row.Status, row.Name, row.Time)
             end
-            notifyUser("Boss Scan", "Sea " .. getCurrentSea() .. " | " .. #list .. " markers (see F9)")
+            BF.notifyUser("Boss Scan", "Sea " .. BF.getCurrentSea() .. " | " .. #list .. " markers (see F9)")
         end,
     })
 
@@ -4195,13 +4199,13 @@ if useVaxorin and window then
         Flag = "Fruit.AutoRandom", Save = true,
         Callback = function(v)
             config.autoRandomFruit = v
-            if v then startAutoRandomFruit() else stopAutoRandomFruit() end
+            if v then BF.startAutoRandomFruit() else BF.stopAutoRandomFruit() end
         end,
     })
     fruitSection:CreateButton({
         Name = "Buy Random Fruit Once",
         Callback = function()
-            buyRandomFruitOnce()
+            BF.buyRandomFruitOnce()
         end,
     })
     fruitSection:CreateToggle({
@@ -4211,9 +4215,9 @@ if useVaxorin and window then
         Callback = function(v)
             config.fruitNotifier = v
             if v then
-                startFruitNotifier()
+                BF.startFruitNotifier()
             else
-                stopFruitNotifier()
+                BF.stopFruitNotifier()
             end
         end,
     })
@@ -4229,7 +4233,7 @@ if useVaxorin and window then
         Flag = "Fruit.AutoCollect", Save = true,
         Callback = function(v)
             config.fruitAutoCollect = v
-            if v then startFruitNotifier() end
+            if v then BF.startFruitNotifier() end
         end,
     })
     fruitSection:CreateToggle({
@@ -4244,10 +4248,10 @@ if useVaxorin and window then
         pcall(startBossTimers)
     end
     local seaName = "?"
-    pcall(function() seaName = tostring(getCurrentSea()) end)
-    notifyUser("Loaded", "Vaxorin UI active. Sea: " .. seaName)
+    pcall(function() seaName = tostring(BF.getCurrentSea()) end)
+    BF.notifyUser("Loaded", "Vaxorin UI active. Sea: " .. seaName)
 else
-    notifyUser("Loaded", "Fallback UI active. Use the button to start/stop.")
+    BF.notifyUser("Loaded", "Fallback UI active. Use the button to start/stop.")
     if config.bossTimersEnabled then
         pcall(startBossTimers)
     end
