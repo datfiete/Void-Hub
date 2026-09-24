@@ -805,7 +805,7 @@ end
 BF.setFlyTarget = function(position, preserveHeight)
     -- While a selected boss is UP/? and hunt is active, Auto Farm must not steal the target.
     -- Boss hunt sets BF._bossFlyUnlock for its own calls.
-    if bossHuntOwnsFly and type(bossHuntOwnsFly) == "function" and BF.bossHuntOwnsFly() then
+    if BF.bossHuntOwnsFly and type(BF.bossHuntOwnsFly) == "function" and BF.bossHuntOwnsFly() then
         if not BF._bossFlyUnlock then
             return
         end
@@ -825,7 +825,7 @@ BF.setFlyTarget = function(position, preserveHeight)
 end
 
 BF.setHoverHeight = function(y)
-    if bossHuntOwnsFly and type(bossHuntOwnsFly) == "function" and BF.bossHuntOwnsFly() then
+    if BF.bossHuntOwnsFly and type(BF.bossHuntOwnsFly) == "function" and BF.bossHuntOwnsFly() then
         if not BF._bossFlyUnlock then
             return
         end
@@ -919,7 +919,7 @@ BF.stackQuest = function(questArgs, count)
 end
 
 BF.acceptQuestWrapper = function(questArgs)
-    if questArgs and questArgs[2] and type(activeQuestMatches) == "function" then
+    if questArgs and questArgs[2] and type(BF.activeQuestMatches) == "function" then
         local ok, matched = pcall(function()
             return BF.activeQuestMatches(tostring(questArgs[2]))
         end)
@@ -1085,7 +1085,7 @@ BF.fruitScan = function()
             if canCollect then
                 local owns = false
                 pcall(function()
-                    if type(bossHuntOwnsFly) == "function" then owns = BF.bossHuntOwnsFly() end
+                    if type(BF.bossHuntOwnsFly) == "function" then owns = BF.bossHuntOwnsFly() end
                 end)
                 if owns then canCollect = false end
             end
@@ -1128,7 +1128,7 @@ BF.startFruitNotifier = function()
     BF.fruitNotifierRunning = true
     task.spawn(function()
         while BF.fruitNotifierRunning do
-            pcall(fruitScan)
+            pcall(BF.fruitScan)
             task.wait(2) -- never Heartbeat+wait spam
         end
     end)
@@ -2166,7 +2166,7 @@ BF.startBossHuntCombat = function(bossName)
 
         while BF.bossTimerRunning and BF.selectedBosses[bossName] and os.clock() < deadline do
             if not BF.flying then
-                pcall(enableFly)
+                pcall(BF.enableFly)
             end
             -- re-try quest every ~8s while hunting
             if os.clock() - questTriedAt > 8 then
@@ -2426,13 +2426,13 @@ BF.startBossTimers = function()
     BF.bossTimerTask = task.spawn(function()
         while BF.bossTimerRunning do
             local list, sea = {}, BF.getCurrentSea()
-            local ok, pack = pcall(scanBossesForSea)
+            local ok, pack = pcall(BF.scanBossesForSea)
             if ok and type(pack) == "table" then
                 list = pack.List or {}
                 sea = pack.Sea or BF.getCurrentSea()
             end
-            pcall(rebuildBossListRows, list)
-            pcall(processBossHuntActions, list)
+            pcall(BF.rebuildBossListRows, list)
+            pcall(BF.processBossHuntActions, list)
             if config.bossSpawnNotify then
                 for _, row in ipairs(list or {}) do
                     local prev = BF.lastBossStatus[row.Name]
@@ -3138,7 +3138,7 @@ BF.startFarm = function()
 
         while BF.farmRunning do
             -- Boss hunt (UP/?) fully owns movement + combat; farm waits
-            if bossHuntOwnsFly and type(bossHuntOwnsFly) == "function" and BF.bossHuntOwnsFly() then
+            if BF.bossHuntOwnsFly and type(BF.bossHuntOwnsFly) == "function" and BF.bossHuntOwnsFly() then
                 task.wait(0.2)
                 continue
             end
@@ -3504,59 +3504,65 @@ BF.buyRandomFruitOnce = function()
         BF.notifyUser("Gacha", "Need level 50+", 3)
         return false, "need level 50+"
     end
-    if (os.clock() - BF._lastRandomFruitAt) < 5 then
+    if (os.clock() - (BF._lastRandomFruitAt or 0)) < 5 then
         return false, "throttle"
     end
 
     local remotes = ReplicatedStorage:FindFirstChild("Remotes")
     local comm = remotes and remotes:FindFirstChild("CommF_")
-    local result = nil
+    local results = {}
     local okAny = false
 
-    -- What most hubs still use (Huy_Hub / older redz-style):
-    if comm then
-        local ok, ret = pcall(function()
-            return comm:InvokeServer("Cousin", "BuyItem")
-        end)
-        if ok then
+    local function try(label, fn)
+        local ok, ret = pcall(fn)
+        table.insert(results, label .. "=" .. tostring(ok and ret or ("err:" .. tostring(ret))))
+        if ok and ret ~= false and ret ~= nil then
             okAny = true
-            result = ret
+        elseif ok then
+            okAny = true -- remote accepted call
         end
-        -- alternate string seen in some scripts
-        pcall(function()
-            return comm:InvokeServer("Cousin", "Buy")
-        end)
+        return ok, ret
     end
 
-    -- Update 30 path if present
+    if comm then
+        -- Most common hub patterns
+        try("Cousin/BuyItem", function() return comm:InvokeServer("Cousin", "BuyItem") end)
+        try("Cousin/Buy", function() return comm:InvokeServer("Cousin", "Buy") end)
+        try("Cousin/1", function() return comm:InvokeServer("Cousin", 1) end)
+        try("BuyFruit/Random", function() return comm:InvokeServer("BuyFruit", "Random") end)
+        try("BuyFruitRandom", function() return comm:InvokeServer("BuyFruitRandom") end)
+    end
+
     local gacha = BF.getGachaRemote()
     if gacha then
-        local ok2, ret2 = pcall(function()
+        try("GachaBuy", function()
             return gacha:InvokeServer({
                 BoxName = "ZiolesGacha",
                 Context = "Buy",
                 SpokeNPC = "Blox Fruit Gacha",
             })
         end)
-        if ok2 then
-            okAny = true
-            result = result or ret2
-        end
-        pcall(function()
-            gacha:InvokeServer({
+        try("GachaGet", function()
+            return gacha:InvokeServer({
                 Context = "getGachaFromBoxName",
                 BoxName = "ZiolesGacha",
+            })
+        end)
+        try("GachaCheck", function()
+            return gacha:InvokeServer({
+                BoxName = "ZiolesGacha",
+                Context = "Check",
+                SpokeNPC = "Blox Fruit Gacha",
             })
         end)
     end
 
     BF._lastRandomFruitAt = os.clock()
-    if okAny then
-        BF.notifyUser("Gacha", "Buy sent | ret=" .. tostring(result), 4)
-    else
-        BF.notifyUser("Gacha", "No remote found (CommF_/GachaNetworkRF)", 4)
-    end
-    return okAny, result
+    local msg = table.concat(results, " | ")
+    if #msg > 180 then msg = msg:sub(1, 180) .. "..." end
+    BF.notifyUser("Gacha", msg ~= "" and msg or "no remotes", 6)
+    print("[BF] Gacha:", msg)
+    return okAny, results
 end
 
 BF.startAutoRandomFruit = function()
@@ -3566,7 +3572,7 @@ BF.startAutoRandomFruit = function()
     BF.randomFruitTask = task.spawn(function()
         while BF.randomFruitRunning do
             if config.autoRandomFruit then
-                pcall(buyRandomFruitOnce)
+                pcall(BF.buyRandomFruitOnce)
             end
             -- check every 5 min (server CD is 2h)
             task.wait(300)
@@ -3710,8 +3716,11 @@ BF.ensureEnemyEsp = function(model)
     pcall(function()
         local hl = Instance.new("Highlight")
         hl.Name = "BF_EnemyESP"
-        hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-        hl.FillTransparency = 0.65
+        hl.Enabled = true
+        pcall(function()
+            hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        end)
+        hl.FillTransparency = 0.5
         hl.OutlineTransparency = 0
         if BF.isBossModel(model) then
             hl.FillColor = Color3.fromRGB(255, 60, 60)
@@ -3721,7 +3730,15 @@ BF.ensureEnemyEsp = function(model)
             hl.OutlineColor = Color3.fromRGB(255, 255, 255)
         end
         hl.Adornee = model
-        hl.Parent = model
+        -- Parent to PlayerGui folder so it survives enemy streaming better
+        local pg = LocalPlayer:FindFirstChild("PlayerGui")
+        local folder = pg and pg:FindFirstChild("BF_ESP_FOLDER")
+        if not folder and pg then
+            folder = Instance.new("Folder")
+            folder.Name = "BF_ESP_FOLDER"
+            folder.Parent = pg
+        end
+        hl.Parent = folder or model
         data.hl = hl
     end)
     pcall(function()
@@ -3822,7 +3839,7 @@ BF.startEnemyEsp = function()
     config.enemyEspEnabled = true
     BF.enemyEspTask = task.spawn(function()
         while BF.enemyEspRunning do
-            pcall(updateEnemyEsp)
+            pcall(BF.updateEnemyEsp)
             task.wait(0.35)
         end
         BF.clearEnemyEsp()
@@ -4245,7 +4262,7 @@ if useVaxorin and window then
 
     window:SetWatermarkEnabled(true)
     if config.bossTimersEnabled then
-        pcall(startBossTimers)
+        pcall(BF.startBossTimers)
     end
     local seaName = "?"
     pcall(function() seaName = tostring(BF.getCurrentSea()) end)
@@ -4253,7 +4270,7 @@ if useVaxorin and window then
 else
     BF.notifyUser("Loaded", "Fallback UI active. Use the button to start/stop.")
     if config.bossTimersEnabled then
-        pcall(startBossTimers)
+        pcall(BF.startBossTimers)
     end
 end
 
