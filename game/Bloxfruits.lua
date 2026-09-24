@@ -10,7 +10,7 @@ pcall(function()
     if type(getexecutorname) == "function" then Executor = tostring(getexecutorname())
     elseif type(identifyexecutor) == "function" then Executor = tostring(identifyexecutor()) end
 end)
-print("[BF] load ok — full autofarm script")
+print("[BF] load ok - full autofarm script")
 
 -- Load Vaxorin (or fallback UI)
 local useVaxorin = false
@@ -120,7 +120,7 @@ if not useVaxorin or not window then
     notifierLabel.Font = Enum.Font.Gotham
     notifierLabel.Parent = frame
 
-    -- Simple toggle button (Start/Stop farm) – we'll just use the same functions later
+    -- Simple toggle button (Start/Stop farm) - we'll just use the same functions later
     local toggleBtn = Instance.new("TextButton")
     toggleBtn.Size = UDim2.new(0, 120, 0, 40)
     toggleBtn.Position = UDim2.new(0.5, -60, 0, 150)
@@ -354,7 +354,7 @@ local function fireAssetsHit(bodyPart)
     return fired
 end
 
--- QuantumOnyx-style: all living targets within 70 studs of player → one bladeHits packet
+-- QuantumOnyx-style: all living targets within 70 studs of player -> one bladeHits packet
 local function expandTargetsInHitRange(targets, maxDist)
     maxDist = maxDist or 70
     local char = LocalPlayer.Character
@@ -570,7 +570,7 @@ local islands = {
     {Name = "Fountain 1",         Min = 625, Max = 650, Pos = Vector3.new(5572, 78, 4010), Quest = {"StartQuest","FountainQuest",1}, EnemyPatterns = {"Galley Pirate"}, isBoss = false},
     {Name = "Fountain 2",         Min = 650, Max = 675, Pos = Vector3.new(5634, 78, 4789), Quest = {"StartQuest","FountainQuest",2}, EnemyPatterns = {"Galley Captain"}, isBoss = false},
 
-    -- Sea1 Bosses (positions from dump) — Mob Boss is NOT a real boss quest target
+    -- Sea1 Bosses (positions from dump) - Mob Boss is NOT a real boss quest target
     {Name = "The Gorilla King", Min = 20, Max = 30, Pos = Vector3.new(-1194, 11, -550),
         Quest = {"StartQuest","JungleQuest",2}, EnemyPatterns = {"Gorilla"},
         BossQuest = {"StartQuest","JungleQuest",3}, BossPatterns = {"The Gorilla King", "Gorilla King"},
@@ -1051,50 +1051,59 @@ local function fruitScan()
     for _, v in ipairs(candidates) do
         local handle = getFruitHandle(v)
         local pos = handle and handle.Position
-        if not pos and v:IsA("Model") and v:GetPivot then
-            pos = v:GetPivot().Position
+        if (not pos) and v:IsA("Model") then
+            local okp, piv = pcall(function() return v:GetPivot().Position end)
+            if okp then pos = piv end
         end
-        if not pos then continue end
+        if pos then
+            local displayName = v.Name
+            local key = tostring(v) .. "|" .. displayName
+            local valuable = isValuableFruit(displayName)
 
-        local displayName = v.Name
-        local key = tostring(v) .. "|" .. displayName
-        local valuable = isValuableFruit(displayName)
-
-        if not fruitNotified[key] then
-            fruitNotified[key] = true
-            local shouldNotify = config.fruitNotifier
-            if shouldNotify and config.fruitFilterNotify and not valuable then
-                shouldNotify = false
+            if not fruitNotified[key] then
+                fruitNotified[key] = true
+                local shouldNotify = config.fruitNotifier
+                if shouldNotify and config.fruitFilterNotify and not valuable then
+                    shouldNotify = false
+                end
+                if shouldNotify then
+                    local tag = valuable and " [VAL]" or ""
+                    notifyUser("Fruit Detected", displayName .. tag, 4)
+                end
             end
-            if shouldNotify then
-                local tag = valuable and " ★" or ""
-                notifyUser("Fruit Detected", displayName .. tag, 4)
-            end
-        end
 
-        -- Auto collect only valuable (if filter on)
-        local canCollect = config.fruitAutoCollect and not bossHuntOwnsFly()
-        if canCollect and config.fruitFilterCollect and not valuable then
-            canCollect = false
-        end
-        if canCollect then
-            setFlyTarget(pos + Vector3.new(0, 5, 0), false)
-            task.wait(0.4)
-            local character = LocalPlayer.Character
-            local hrp = character and character:FindFirstChild("HumanoidRootPart")
-            if hrp and (hrp.Position - pos).Magnitude < 20 then
+            local canCollect = config.fruitAutoCollect
+            if canCollect then
+                local owns = false
                 pcall(function()
-                    firetouchinterest(hrp, handle or v, 0)
-                    firetouchinterest(hrp, handle or v, 1)
+                    if type(bossHuntOwnsFly) == "function" then owns = bossHuntOwnsFly() end
                 end)
-                pcall(function()
-                    VirtualInputManager:SendKeyEvent(true, "E", false, game)
-                    task.wait(0.1)
-                    VirtualInputManager:SendKeyEvent(false, "E", false, game)
-                end)
-                notifyUser("Fruit", "Collected " .. displayName, 2)
+                if owns then canCollect = false end
             end
-            break -- one at a time
+            if canCollect and config.fruitFilterCollect and not valuable then
+                canCollect = false
+            end
+            if canCollect then
+                pcall(function() setFlyTarget(pos + Vector3.new(0, 5, 0), false) end)
+                task.wait(0.4)
+                local character = LocalPlayer.Character
+                local hrp = character and character:FindFirstChild("HumanoidRootPart")
+                if hrp and (hrp.Position - pos).Magnitude < 20 then
+                    pcall(function()
+                        if firetouchinterest and handle then
+                            firetouchinterest(hrp, handle, 0)
+                            firetouchinterest(hrp, handle, 1)
+                        end
+                    end)
+                    pcall(function()
+                        VirtualInputManager:SendKeyEvent(true, "E", false, game)
+                        task.wait(0.1)
+                        VirtualInputManager:SendKeyEvent(false, "E", false, game)
+                    end)
+                    notifyUser("Fruit", "Collected " .. displayName, 2)
+                end
+                break
+            end
         end
     end
 
@@ -1828,7 +1837,7 @@ local function scanBossesForSea()
         table.insert(catalog, name)
     end
 
-    -- 1) live from EnemySpawns ([Boss] parts) — authoritative for this server/sea
+    -- 1) live from EnemySpawns ([Boss] parts) - authoritative for this server/sea
     for _, name in ipairs(collectBossesFromEnemySpawns()) do
         addBoss(name)
     end
@@ -2493,7 +2502,7 @@ local function _seaKill(nameSub, seconds)
                 end)
             end
         elseif sawAlive then
-            -- was alive, now gone → killed
+            -- was alive, now gone -> killed
             confirmedDead = true
             break
         end
@@ -2530,10 +2539,10 @@ local function startSeaProgress()
                     onSwanQuest = true
                 end
 
-                -- If we think we're past Jeremy but he's still alive → force stage j
+                -- If we think we're past Jeremy but he's still alive -> force stage j
                 if jeremyAlive and (sea2Stage == "prisoners" or sea2Stage == "don" or sea2Stage == "king") then
                     sea2Stage = "j"
-                    notifyUser("Sea", "Jeremy still alive → back to stage j", 3)
+                    notifyUser("Sea", "Jeremy still alive -> back to stage j", 3)
                 end
                 -- If on swan quest text, force swan stage
                 if onSwanQuest and sea2Stage ~= "swan" and sea2Stage ~= "idle" then
@@ -2550,7 +2559,7 @@ local function startSeaProgress()
                 if donAlive then stageLabel = stageLabel .. " | Don ALIVE" end
                 notifyUser("Sea Stage", stageLabel .. " | " .. map .. " lv" .. tostring(level), 2)
 
-                -- ========== SEA1 → SEA2 ==========
+                -- ========== SEA1 -> SEA2 ==========
                 if level >= 700 and (sea == "" or sea == "sea1" or string.find(sea, "1"))
                     and not string.find(sea, "2") and not string.find(sea, "3")
                     and sea1Stage ~= "done" then
@@ -2577,7 +2586,7 @@ local function startSeaProgress()
                     return
                 end
 
-                -- ========== SEA2 → SEA3 ==========
+                -- ========== SEA2 -> SEA3 ==========
                 if not (string.find(sea, "2") or sea == "") then
                     if string.find(sea, "3") then
                         sea2Stage = "done"
@@ -2596,18 +2605,18 @@ local function startSeaProgress()
                         task.wait(0.5)
                     end
                     sea2Stage = "swan"
-                    notifyUser("Sea", "→ stage swan", 3)
+                    notifyUser("Sea", "-> stage swan", 3)
 
                 elseif sea2Stage == "swan" then
                     _seaFly(Vector3.new(1019, 73, 1221))
                     if activeQuestMatches("swan", "50", "pirate") or activeQuestMatches("swan") then
                         _seaKill("Swan Pirate", 35)
                     else
-                        -- quest cleared → Jeremy
+                        -- quest cleared -> Jeremy
                         _seaComm("StartQuest", "BartiloQuest", 2)
                         task.wait(0.4)
                         sea2Stage = "j"
-                        notifyUser("Sea", "→ stage j (Jeremy)", 3)
+                        notifyUser("Sea", "-> stage j (Jeremy)", 3)
                     end
 
                 elseif sea2Stage == "j" then
@@ -2617,20 +2626,20 @@ local function startSeaProgress()
                         local dead = _seaKill("Jeremy", 90)
                         if dead then
                             sea2Stage = "prisoners"
-                            notifyUser("Sea", "Jeremy dead → stage prisoners", 3)
+                            notifyUser("Sea", "Jeremy dead -> stage prisoners", 3)
                         else
                             notifyUser("Sea", "Jeremy still fighting...", 2)
                         end
                     else
                         -- not on map: wait / hop, do NOT skip to don
-                        notifyUser("Sea", "Jeremy not in Enemies — waiting (stage j)", 2)
+                        notifyUser("Sea", "Jeremy not in Enemies - waiting (stage j)", 2)
                         task.wait(3)
                         -- if still missing after a few ticks, optional skip only if level high and user wants
                         -- stay on j
                     end
 
                 elseif sea2Stage == "prisoners" then
-                    -- Colosseum / free gladiators / King cell — STAY HERE, don't skip
+                    -- Colosseum / free gladiators / King cell - STAY HERE, don't skip
                     local colPos = Vector3.new(-1836, 7, -2742)
                     notifyUser("Sea", "Stage prisoners: flying to Colosseum", 2)
                     _seaFly(colPos)
@@ -2660,7 +2669,7 @@ local function startSeaProgress()
                     -- only leave prisoners when Jeremy is gone AND we've spent time at colosseum
                     if not jeremyAlive then
                         sea2Stage = "don"
-                        notifyUser("Sea", "→ stage don (Don Swan)", 3)
+                        notifyUser("Sea", "-> stage don (Don Swan)", 3)
                     end
 
                 elseif sea2Stage == "don" then
@@ -2677,7 +2686,7 @@ local function startSeaProgress()
                         local dead = _seaKill("Don Swan", 120)
                         if dead then
                             sea2Stage = "king"
-                            notifyUser("Sea", "Don Swan dead → stage king", 3)
+                            notifyUser("Sea", "Don Swan dead -> stage king", 3)
                         end
                     else
                         notifyUser("Sea", "Don Swan not spawned (fruit door?)", 2)
@@ -2711,7 +2720,7 @@ local function startSeaProgress()
                     end)
                     task.wait(3)
                     sea2Stage = "indra"
-                    notifyUser("Sea", "→ stage indra", 3)
+                    notifyUser("Sea", "-> stage indra", 3)
 
                 elseif sea2Stage == "indra" then
                     notifyUser("Sea", "Stage indra: rip_indra", 2)
@@ -2728,13 +2737,13 @@ local function startSeaProgress()
                         end
                         if hum and hum.MaxHealth > 0 and (hum.Health / hum.MaxHealth) <= 0.55 then
                             sea2Stage = "captain"
-                            notifyUser("Sea", "Indra ~50% → captain", 3)
+                            notifyUser("Sea", "Indra ~50% -> captain", 3)
                         end
                     else
                         local deadish = _seaKill("indra", 40)
                         if deadish or not (_seaFindAlive("indra") or _seaFindAlive("rip")) then
                             sea2Stage = "captain"
-                            notifyUser("Sea", "→ stage captain", 3)
+                            notifyUser("Sea", "-> stage captain", 3)
                         end
                     end
 
@@ -2769,7 +2778,7 @@ end
 -- =============================================
 -- AUTO RAID (Microchip / Awakening Raids)
 -- Wiki: 5 islands, kill all enemies to progress, boss on island 5
--- Start: Mysterious Scientist chip → lab tubes (Sea2 Hot&Cold / Sea3 Castle)
+-- Start: Mysterious Scientist chip -> lab tubes (Sea2 Hot&Cold / Sea3 Castle)
 -- Remote: CommF_ "RaidsNpc","Select", <RaidName>
 -- In-raid detect: PlayerGui.Main.TopHUDList.RaidTimer (or similar)
 -- =============================================
@@ -2940,7 +2949,7 @@ local function raidKillLoop()
     local island, idx, cf = getActiveRaidIsland()
     local focusPos = cf and cf.Position or nil
 
-    -- Fallback: no Locations parts → use living enemies as focus (still progress raid)
+    -- Fallback: no Locations parts -> use living enemies as focus (still progress raid)
     if not focusPos then
         local all = getAllRaidEnemies()
         if #all > 0 then
@@ -2951,7 +2960,7 @@ local function raidKillLoop()
             focusPos = sum / #all
             if currentRaidIslandIndex ~= -1 then
                 currentRaidIslandIndex = -1
-                notifyUser("Raid", "No Island parts — following enemies", 2)
+                notifyUser("Raid", "No Island parts - following enemies", 2)
             end
         end
     end
@@ -3009,7 +3018,7 @@ local function startAutoRaid()
 
                 -- DEAD: wait for respawn, do not fly to old raid
                 if isPlayerDead() then
-                    notifyUser("Raid", "Dead — waiting respawn", 2)
+                    notifyUser("Raid", "Dead - waiting respawn", 2)
                     task.wait(1)
                     return
                 end
@@ -3027,7 +3036,7 @@ local function startAutoRaid()
                 currentRaidIslandIndex = 0
                 if raidEndedAt == 0 then
                     raidEndedAt = os.clock()
-                    notifyUser("Raid", "Raid ended — cooldown then new chip", 3)
+                    notifyUser("Raid", "Raid ended - cooldown then new chip", 3)
                 end
                 -- short cooldown so we don't path back into a finishing raid
                 if os.clock() - raidEndedAt < RAID_REENTRY_COOLDOWN then
@@ -3045,14 +3054,14 @@ local function startAutoRaid()
                 if not hasMicrochip() then
                     buyRaidChip()
                     if not hasMicrochip() then
-                        notifyUser("Raid", "No Microchip — lobby / CD", 3)
+                        notifyUser("Raid", "No Microchip - lobby / CD", 3)
                         goToRaidLobby()
                         task.wait(4)
                         return
                     end
                 end
 
-                notifyUser("Raid", "Lobby → start", 2)
+                notifyUser("Raid", "Lobby -> start", 2)
                 goToRaidLobby()
                 tryStartRaid()
                 task.wait(2.5)
@@ -3164,13 +3173,13 @@ function startFarm()
 
 
             -- QUEST: TrackedQuestFrame exists = has quest (never StartQuest)
-            --        missing = no quest → accept once (cooldown)
+            --        missing = no quest -> accept once (cooldown)
             do
                 if not _lastQuestAcceptAt then _lastQuestAcceptAt = 0 end
                 if hasActiveQuest() then
                     questAccepted = true
                 else
-                    -- frame gone = finished or none → may take new quest
+                    -- frame gone = finished or none -> may take new quest
                     if (os.clock() - _lastQuestAcceptAt) >= 3 then
                         questAccepted = false
                         if state == "COMBAT" or state == "PATROL" then
@@ -3284,7 +3293,7 @@ function startFarm()
                 -- If the quest really is not active, the QUEST state will retry it
                 -- after target detection has had a chance to find the configured mob.
                 -- Never interrupt an accepted quest. Farm always.
-                -- New quest only via the 10s-hidden tracker above → state QUEST.
+                -- New quest only via the 10s-hidden tracker above -> state QUEST.
 
                 local bossEnemy = nil
                 if island.isBoss then bossEnemy = findBossInWorkspace(island) end
@@ -3563,7 +3572,7 @@ local function stopAutoRandomFruit()
 end
 
 -- =============================================
--- SEA1 ISLAND SECRETS (Update 30) — partial auto
+-- SEA1 ISLAND SECRETS (Update 30) - partial auto
 -- Pirate Village: Free the Windmill = cut 5 ropes with sword
 -- More secrets: toggle flies you to island; full puzzles still partial
 -- =============================================
@@ -3725,7 +3734,7 @@ if useVaxorin and window then
     })
 
     mainSection:CreateToggle({
-        Name = "Auto Sea Progress (1→2 / 2→3)",
+        Name = "Auto Sea Progress (1->2 / 2->3)",
         CurrentValue = false,
         Flag = "Farm.AutoSeaProgress", Save = true,
         Callback = function(v)
