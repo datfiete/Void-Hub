@@ -1245,6 +1245,48 @@ BF.activeQuestMatches = function(...)
 end
 
 -- Derive farm patterns from tracked quest text when possible
+
+-- While a quest is still active, farm THAT quest's mobs even if level unlocked the next island.
+BF.resolveFarmPatterns = function(island, questType)
+    local patternInfo = BF.getPatterns(island, questType or "normal")
+    if BF.hasActiveQuest() then
+        local _, qtext = BF.getActiveQuestInfo()
+        local fromQuest = BF.getPatternsFromQuestText(qtext, patternInfo and patternInfo.patterns)
+        if fromQuest and #fromQuest > 0 then
+            return { patterns = fromQuest, includeBossAttr = false }
+        end
+    end
+    return patternInfo
+end
+
+BF.resolveFarmIsland = function(level)
+    local island = BF.getIslandForLevel(level)
+    if not BF.hasActiveQuest() then
+        return island
+    end
+    local _, qtext = BF.getActiveQuestInfo()
+    local fromQuest = BF.getPatternsFromQuestText(qtext, nil)
+    if not fromQuest or not fromQuest[1] then
+        return island
+    end
+    local p = string.lower(fromQuest[1])
+    for _, isl in ipairs(islands) do
+        for _, ep in ipairs(isl.EnemyPatterns or {}) do
+            local epl = string.lower(ep)
+            if string.find(epl, p, 1, true) or string.find(p, epl, 1, true) then
+                return isl
+            end
+        end
+        for _, ep in ipairs(isl.BossPatterns or {}) do
+            local epl = string.lower(ep)
+            if string.find(epl, p, 1, true) or string.find(p, epl, 1, true) then
+                return isl
+            end
+        end
+    end
+    return island
+end
+
 BF.getPatternsFromQuestText = function(text, fallbackPatterns)
     text = string.lower(tostring(text or ""))
     if text == "" then return fallbackPatterns end
@@ -3158,7 +3200,7 @@ BF.startFarm = function()
             end
 
             local level = BF.getPlayerLevel()
-            local island = BF.getIslandForLevel(level)
+            local island = BF.resolveFarmIsland(level)
             local hrp = character:FindFirstChild("HumanoidRootPart")
 
             -- Level 700-725: make sure the normal Raider pattern is selected.
@@ -3201,19 +3243,23 @@ BF.startFarm = function()
             if level ~= currentLevel then
                 currentLevel = level
                 lastLevelForStats = level
-                lockedEnemy = nil
-                heightLocked = false
-                isBossTarget = false
-                underwaterEntryDone = false
-                underwaterEntryStarted = false
+                -- Keep fighting current quest mobs until TrackedQuestFrame is gone
                 if not BF.hasActiveQuest() then
+                    lockedEnemy = nil
+                    heightLocked = false
+                    isBossTarget = false
+                    underwaterEntryDone = false
+                    underwaterEntryStarted = false
                     questAccepted = false
                     currentQuestType = "normal"
                     state = "ISLAND"
-                end
-                if island.Name ~= BF.lastIslandName then
-                    BF.lastIslandName = island.Name
-                    BF.notifyUser("New Island", "Now farming: " .. island.Name)
+                    if island.Name ~= BF.lastIslandName then
+                        BF.lastIslandName = island.Name
+                        BF.notifyUser("New Island", "Now farming: " .. island.Name)
+                    end
+                else
+                    -- level-up mid-quest: stay on quest island/mobs, keep attacking
+                    BF.notifyUser("Level Up", "Finishing current quest first", 3)
                 end
             end
 
@@ -3314,15 +3360,7 @@ BF.startFarm = function()
                     isBossTarget = true
                 else
                     isBossTarget = false
-                    local patternInfo = BF.getPatterns(island, currentQuestType)
-                    -- Prefer mob name from TrackedQuestFrame ("Defeat 8 Brutes")
-                    if BF.hasActiveQuest() then
-                        local _, qtext = BF.getActiveQuestInfo()
-                        local fromQuest = BF.getPatternsFromQuestText(qtext, patternInfo.patterns)
-                        if fromQuest and #fromQuest > 0 then
-                            patternInfo = { patterns = fromQuest, includeBossAttr = false }
-                        end
-                    end
+                    local patternInfo = BF.resolveFarmPatterns(island, currentQuestType)
                     local allTargets = BF.getMatchingEnemies(island, patternInfo)
                     if #allTargets == 0 then
                         lockedEnemy = nil
@@ -3378,7 +3416,7 @@ BF.startFarm = function()
                                     BF.setFlyTarget(targetPos + Vector3.new(0, hover, 0), false)
                                     heightLocked = false
 
-                                    local patternInfo = BF.getPatterns(island, currentQuestType)
+                                    local patternInfo = BF.resolveFarmPatterns(island, currentQuestType)
                                     local allTargets = BF.getMatchingEnemies(island, patternInfo)
                                     local maxN = config.maxClusterSize or 15
                                     -- Pull range (large) vs attack range (small) were mixed before
@@ -3445,7 +3483,7 @@ BF.startFarm = function()
                     isBossTarget = true
                     state = "COMBAT"
                 else
-                    local patternInfo = BF.getPatterns(island, currentQuestType)
+                    local patternInfo = BF.resolveFarmPatterns(island, currentQuestType)
                     local enemies = BF.getMatchingEnemies(island, patternInfo)
                     if #enemies > 0 then
                         state = "COMBAT"
@@ -3865,8 +3903,145 @@ end
 -- =============================================
 -- VAXORIN UI CREATION (if successful)
 -- =============================================
+
+-- =============================================
+-- FPS BOOSTER + ISLAND FLY
+-- =============================================
+BF.fpsBoostOn = false
+
+BF.applyFpsBoost = function(on)
+    BF.fpsBoostOn = on and true or false
+    pcall(function()
+        local lighting = game:GetService("Lighting")
+        if BF.fpsBoostOn then
+            settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
+            pcall(function()
+                UserSettings():GetService("UserGameSettings").SavedQualityLevel = Enum.SavedQualitySetting.QualityLevel1
+            end)
+            lighting.GlobalShadows = false
+            lighting.FogEnd = 9e9
+            lighting.Brightness = 1
+            pcall(function()
+                workspace.Terrain.WaterWaveSize = 0
+                workspace.Terrain.WaterWaveSpeed = 0
+                workspace.Terrain.WaterReflectance = 0
+                workspace.Terrain.WaterTransparency = 1
+            end)
+            pcall(function()
+                for _, v in ipairs(workspace:GetDescendants()) do
+                    if v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Smoke") or v:IsA("Fire") or v:IsA("Sparkles") then
+                        v.Enabled = false
+                    elseif v:IsA("Explosion") then
+                        v:Destroy()
+                    end
+                end
+            end)
+            BF.notifyUser("FPS", "Boost ON", 2)
+        else
+            settings().Rendering.QualityLevel = Enum.QualityLevel.Automatic
+            lighting.GlobalShadows = true
+            BF.notifyUser("FPS", "Boost OFF", 2)
+        end
+    end)
+end
+
+BF.getIslandTeleportList = function()
+    local list = {}
+    local seen = {}
+    for _, isl in ipairs(islands) do
+        if isl.Pos and not seen[isl.Name] then
+            seen[isl.Name] = true
+            table.insert(list, { Name = isl.Name, Pos = isl.Pos })
+        end
+    end
+    pcall(function()
+        local locs = workspace:FindFirstChild("_WorldOrigin") and workspace._WorldOrigin:FindFirstChild("Locations")
+        if not locs then return end
+        for _, loc in ipairs(locs:GetChildren()) do
+            if loc:IsA("BasePart") and not seen[loc.Name] then
+                seen[loc.Name] = true
+                table.insert(list, { Name = loc.Name, Pos = loc.Position })
+            elseif loc:IsA("Model") and not seen[loc.Name] then
+                local p = loc:FindFirstChildWhichIsA("BasePart")
+                if p then
+                    seen[loc.Name] = true
+                    table.insert(list, { Name = loc.Name, Pos = p.Position })
+                end
+            end
+        end
+    end)
+    table.sort(list, function(a, b) return a.Name < b.Name end)
+    return list
+end
+
+BF.flyToIslandByName = function(name)
+    if not name or name == "" then return end
+    local list = BF.getIslandTeleportList()
+    local target = nil
+    for _, e in ipairs(list) do
+        if e.Name == name then target = e break end
+    end
+    if not target then
+        for _, e in ipairs(list) do
+            if string.find(string.lower(e.Name), string.lower(name), 1, true) then
+                target = e
+                break
+            end
+        end
+    end
+    if not target then
+        BF.notifyUser("Island", "Not found: " .. tostring(name), 3)
+        return
+    end
+    pcall(function()
+        if not BF.flying then BF.enableFly() end
+        BF.setFlyTarget(target.Pos + Vector3.new(0, 25, 0), false)
+    end)
+    BF.notifyUser("Island", "Flying to " .. target.Name, 3)
+end
+
+
 if useVaxorin and window then
     local mainTab = window:CreateTab("Farm")
+
+    local miscTab = window:CreateTab("Misc")
+    local fpsSection = miscTab:CreateSection({Name = "Performance"})
+    fpsSection:CreateToggle({
+        Name = "FPS Booster",
+        CurrentValue = false,
+        Flag = "Misc.FPS",
+        Save = true,
+        Callback = function(v) BF.applyFpsBoost(v) end,
+    })
+
+    local islandSection = miscTab:CreateSection({Name = "Fly to Island"})
+    local islandNames = {}
+    pcall(function()
+        for _, e in ipairs(BF.getIslandTeleportList()) do
+            table.insert(islandNames, e.Name)
+        end
+    end)
+    if #islandNames == 0 then islandNames = {"Jungle (Normal)", "Pirate Village", "Desert 1"} end
+    islandSection:CreateDropdown({
+        Name = "Island",
+        Options = islandNames,
+        CurrentOption = islandNames[1],
+        Flag = "Misc.IslandSelect",
+        Save = false,
+        Callback = function(v)
+            -- dropdown may pass string or table
+            local name = v
+            if type(v) == "table" then name = v[1] or v.Name or tostring(v) end
+            BF._selectedIslandFly = tostring(name)
+        end,
+    })
+    islandSection:CreateButton({
+        Name = "Fly to Selected Island",
+        Callback = function()
+            BF.flyToIslandByName(BF._selectedIslandFly or islandNames[1])
+        end,
+    })
+
     local espTab = window:CreateTab("ESP")
     local MoneyTab = window:CreateTab("Auto Money")
     local combatTab = window:CreateTab("Combat")
