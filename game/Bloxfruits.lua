@@ -163,7 +163,7 @@ local config = {
     bossHitsPerCycle = 35,
     clusterEnabled = true,
     clusterHeight = 12,
-    maxClusterSize = 25,
+    maxClusterSize = 30,
     clusterRange = 300, -- how far to pull mobs into cluster
     statEnabled = false,
     statsToAdd = {"Melee", "Defense"},
@@ -179,6 +179,7 @@ local config = {
     bossSpawnNotify = true,
     autoSeaProgress = false, -- off by default until stable
     autoSecrets = false, -- Update 30 island secrets (windmill etc.)
+    autoRandomFruit = false, -- Zioles / Gacha random fruit (2h CD, Lv50+)
 }
 
 -- =============================================
@@ -351,43 +352,67 @@ local function fireAssetsHit(bodyPart)
     return fired
 end
 
+-- QuantumOnyx-style: all living targets within 70 studs of player → one bladeHits packet
+local function expandTargetsInHitRange(targets, maxDist)
+    maxDist = maxDist or 70
+    local char = LocalPlayer.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return targets end
+    local byModel = {}
+    for _, t in ipairs(targets or {}) do
+        if t then byModel[t] = true end
+    end
+    -- also pull any same-folder enemies near player (cluster may miss some)
+    local folder = Workspace:FindFirstChild("Enemies")
+    if folder then
+        for _, enemy in ipairs(folder:GetChildren()) do
+            if enemy:IsA("Model") and not byModel[enemy] then
+                local root = enemy:FindFirstChild("HumanoidRootPart")
+                local hum = enemy:FindFirstChildOfClass("Humanoid")
+                if root and hum and hum.Health > 0 then
+                    if (root.Position - hrp.Position).Magnitude <= maxDist then
+                        -- only if name matches any already targeted type
+                        local match = false
+                        for t in pairs(byModel) do
+                            if t.Name == enemy.Name then match = true break end
+                        end
+                        if match or #targets == 0 then
+                            byModel[enemy] = true
+                        end
+                    end
+                end
+            end
+        end
+    end
+    local list = {}
+    for m in pairs(byModel) do
+        table.insert(list, m)
+    end
+    return list
+end
+
 local function fireCombatHit(targets)
     if not targets or #targets == 0 then return false end
+    targets = expandTargetsInHitRange(targets, 70)
     local primary, hits = buildBladeHits(targets)
     if not primary or #hits == 0 then return false end
 
-    -- 1) Game's own SendHitsToServer with FULL blade list
-    local send = resolveSendHits()
-    if send then
-        pcall(function()
-            send(primary, hits)
-        end)
-        -- second pass: each enemy as primary (some servers only process first)
-        for _, pair in ipairs(hits) do
-            pcall(function()
-                send(pair[2], hits)
-            end)
-        end
-    end
-
-    -- 2) RegisterAttack + RegisterHit (full list, multiple times)
+    -- QuantumOnyx: RegisterAttack + SendHitsToServer(closest, full list)
     local RegisterAttack, RegisterHit = getCombatRemotes()
     if RegisterAttack then
-        pcall(function() RegisterAttack:FireServer(0) end)
+        pcall(function() RegisterAttack:FireServer(0.05) end)
+    end
+
+    local send = resolveSendHits()
+    if send then
+        pcall(function() send(primary, hits) end)
     end
     if RegisterHit then
         pcall(function() RegisterHit:FireServer(primary, hits) end)
-        for _, pair in ipairs(hits) do
-            local root = pair[1]:FindFirstChild("HumanoidRootPart") or pair[2]
-            pcall(function() RegisterHit:FireServer(root, hits) end)
-            pcall(function() RegisterHit:FireServer(pair[2], hits) end)
-        end
     end
 
-    -- 3) LeftClickRemote on tool
     fireLeftClickRemote(primary)
 
-    -- 4) CombatController:Attack(tool)
     pcall(function()
         local cc = resolveCombatController()
         local tool = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
@@ -396,7 +421,6 @@ local function fireCombatHit(targets)
         end
     end)
 
-    -- 5) Assets Cobalt remote — every part
     for _, pair in ipairs(hits) do
         fireAssetsHit(pair[2])
     end
@@ -549,7 +573,7 @@ local islands = {
         Quest = {"StartQuest","JungleQuest",2}, EnemyPatterns = {"Gorilla"},
         BossQuest = {"StartQuest","JungleQuest",3}, BossPatterns = {"The Gorilla King", "Gorilla King"},
         isBoss = true},
-    {Name = "Chef", Min = 55, Max = 70, Pos = Vector3.new(-1121, 55, 4121),
+    {Name = "Chef", Min = 55, Max = 60, Pos = Vector3.new(-1121, 55, 4121),
         Quest = {"StartQuest","BuggyQuest1",2}, EnemyPatterns = {"Brute"},
         BossQuest = {"StartQuest","BuggyQuest1",3}, BossPatterns = {"Chef"},
         isBoss = true},
@@ -3349,6 +3373,103 @@ function stopFarm()
 end
 
 
+
+-- =============================================
+-- AUTO RANDOM FRUIT (Zioles Gacha)
+-- Classic: CommF_ "Cousin","BuyItem"
+-- New: Modules.Net RF/GachaNetworkRF ZiolesGacha
+-- Cooldown ~2 hours, Level 50+
+-- =============================================
+local randomFruitRunning = false
+local randomFruitTask = nil
+local _lastRandomFruitAt = 0
+
+local function getGachaRemote()
+    local modules = ReplicatedStorage:FindFirstChild("Modules")
+    local net = modules and modules:FindFirstChild("Net")
+    if not net then return nil end
+    return net:FindFirstChild("RF/GachaNetworkRF") or net:FindFirstChild("GachaNetworkRF")
+end
+
+local function buyRandomFruitOnce()
+    local lvl = getPlayerLevel()
+    if lvl < 50 then
+        return false, "need level 50+"
+    end
+    -- 2h soft client cooldown (server still enforces)
+    if (os.clock() - _lastRandomFruitAt) < 10 then
+        return false, "throttle"
+    end
+
+    local okAny = false
+    local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+    local comm = remotes and remotes:FindFirstChild("CommF_")
+
+    -- Legacy Cousin buy
+    if comm then
+        local ok = pcall(function()
+            comm:InvokeServer("Cousin", "BuyItem")
+        end)
+        if ok then okAny = true end
+        pcall(function()
+            comm:InvokeServer("BuyFruit", "Random")
+        end)
+    end
+
+    -- Update 30 GachaNetworkRF
+    local gacha = getGachaRemote()
+    if gacha then
+        pcall(function()
+            gacha:InvokeServer({
+                Context = "getGachaFromBoxName",
+                BoxName = "ZiolesGacha",
+            })
+        end)
+        pcall(function()
+            gacha:InvokeServer({
+                BoxName = "ZiolesGacha",
+                Context = "Buy",
+                SpokeNPC = "Blox Fruit Gacha",
+            })
+        end)
+        pcall(function()
+            gacha:InvokeServer({
+                BoxName = "ZiolesGacha",
+                Context = "Check",
+                SpokeNPC = "Blox Fruit Gacha",
+            })
+        end)
+        okAny = true
+    end
+
+    if okAny then
+        _lastRandomFruitAt = os.clock()
+        notifyUser("Gacha", "Random fruit request sent (2h CD if success)", 4)
+    end
+    return okAny
+end
+
+local function startAutoRandomFruit()
+    if randomFruitRunning then return end
+    randomFruitRunning = true
+    notifyUser("Gacha", "Auto Random Fruit ON", 3)
+    randomFruitTask = task.spawn(function()
+        while randomFruitRunning do
+            if config.autoRandomFruit then
+                pcall(buyRandomFruitOnce)
+            end
+            -- check every 5 min (server CD is 2h)
+            task.wait(300)
+        end
+    end)
+end
+
+local function stopAutoRandomFruit()
+    randomFruitRunning = false
+    if randomFruitTask then pcall(function() task.cancel(randomFruitTask) end) randomFruitTask = nil end
+    notifyUser("Gacha", "Auto Random Fruit OFF", 2)
+end
+
 -- =============================================
 -- SEA1 ISLAND SECRETS (Update 30) — partial auto
 -- Pirate Village: Free the Windmill = cut 5 ropes with sword
@@ -3770,6 +3891,21 @@ if useVaxorin and window then
     })
 
     local fruitSection = fruitTab:CreateSection({Name = "Fruit Notifier"})
+    fruitSection:CreateToggle({
+        Name = "Auto Random Fruit (Gacha)",
+        CurrentValue = false,
+        Flag = "Fruit.AutoRandom", Save = true,
+        Callback = function(v)
+            config.autoRandomFruit = v
+            if v then startAutoRandomFruit() else stopAutoRandomFruit() end
+        end,
+    })
+    fruitSection:CreateButton({
+        Name = "Buy Random Fruit Once",
+        Callback = function()
+            buyRandomFruitOnce()
+        end,
+    })
     fruitSection:CreateToggle({
         Name = "Fruit Notifier",
         CurrentValue = config.fruitNotifier,
