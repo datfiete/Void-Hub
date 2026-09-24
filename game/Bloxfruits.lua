@@ -356,25 +356,31 @@ local function fireCombatHit(targets)
     local primary, hits = buildBladeHits(targets)
     if not primary or #hits == 0 then return false end
 
-    -- 1) Game's own SendHitsToServer (what working hubs use)
+    -- 1) Game's own SendHitsToServer with FULL blade list
     local send = resolveSendHits()
     if send then
         pcall(function()
             send(primary, hits)
         end)
+        -- second pass: each enemy as primary (some servers only process first)
+        for _, pair in ipairs(hits) do
+            pcall(function()
+                send(pair[2], hits)
+            end)
+        end
     end
 
-    -- 2) RegisterAttack + RegisterHit
+    -- 2) RegisterAttack + RegisterHit (full list, multiple times)
     local RegisterAttack, RegisterHit = getCombatRemotes()
     if RegisterAttack then
         pcall(function() RegisterAttack:FireServer(0) end)
     end
     if RegisterHit then
         pcall(function() RegisterHit:FireServer(primary, hits) end)
-        -- some builds want HRP as first arg
-        local root = hits[1][1]:FindFirstChild("HumanoidRootPart")
-        if root then
+        for _, pair in ipairs(hits) do
+            local root = pair[1]:FindFirstChild("HumanoidRootPart") or pair[2]
             pcall(function() RegisterHit:FireServer(root, hits) end)
+            pcall(function() RegisterHit:FireServer(pair[2], hits) end)
         end
     end
 
@@ -390,12 +396,11 @@ local function fireCombatHit(targets)
         end
     end)
 
-    -- 5) Assets Cobalt remote
+    -- 5) Assets Cobalt remote — every part
     for _, pair in ipairs(hits) do
         fireAssetsHit(pair[2])
     end
 
-    -- NO mouse click spam — SendHitsToServer / RegisterHit is enough
     return true
 end
 
@@ -421,7 +426,7 @@ local function collectNearbyTargets(allTargets, playerRoot, lockedEnemy, maxCoun
     local list = {}
     local seen = {}
     local now = os.clock()
-    local shouldBring = (now - lastBringAt) >= 0.12
+    local shouldBring = (now - lastBringAt) >= 0.06
     if shouldBring then
         lastBringAt = now
     end
@@ -637,7 +642,6 @@ local islands = {
         BossQuest = {"StartQuest","ForgottenQuest",3}, BossPatterns = {"Tide Keeper"},
         isBoss = true},
 }
-
 
 table.sort(islands, function(a,b) return a.Min < b.Min end)
 
@@ -1058,27 +1062,44 @@ local function getIslandForLevel(level)
     return selectedList[1]
 end
 
-local function getActiveQuestInfo()
-    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
-    if not playerGui then return false, "", "" end
-    local main = playerGui:FindFirstChild("Main")
-    if not main then return false, "", "" end
-    local quest = main:FindFirstChild("Quest")
-    if not quest or quest.Visible ~= true then return false, "", "" end
-    local title, body = "", ""
-    pcall(function()
-        for _, d in ipairs(quest:GetDescendants()) do
-            if d:IsA("TextLabel") and d.Visible and d.Text and #d.Text > 0 then
-                if title == "" then title = d.Text else body = body .. " " .. d.Text end
-            end
+-- TrackedQuestFrame = has quest; gone = no quest / completed
+-- Text: TrackedQuestFrame.Frame.header.textLabel ContentText e.g. "Defeat 8 Brutes"
+local function getTrackedQuestLabel()
+    local pg = LocalPlayer:FindFirstChild("PlayerGui")
+    if not pg then return nil end
+    local tqf = pg:FindFirstChild("TrackedQuestFrame")
+    if not tqf then return nil end
+    local frame = tqf:FindFirstChild("Frame")
+    local header = frame and frame:FindFirstChild("header")
+    local label = header and (header:FindFirstChild("textLabel") or header:FindFirstChild("TextLabel"))
+    if label and (label:IsA("TextLabel") or label:IsA("TextButton")) then
+        return label
+    end
+    -- fallback: any TextLabel under TrackedQuestFrame
+    for _, d in ipairs(tqf:GetDescendants()) do
+        if d:IsA("TextLabel") and d.Text and #d.Text > 2 then
+            return d
         end
-    end)
-    return true, title, body
+    end
+    return nil
 end
 
 local function hasActiveQuest()
-    local a = getActiveQuestInfo()
-    return a == true
+    local pg = LocalPlayer:FindFirstChild("PlayerGui")
+    if not pg then return false end
+    return pg:FindFirstChild("TrackedQuestFrame") ~= nil
+end
+
+local function getActiveQuestInfo()
+    if not hasActiveQuest() then
+        return false, "", ""
+    end
+    local label = getTrackedQuestLabel()
+    local text = ""
+    if label then
+        text = tostring(label.ContentText or label.Text or "")
+    end
+    return true, text, text
 end
 
 local function activeQuestMatches(...)
@@ -1090,6 +1111,38 @@ local function activeQuestMatches(...)
         if n ~= "" and string.find(hay, n, 1, true) then return true end
     end
     return false
+end
+
+-- Derive farm patterns from tracked quest text when possible
+local function getPatternsFromQuestText(text, fallbackPatterns)
+    text = string.lower(tostring(text or ""))
+    if text == "" then return fallbackPatterns end
+    -- "Defeat 8 Brutes" / "Defeat Bandits" etc.
+    local known = {
+        "bandit", "trainee", "monkey", "gorilla", "pirate", "brute",
+        "desert bandit", "desert officer", "snow bandit", "snowman",
+        "chief petty officer", "sky bandit", "dark master", "prisoner",
+        "dangerous prisoner", "toga warrior", "gladiator",
+        "military soldier", "military spy", "fishman warrior", "fishman commando",
+        "god's guard", "shanda", "royal squad", "royal soldier",
+        "galley pirate", "galley captain", "raider", "mercenary",
+        "swan pirate", "factory staff", "marine lieutenant", "marine captain",
+        "zombie", "vampire", "snow trooper", "winter warrior",
+        "lab subordinate", "horned warrior", "magma ninja", "lava pirate",
+        "ship deckhand", "ship engineer", "ship steward", "ship officer",
+        "arctic warrior", "snow lurker", "sea soldier", "water fighter",
+    }
+    local found = {}
+    for _, name in ipairs(known) do
+        if string.find(text, name, 1, true) then
+            -- prefer longer matches: store as-is
+            table.insert(found, name)
+        end
+    end
+    if #found == 0 then return fallbackPatterns end
+    -- use longest match first
+    table.sort(found, function(a, b) return #a > #b end)
+    return { found[1] }
 end
 
 -- =============================================
@@ -2996,60 +3049,20 @@ function startFarm()
                 end
             end
 
-            -- Quest: NEW quest ONLY after real completion.
-            -- Empty enemies ≠ completed (mobs respawn; do NOT re-accept).
-            -- Real complete = saw progress full (e.g. 5/5) while GUI visible,
-            -- then GUI stayed hidden ≥3s.
+
+            -- QUEST: TrackedQuestFrame exists = has quest (never StartQuest)
+            --        missing = no quest → accept once (cooldown)
             do
                 if not _lastQuestAcceptAt then _lastQuestAcceptAt = 0 end
-                if _questHadFullProgress == nil then _questHadFullProgress = false end
-                if not _questHiddenSince then _questHiddenSince = nil end
-
-                local qVisible = false
-                local title, body = "", ""
-                pcall(function()
-                    local main = LocalPlayer:FindFirstChild("PlayerGui")
-                        and LocalPlayer.PlayerGui:FindFirstChild("Main")
-                    local q = main and main:FindFirstChild("Quest")
-                    qVisible = q and q.Visible == true
-                end)
-                if qVisible then
-                    local _, t, b = getActiveQuestInfo()
-                    title, body = tostring(t or ""), tostring(b or "")
-                end
-                local text = string.lower(title .. " " .. body)
-
-                if qVisible then
+                if hasActiveQuest() then
                     questAccepted = true
-                    _questHiddenSince = nil
-                    -- track full progress while visible
-                    local a, b = string.match(text, "(%d+)%s*/%s*(%d+)")
-                    if a and b then
-                        local na, nb = tonumber(a), tonumber(b)
-                        if na and nb and nb > 0 and na >= nb then
-                            _questHadFullProgress = true
-                        end
-                    end
-                    if string.find(text, "quest completed") or string.find(text, "completed!") then
-                        _questHadFullProgress = true
-                    end
                 else
-                    -- GUI hidden: ONLY complete if we previously saw full progress
-                    if questAccepted and _questHadFullProgress then
-                        if not _questHiddenSince then
-                            _questHiddenSince = os.clock()
-                        elseif (os.clock() - _questHiddenSince) >= 3
-                            and (os.clock() - _lastQuestAcceptAt) >= 8 then
-                            questAccepted = false
-                            _questHadFullProgress = false
-                            _questHiddenSince = nil
-                            lockedEnemy = nil
+                    -- frame gone = finished or none → may take new quest
+                    if (os.clock() - _lastQuestAcceptAt) >= 3 then
+                        questAccepted = false
+                        if state == "COMBAT" or state == "PATROL" then
                             state = "QUEST"
                         end
-                    else
-                        -- hidden without full progress = flicker / UI bug — ignore
-                        _questHiddenSince = nil
-                        -- keep questAccepted as-is so we never StartQuest mid-progress
                     end
                 end
             end
@@ -3057,14 +3070,16 @@ function startFarm()
             if level ~= currentLevel then
                 currentLevel = level
                 lastLevelForStats = level
-                questAccepted = false
-                state = "ISLAND"
                 lockedEnemy = nil
                 heightLocked = false
-                currentQuestType = "normal"
                 isBossTarget = false
                 underwaterEntryDone = false
                 underwaterEntryStarted = false
+                if not hasActiveQuest() then
+                    questAccepted = false
+                    currentQuestType = "normal"
+                    state = "ISLAND"
+                end
                 if island.Name ~= lastIslandName then
                     lastIslandName = island.Name
                     notifyUser("New Island", "Now farming: " .. island.Name)
@@ -3113,21 +3128,14 @@ function startFarm()
             end
 
             if state == "QUEST" then
-                local qVisible = false
-                pcall(function()
-                    local main = LocalPlayer.PlayerGui:FindFirstChild("Main")
-                    local q = main and main:FindFirstChild("Quest")
-                    qVisible = q and q.Visible == true
-                end)
-                -- Already on a quest → never StartQuest again (resets progress!)
-                if qVisible or questAccepted then
+                -- TrackedQuestFrame present = already have quest
+                if hasActiveQuest() then
                     questAccepted = true
                     state = "COMBAT"
                     continue
                 end
-
                 if not _lastQuestAcceptAt then _lastQuestAcceptAt = 0 end
-                if (os.clock() - _lastQuestAcceptAt) < 15 then
+                if (os.clock() - _lastQuestAcceptAt) < 3 then
                     state = "COMBAT"
                     continue
                 end
@@ -3144,12 +3152,9 @@ function startFarm()
                         currentQuestType = desiredType
                         questAccepted = true
                         state = "COMBAT"
-                        if desiredType == "boss" then
-                            notifyUser("Boss Quest", "Boss detected – switched to boss quest.")
-                        end
-                        task.wait(1)
+                        task.wait(0.8)
                     else
-                        task.wait(2)
+                        task.wait(1.5)
                     end
                 else
                     state = "COMBAT"
@@ -3170,12 +3175,7 @@ function startFarm()
 
                 local bossEnemy = nil
                 if island.isBoss then bossEnemy = findBossInWorkspace(island) end
-                if bossEnemy and currentQuestType ~= "boss" then
-                    abandonQuest()
-                    questAccepted = false
-                    state = "QUEST"
-                    continue
-                end
+                -- no AbandonQuest mid-run
 
                 if bossEnemy and bossEnemy.Parent and bossEnemy:FindFirstChildOfClass("Humanoid")
                     and bossEnemy:FindFirstChildOfClass("Humanoid").Health > 0 then
@@ -3184,6 +3184,14 @@ function startFarm()
                 else
                     isBossTarget = false
                     local patternInfo = getPatterns(island, currentQuestType)
+                    -- Prefer mob name from TrackedQuestFrame ("Defeat 8 Brutes")
+                    if hasActiveQuest() then
+                        local _, qtext = getActiveQuestInfo()
+                        local fromQuest = getPatternsFromQuestText(qtext, patternInfo.patterns)
+                        if fromQuest and #fromQuest > 0 then
+                            patternInfo = { patterns = fromQuest, includeBossAttr = false }
+                        end
+                    end
                     local allTargets = getMatchingEnemies(island, patternInfo)
                     if #allTargets == 0 then
                         lockedEnemy = nil
