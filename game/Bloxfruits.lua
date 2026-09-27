@@ -161,13 +161,13 @@ local config = {
     healThreshold = 30,
     aboveHeight = 15,
     attackRange = 30,
-    attackSpeed = 0.002,
+    attackSpeed = 0.04,
     bossAttackSpeed = 0.001,
-    hitsPerCycle = 40,
+    hitsPerCycle = 6,
     bossHitsPerCycle = 35,
     clusterEnabled = true,
     clusterHeight = 12,
-    maxClusterSize = 30,
+    maxClusterSize = 12,
     clusterRange = 300, -- how far to pull mobs into cluster
     statEnabled = false,
     statsToAdd = {"Melee", "Defense"},
@@ -402,38 +402,42 @@ BF.expandTargetsInHitRange = function(targets, maxDist)
     return list
 end
 
+BF._combatRemotesCache = nil
+BF._combatRemotesAt = 0
+BF._hitTick = 0
+
 BF.fireCombatHit = function(targets)
     if not targets or #targets == 0 then return false end
-    targets = BF.expandTargetsInHitRange(targets, 70)
+    -- expand every other hit only (full Enemies scan is expensive)
+    BF._hitTick = (BF._hitTick or 0) + 1
+    if BF._hitTick % 2 == 1 then
+        targets = BF.expandTargetsInHitRange(targets, 70)
+    end
     local primary, hits = BF.buildBladeHits(targets)
     if not primary or #hits == 0 then return false end
 
-    -- QuantumOnyx: RegisterAttack + SendHitsToServer(closest, full list)
-    local RegisterAttack, RegisterHit = BF.getCombatRemotes()
-    if RegisterAttack then
-        pcall(function() RegisterAttack:FireServer(0.05) end)
+    local now = os.clock()
+    if not BF._combatRemotesCache or (now - (BF._combatRemotesAt or 0)) > 5 then
+        local a, h = BF.getCombatRemotes()
+        BF._combatRemotesCache = { attack = a, hit = h }
+        BF._combatRemotesAt = now
     end
+    local RegisterAttack = BF._combatRemotesCache.attack
+    local RegisterHit = BF._combatRemotesCache.hit
 
+    -- Prefer ONE real damage path to cut remote spam (FPS)
     local send = BF.resolveSendHits()
     if send then
         pcall(function() send(primary, hits) end)
-    end
-    if RegisterHit then
+    elseif RegisterHit then
         pcall(function() RegisterHit:FireServer(primary, hits) end)
     end
-
-    BF.fireLeftClickRemote(primary)
-
-    pcall(function()
-        local cc = BF.resolveCombatController()
-        local tool = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
-        if cc and tool and type(cc.Attack) == "function" then
-            cc:Attack(tool)
-        end
-    end)
-
-    for _, pair in ipairs(hits) do
-        BF.fireAssetsHit(pair[2])
+    if RegisterAttack then
+        pcall(function() RegisterAttack:FireServer(0.05) end)
+    end
+    -- skip fireLeftClickRemote + AssetsHit every frame (big FPS drain)
+    if BF._hitTick % 4 == 0 then
+        BF.fireLeftClickRemote(primary)
     end
 
     return true
@@ -447,7 +451,10 @@ end
 BF.clusterStackPos = nil
 BF.lastBringAt = 0
 
+BF._simRadiusAt = 0
 BF.ensureSimRadius = function()
+    if os.clock() - (BF._simRadiusAt or 0) < 5 then return end
+    BF._simRadiusAt = os.clock()
     pcall(function()
         sethiddenproperty(LocalPlayer, "SimulationRadius", 10000)
     end)
@@ -1525,6 +1532,7 @@ BF.selectAttackWeapon = function()
     end
 end
 
+BF._lastWeaponSelectAt = 0
 BF.attackTargets = function(targets, speed, hits)
     if not targets or #targets == 0 then return end
 
@@ -1540,34 +1548,28 @@ BF.attackTargets = function(targets, speed, hits)
     end
     if #validTargets == 0 then return end
 
-    local character = LocalPlayer.Character
-    local hrp = character and character:FindFirstChild("HumanoidRootPart")
-    if hrp then
-        local firstHead = validTargets[1]:FindFirstChild("Head")
-        if firstHead then
-            hrp.CFrame = CFrame.new(hrp.Position, firstHead.Position)
-        end
+    -- weapon select at most every 2s
+    if os.clock() - (BF._lastWeaponSelectAt or 0) > 2 then
+        BF._lastWeaponSelectAt = os.clock()
+        pcall(BF.selectAttackWeapon)
     end
 
-    BF.selectAttackWeapon()
-
-    -- speed is delay between multi-hit packets; clamp so it never stalls
-    local delay = tonumber(speed) or 0.01
-    if delay < 0.001 then delay = 0.001 end
-    if delay > 0.05 then delay = 0.05 end
+    -- FPS-safe clamps: was 40 hits * 0.002s = freezes client
+    local delay = tonumber(speed) or 0.04
+    if delay < 0.025 then delay = 0.025 end
+    if delay > 0.12 then delay = 0.12 end
     local n = math.max(1, math.floor(tonumber(hits) or 1))
+    if n > 10 then n = 10 end
 
     for _ = 1, n do
         local alive = {}
         for _, target in ipairs(validTargets) do
             local hum = target:FindFirstChildOfClass("Humanoid")
-            local head = target:FindFirstChild("Head")
-            if target.Parent and hum and hum.Health > 0 and head then
+            if target.Parent and hum and hum.Health > 0 then
                 table.insert(alive, target)
             end
         end
         if #alive == 0 then break end
-        -- one RegisterHit packet hits the WHOLE cluster
         BF.fireCombatHit(alive)
         task.wait(delay)
     end
@@ -3535,7 +3537,6 @@ BF.startFarm = function()
                                     )
 
                                     if #clusterTargets > 0 then
-                                        -- stand above the fixed stack (not a moving flyer underpoint)
                                         if BF.clusterStackPos then
                                             local hover = math.clamp(config.aboveHeight or 8, 4, 12)
                                             BF.setFlyTarget(BF.clusterStackPos + Vector3.new(0, hover, 0), false)
@@ -3548,11 +3549,12 @@ BF.startFarm = function()
                                     BF.attackEnemy(lockedEnemy, speed, hits)
                                 end
                             else
-                                -- single target: also keep height moderate for valid hits
                                 local hover = math.clamp(config.aboveHeight or 8, 4, 14)
                                 BF.setFlyTarget(targetPos + Vector3.new(0, hover, 0), false)
                                 BF.attackEnemy(lockedEnemy, speed, hits)
                             end
+                            -- give the client a frame to breathe (was tight-loop 3-7 FPS)
+                            task.wait(0.03)
                         end
                     else
                         lockedEnemy = nil
@@ -4432,7 +4434,7 @@ if useVaxorin and window then
     })
     combatSection:CreateSlider({
         Name = "Attack Speed (normal)",
-        Min = 0.001, Max = 0.05, CurrentValue = config.attackSpeed, Rounding = 0.001,
+        Min = 0.025, Max = 0.15, CurrentValue = config.attackSpeed, Rounding = 0.001,
         Flag = "Combat.AttackSpeed", Save = true,
         Callback = function(v) config.attackSpeed = v end,
     })
@@ -4444,7 +4446,7 @@ if useVaxorin and window then
     })
     combatSection:CreateSlider({
         Name = "Hits per Cycle (normal)",
-        Min = 5, Max = 30, CurrentValue = config.hitsPerCycle, Rounding = 1,
+        Min = 1, Max = 15, CurrentValue = config.hitsPerCycle, Rounding = 1,
         Flag = "Combat.HitsPerCycle", Save = true,
         Callback = function(v) config.hitsPerCycle = v end,
     })
