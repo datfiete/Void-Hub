@@ -179,7 +179,9 @@ local config = {
     fruitNotifier = true,        -- fruit notifier toggle
     fruitAutoCollect = false,
     fruitFilterCollect = true,   -- only auto-collect valuable fruits
-    fruitFilterNotify = false,   -- if true, only notify valuable; false = notify all
+    fruitFilterNotify = false,
+    fruitEspEnabled = true,
+    fruitStoreAfterCollect = true,
     enemyEspEnabled = false,
     enemyEspMaxDist = 2000,
     enemyEspShowName = true,
@@ -832,8 +834,11 @@ BF.disableFly = function()
 end
 
 BF.setFlyTarget = function(position, preserveHeight)
-    -- While a selected boss is UP/? and hunt is active, Auto Farm must not steal the target.
-    -- Boss hunt sets BF._bossFlyUnlock for its own calls.
+    if BF.fruitOwnsFly and type(BF.fruitOwnsFly) == "function" and BF.fruitOwnsFly() then
+        if not BF._fruitFlyUnlock then
+            return
+        end
+    end
     if BF.bossHuntOwnsFly and type(BF.bossHuntOwnsFly) == "function" and BF.bossHuntOwnsFly() then
         if not BF._bossFlyUnlock then
             return
@@ -1031,7 +1036,129 @@ end
 -- FRUIT NOTIFIER (SIMPLE)
 -- =============================================
 BF.fruitNotifierRunning = false
-BF.fruitNotified = {} -- instance or name key -> true (already announced)
+BF.fruitNotified = {}
+BF._fruitCollectActive = false
+BF._fruitTargetPos = nil
+BF._fruitFlyUnlock = false
+BF._fruitEspFolder = nil
+BF._fruitEspMap = {} -- key -> {bb, label, obj}
+
+BF.fruitOwnsFly = function()
+    return BF._fruitCollectActive == true and BF._fruitTargetPos ~= nil
+end
+
+BF.getFruitStoreKey = function(displayName)
+    local n = tostring(displayName or "")
+    n = n:gsub("%s*[Ff]ruit%s*", ""):gsub("^%s+", ""):gsub("%s+$", "")
+    if n == "" then return nil end
+    if string.find(n, "-", 1, true) then return n end
+    -- "Spin" -> "Spin-Spin"
+    local word = n:match("^(%S+)") or n
+    return word .. "-" .. word
+end
+
+BF.storeFruitInInventory = function()
+    if not config.fruitStoreAfterCollect then return end
+    local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+    local comm = remotes and remotes:FindFirstChild("CommF_")
+    if not comm then return end
+    local char = LocalPlayer.Character
+    local bp = LocalPlayer:FindFirstChild("Backpack")
+    local tools = {}
+    if char then
+        for _, t in ipairs(char:GetChildren()) do
+            if t:IsA("Tool") and BF.isRealFruitName and BF.isRealFruitName(t.Name) then
+                table.insert(tools, t)
+            end
+        end
+    end
+    if bp then
+        for _, t in ipairs(bp:GetChildren()) do
+            if t:IsA("Tool") and BF.isRealFruitName and BF.isRealFruitName(t.Name) then
+                table.insert(tools, t)
+            end
+        end
+    end
+    for _, tool in ipairs(tools) do
+        local key = BF.getFruitStoreKey(tool.Name)
+        if key then
+            pcall(function()
+                comm:InvokeServer("StoreFruit", key, tool)
+            end)
+            task.wait(0.2)
+        end
+    end
+end
+
+BF.ensureFruitEspFolder = function()
+    local pg = LocalPlayer:FindFirstChild("PlayerGui")
+    if not pg then return nil end
+    local f = pg:FindFirstChild("BF_FruitESP")
+    if not f then
+        f = Instance.new("Folder")
+        f.Name = "BF_FruitESP"
+        f.Parent = pg
+    end
+    BF._fruitEspFolder = f
+    return f
+end
+
+BF.clearFruitEsp = function()
+    if BF._fruitEspFolder then
+        pcall(function() BF._fruitEspFolder:ClearAllChildren() end)
+    end
+    BF._fruitEspMap = {}
+end
+
+BF.updateFruitEspEntry = function(key, obj, pos, displayName)
+    if not config.fruitEspEnabled then return end
+    local folder = BF.ensureFruitEspFolder()
+    if not folder then return end
+    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    local dist = hrp and math.floor((hrp.Position - pos).Magnitude) or 0
+
+    local entry = BF._fruitEspMap[key]
+    if not entry or not entry.bb or not entry.bb.Parent then
+        local part = BF.getFruitHandle(obj)
+        if not part and obj:IsA("Model") then
+            part = obj:FindFirstChildWhichIsA("BasePart")
+        end
+        if not part then
+            part = Instance.new("Part")
+            part.Name = "BF_FruitEspAnchor"
+            part.Anchored = true
+            part.CanCollide = false
+            part.Transparency = 1
+            part.Size = Vector3.new(1, 1, 1)
+            part.Position = pos
+            part.Parent = folder
+        end
+        local bb = Instance.new("BillboardGui")
+        bb.Name = "FruitESP"
+        bb.AlwaysOnTop = true
+        bb.Size = UDim2.new(0, 160, 0, 40)
+        bb.StudsOffset = Vector3.new(0, 3, 0)
+        bb.Adornee = part
+        bb.Parent = folder
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(1, 0, 1, 0)
+        label.BackgroundTransparency = 0.35
+        label.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+        label.TextColor3 = Color3.fromRGB(120, 255, 140)
+        label.Font = Enum.Font.GothamBold
+        label.TextSize = 14
+        label.TextStrokeTransparency = 0.5
+        label.Parent = bb
+        entry = { bb = bb, label = label, part = part }
+        BF._fruitEspMap[key] = entry
+    end
+    if entry.label then
+        entry.label.Text = string.format("%s\n%d studs", displayName, dist)
+    end
+    if entry.part and entry.part.Name == "BF_FruitEspAnchor" then
+        entry.part.Position = pos
+    end
+end
 
 -- Valuable fruits for filter (auto-collect / optional notify)
 local FRUIT_WHITELIST = {
@@ -1103,7 +1230,7 @@ BF.isWorldFruit = function(obj)
 end
 
 BF.fruitScan = function()
-    if not config.fruitNotifier and not config.fruitAutoCollect then return end
+    if not config.fruitNotifier and not config.fruitAutoCollect and not config.fruitEspEnabled then return end
 
     local candidates = {}
 
@@ -1155,7 +1282,16 @@ BF.fruitScan = function()
                 end
             end
 
+            -- ESP always when enabled
+            pcall(function()
+                BF.updateFruitEspEntry(key, v, pos, displayName)
+            end)
+
             local canCollect = config.fruitAutoCollect
+            if canCollect and config.fruitFilterCollect and not valuable then
+                canCollect = false
+            end
+            -- boss hunt still wins over fruit
             if canCollect then
                 local owns = false
                 pcall(function()
@@ -1163,15 +1299,19 @@ BF.fruitScan = function()
                 end)
                 if owns then canCollect = false end
             end
-            if canCollect and config.fruitFilterCollect and not valuable then
-                canCollect = false
-            end
             if canCollect then
-                pcall(function() BF.setFlyTarget(pos + Vector3.new(0, 5, 0), false) end)
-                task.wait(0.4)
+                -- claim flight: farm / combat must wait
+                BF._fruitCollectActive = true
+                BF._fruitTargetPos = pos
+                BF._fruitFlyUnlock = true
+                pcall(function()
+                    BF.setFlyTarget(pos + Vector3.new(0, 6, 0), false)
+                end)
+                BF._fruitFlyUnlock = false
+                task.wait(0.35)
                 local character = LocalPlayer.Character
                 local hrp = character and character:FindFirstChild("HumanoidRootPart")
-                if hrp and (hrp.Position - pos).Magnitude < 20 then
+                if hrp and (hrp.Position - pos).Magnitude < 22 then
                     pcall(function()
                         if firetouchinterest and handle then
                             firetouchinterest(hrp, handle, 0)
@@ -1183,14 +1323,23 @@ BF.fruitScan = function()
                         task.wait(0.1)
                         VirtualInputManager:SendKeyEvent(false, "E", false, game)
                     end)
+                    task.wait(0.4)
+                    pcall(BF.storeFruitInInventory)
                     BF.notifyUser("Fruit", "Collected " .. displayName, 2)
+                    BF._fruitCollectActive = false
+                    BF._fruitTargetPos = nil
                 end
                 break
             end
         end
     end
 
-        local n = 0
+        -- clear fruit claim if nothing left to collect
+    if BF._fruitCollectActive and not config.fruitAutoCollect then
+        BF._fruitCollectActive = false
+        BF._fruitTargetPos = nil
+    end
+    local n = 0
     for _ in pairs(BF.fruitNotified) do n = n + 1 end
     if n > 80 then
         BF.fruitNotified = {}
@@ -3223,7 +3372,7 @@ BF.startFarm = function()
     BF.farmRunning = true
     BF.setupRespawnRecovery()
     BF.enableFly()
-    if config.fruitNotifier then BF.startFruitNotifier() end
+    if config.fruitNotifier or config.fruitAutoCollect or config.fruitEspEnabled then BF.startFruitNotifier() end
 
     if config.autoEquip then
         task.spawn(function()
@@ -3249,6 +3398,10 @@ BF.startFarm = function()
 
         while BF.farmRunning do
             -- Boss hunt (UP/?) fully owns movement + combat; farm waits
+            if BF.fruitOwnsFly and type(BF.fruitOwnsFly) == "function" and BF.fruitOwnsFly() then
+                task.wait(0.15)
+                continue
+            end
             if BF.bossHuntOwnsFly and type(BF.bossHuntOwnsFly) == "function" and BF.bossHuntOwnsFly() then
                 task.wait(0.2)
                 continue
