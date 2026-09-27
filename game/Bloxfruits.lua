@@ -1188,173 +1188,223 @@ end
 
 BF.isJunkFruitName = function(name)
     local n = string.lower(tostring(name or "")):gsub("%s+", "")
-    -- Fruit, Fruit1, Fruit2, fruit_1, etc.
     if n == "fruit" then return true end
     if string.match(n, "^fruit%d+$") then return true end
     if string.match(n, "^fruit[%-_]%d+$") then return true end
     if n == "fruitspawn" or n == "fruitspawns" then return true end
+    if n == "handle" or n == "part" or n == "mesh" then return true end
     return false
 end
 
 BF.isRealFruitName = function(name)
     local n = string.lower(tostring(name or ""))
     if BF.isJunkFruitName(n) then return false end
-        if string.find(n, "%-") then return true end -- Type-Type pattern
-    if string.find(n, "fruit", 1, true) and not BF.isJunkFruitName(n) then
-        -- "X Fruit" with a real prefix
+    if string.find(n, "%-") then return true end
+    if string.find(n, "fruit", 1, true) then
         local base = n:gsub("%s*fruit%s*", ""):gsub("%s+", "")
-        if #base >= 3 then return true end
+        if #base >= 3 and not BF.isJunkFruitName(base) then return true end
     end
-        if BF.isValuableFruit(n) then return true end
+    if BF.isValuableFruit(n) then return true end
     return false
 end
 
-BF.isWorldFruit = function(obj)
-    if not obj then return false end
+-- Only real dropped Tools count as collectible (not FruitSpawns markers)
+BF.isCollectibleFruit = function(obj)
+    if not obj or not obj.Parent then return false end
+    if not obj:IsA("Tool") then return false end
     if BF.isJunkFruitName(obj.Name) then return false end
+    if not BF.isRealFruitName(obj.Name) then return false end
+    local parent = obj.Parent
+    if parent == LocalPlayer:FindFirstChild("Backpack") then return false end
+    if parent and parent:IsA("Model") and parent:FindFirstChildOfClass("Humanoid") then return false end
+    if parent == LocalPlayer.Character then return false end
+    return BF.getFruitHandle(obj) ~= nil
+end
 
-        if obj:IsA("Tool") then
-        local parent = obj.Parent
-        if parent and parent:IsA("Model") and parent:FindFirstChildOfClass("Humanoid") then
-            return false
-        end
-        if parent and parent:IsA("Backpack") then return false end
-        if not BF.isRealFruitName(obj.Name) then return false end
-        return BF.getFruitHandle(obj) ~= nil
-    end
+BF.isWorldFruit = function(obj)
+    return BF.isCollectibleFruit(obj)
+end
 
-        if obj:IsA("Model") and BF.isRealFruitName(obj.Name) then
-        return true
-    end
-    return false
+BF._lockedFruit = nil
+BF._lockedFruitSince = 0
+BF._lockedFruitMiss = 0
+
+BF.fruitTargetStillValid = function(obj)
+    if not obj or not obj.Parent then return false end
+    if not BF.isCollectibleFruit(obj) then return false end
+    local h = BF.getFruitHandle(obj)
+    return h ~= nil
 end
 
 BF.fruitScan = function()
     if not config.fruitNotifier and not config.fruitAutoCollect and not config.fruitEspEnabled then return end
 
     local candidates = {}
-
-    -- 1) Workspace root tools/fruits
-    for _, v in ipairs(Workspace:GetChildren()) do
-        if BF.isWorldFruit(v) then
+    local function addCand(v)
+        if v and BF.isCollectibleFruit(v) then
             table.insert(candidates, v)
         end
     end
 
-    -- 2) workspace._WorldOrigin.FruitSpawns
+    for _, v in ipairs(Workspace:GetChildren()) do
+        addCand(v)
+    end
     pcall(function()
         local wo = Workspace:FindFirstChild("_WorldOrigin")
         local fs = wo and wo:FindFirstChild("FruitSpawns")
         if not fs then return end
-        for _, v in ipairs(fs:GetChildren()) do
-            if BF.isWorldFruit(v) then
-                table.insert(candidates, v)
-            end
-        end
         for _, v in ipairs(fs:GetDescendants()) do
-            if v:IsA("Tool") and BF.isWorldFruit(v) then
-                table.insert(candidates, v)
-            end
+            if v:IsA("Tool") then addCand(v) end
         end
     end)
 
+    -- ESP for all real candidates
+    local seenEsp = {}
     for _, v in ipairs(candidates) do
         local handle = BF.getFruitHandle(v)
         local pos = handle and handle.Position
-        if (not pos) and v:IsA("Model") then
-            local okp, piv = pcall(function() return v:GetPivot().Position end)
-            if okp then pos = piv end
-        end
         if pos then
+            local key = tostring(v)
+            seenEsp[key] = true
             local displayName = v.Name
-            local key = tostring(v) .. "|" .. displayName
-            local valuable = BF.isValuableFruit(displayName)
-
+            pcall(function()
+                BF.updateFruitEspEntry(key, v, pos, displayName)
+            end)
             if not BF.fruitNotified[key] then
                 BF.fruitNotified[key] = true
+                local valuable = BF.isValuableFruit(displayName)
                 local shouldNotify = config.fruitNotifier
                 if shouldNotify and config.fruitFilterNotify and not valuable then
                     shouldNotify = false
                 end
                 if shouldNotify then
-                    local tag = valuable and " [VAL]" or ""
-                    BF.notifyUser("Fruit Detected", displayName .. tag, 4)
+                    BF.notifyUser("Fruit Detected", displayName .. (valuable and " [VAL]" or ""), 4)
                 end
-            end
-
-            -- ESP always when enabled
-            pcall(function()
-                BF.updateFruitEspEntry(key, v, pos, displayName)
-            end)
-
-            local canCollect = config.fruitAutoCollect
-            if canCollect and config.fruitFilterCollect and not valuable then
-                canCollect = false
-            end
-            -- boss hunt still wins over fruit
-            if canCollect then
-                local owns = false
-                pcall(function()
-                    if type(BF.bossHuntOwnsFly) == "function" then owns = BF.bossHuntOwnsFly() end
-                end)
-                if owns then canCollect = false end
-            end
-            if canCollect then
-                -- claim flight: farm / combat must wait
-                BF._fruitCollectActive = true
-                BF._fruitTargetPos = pos
-                BF._fruitFlyUnlock = true
-                pcall(function()
-                    BF.setFlyTarget(pos + Vector3.new(0, 6, 0), false)
-                end)
-                BF._fruitFlyUnlock = false
-                task.wait(0.35)
-                local character = LocalPlayer.Character
-                local hrp = character and character:FindFirstChild("HumanoidRootPart")
-                if hrp and (hrp.Position - pos).Magnitude < 22 then
-                    pcall(function()
-                        if firetouchinterest and handle then
-                            firetouchinterest(hrp, handle, 0)
-                            firetouchinterest(hrp, handle, 1)
-                        end
-                    end)
-                    pcall(function()
-                        VirtualInputManager:SendKeyEvent(true, "E", false, game)
-                        task.wait(0.1)
-                        VirtualInputManager:SendKeyEvent(false, "E", false, game)
-                    end)
-                    task.wait(0.4)
-                    pcall(BF.storeFruitInInventory)
-                    BF.notifyUser("Fruit", "Collected " .. displayName, 2)
-                    BF._fruitCollectActive = false
-                    BF._fruitTargetPos = nil
-                end
-                break
             end
         end
     end
+    -- prune dead ESP
+    for key, entry in pairs(BF._fruitEspMap) do
+        if not seenEsp[key] then
+            pcall(function()
+                if entry.bb then entry.bb:Destroy() end
+                if entry.part and entry.part.Name == "BF_FruitEspAnchor" then entry.part:Destroy() end
+            end)
+            BF._fruitEspMap[key] = nil
+        end
+    end
 
-        -- clear fruit claim if nothing left to collect
-    if BF._fruitCollectActive and not config.fruitAutoCollect then
+    if not config.fruitAutoCollect then
         BF._fruitCollectActive = false
         BF._fruitTargetPos = nil
+        BF._lockedFruit = nil
+        return
     end
-    local n = 0
-    for _ in pairs(BF.fruitNotified) do n = n + 1 end
-    if n > 80 then
-        BF.fruitNotified = {}
-    end
-end
 
-BF.startFruitNotifier = function()
-    if BF.fruitNotifierRunning then return end
-    BF.fruitNotifierRunning = true
-    task.spawn(function()
-        while BF.fruitNotifierRunning do
-            pcall(BF.fruitScan)
-            task.wait(2) -- never Heartbeat+wait spam
-        end
+    -- boss hunt wins
+    local bossOwns = false
+    pcall(function()
+        if type(BF.bossHuntOwnsFly) == "function" then bossOwns = BF.bossHuntOwnsFly() end
     end)
+    if bossOwns then
+        BF._fruitCollectActive = false
+        BF._fruitTargetPos = nil
+        return
+    end
+
+    -- sticky lock: keep same fruit until gone (don't hop every scan)
+    local target = BF._lockedFruit
+    if target and BF.fruitTargetStillValid(target) then
+        BF._lockedFruitMiss = 0
+    else
+        if target then
+            BF._lockedFruitMiss = (BF._lockedFruitMiss or 0) + 1
+            -- require 3 missed scans (~6s) before switching
+            if BF._lockedFruitMiss < 3 then
+                BF._fruitCollectActive = true
+                return
+            end
+        end
+        target = nil
+        BF._lockedFruit = nil
+        BF._lockedFruitMiss = 0
+
+        -- pick nearest valid fruit
+        local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        local best, bestDist = nil, math.huge
+        for _, v in ipairs(candidates) do
+            if BF.isCollectibleFruit(v) then
+                local valuable = BF.isValuableFruit(v.Name)
+                if config.fruitFilterCollect and not valuable then
+                    -- skip non-valuable when filter on
+                else
+                    local handle = BF.getFruitHandle(v)
+                    local pos = handle and handle.Position
+                    if pos and hrp then
+                        local d = (hrp.Position - pos).Magnitude
+                        if d < bestDist then
+                            bestDist = d
+                            best = v
+                        end
+                    elseif pos and not hrp then
+                        best = v
+                        break
+                    end
+                end
+            end
+        end
+        target = best
+        if target then
+            BF._lockedFruit = target
+            BF._lockedFruitSince = os.clock()
+            BF._lockedFruitMiss = 0
+        end
+    end
+
+    if not target then
+        BF._fruitCollectActive = false
+        BF._fruitTargetPos = nil
+        return
+    end
+
+    local handle = BF.getFruitHandle(target)
+    local pos = handle and handle.Position
+    if not pos then
+        BF._lockedFruit = nil
+        BF._fruitCollectActive = false
+        return
+    end
+
+    BF._fruitCollectActive = true
+    BF._fruitTargetPos = pos
+    BF._fruitFlyUnlock = true
+    pcall(function()
+        BF.setFlyTarget(pos + Vector3.new(0, 6, 0), false)
+    end)
+    BF._fruitFlyUnlock = false
+
+    local character = LocalPlayer.Character
+    local hrp = character and character:FindFirstChild("HumanoidRootPart")
+    if hrp and (hrp.Position - pos).Magnitude < 22 then
+        pcall(function()
+            if firetouchinterest and handle then
+                firetouchinterest(hrp, handle, 0)
+                firetouchinterest(hrp, handle, 1)
+            end
+        end)
+        pcall(function()
+            VirtualInputManager:SendKeyEvent(true, "E", false, game)
+            task.wait(0.1)
+            VirtualInputManager:SendKeyEvent(false, "E", false, game)
+        end)
+        task.wait(0.5)
+        pcall(BF.storeFruitInInventory)
+        BF.notifyUser("Fruit", "Collected " .. tostring(target.Name), 2)
+        BF._lockedFruit = nil
+        BF._fruitCollectActive = false
+        BF._fruitTargetPos = nil
+        BF._lockedFruitMiss = 0
+    end
 end
 
 BF.stopFruitNotifier = function()
