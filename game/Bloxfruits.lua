@@ -1407,8 +1407,22 @@ BF.fruitScan = function()
     end
 end
 
+BF.startFruitNotifier = function()
+    if BF.fruitNotifierRunning then return end
+    BF.fruitNotifierRunning = true
+    task.spawn(function()
+        while BF.fruitNotifierRunning do
+            pcall(BF.fruitScan)
+            task.wait(2)
+        end
+    end)
+end
+
 BF.stopFruitNotifier = function()
     BF.fruitNotifierRunning = false
+    BF._fruitCollectActive = false
+    BF._fruitTargetPos = nil
+    BF._lockedFruit = nil
 end
 
 -- =============================================
