@@ -12,7 +12,6 @@ pcall(function()
 end)
 print("[BF] load ok - full autofarm script")
 
--- Register budget: Luau max ~200 locals per function. Store API on one table.
 local BF = {}
 
 
@@ -194,9 +193,6 @@ local config = {
 }
 
 -- =============================================
--- COMBAT (copied from working FastAttack hubs: QuantumOnyx / redz-style)
--- Real damage path: getsenv(PlayerScripts LocalScript)._G.SendHitsToServer(part, bladeHits)
--- Plus: RegisterAttack, LeftClickRemote, RegisterHit fallback
 -- =============================================
 local _hitBodyParts = {
     "RightHand", "LeftHand", "RightLowerArm", "LeftLowerArm",
@@ -332,8 +328,7 @@ BF.fireLeftClickRemote = function(primaryPart)
 end
 
 BF.fireVirtualClick = function()
-    -- used only for secret rope cuts, not combat spam
-    pcall(function()
+        pcall(function()
         local vu = game:GetService("VirtualUser")
         vu:CaptureController()
         vu:Button1Down(Vector2.new(0, 0))
@@ -342,7 +337,6 @@ BF.fireVirtualClick = function()
     end)
 end
 
--- Cobalt Assets path (updates often)
 BF._combatSessionHash = "160293a1"
 BF._combatNumericId = 16110659
 BF._combatKey = "XO%Xomcy~oxBc~"
@@ -363,7 +357,6 @@ BF.fireAssetsHit = function(bodyPart)
     return fired
 end
 
--- QuantumOnyx-style: all living targets within 70 studs of player -> one bladeHits packet
 BF.expandTargetsInHitRange = function(targets, maxDist)
     maxDist = maxDist or 70
     local char = LocalPlayer.Character
@@ -373,8 +366,7 @@ BF.expandTargetsInHitRange = function(targets, maxDist)
     for _, t in ipairs(targets or {}) do
         if t then byModel[t] = true end
     end
-    -- also pull any same-folder enemies near player (cluster may miss some)
-    local folder = Workspace:FindFirstChild("Enemies")
+        local folder = Workspace:FindFirstChild("Enemies")
     if folder then
         for _, enemy in ipairs(folder:GetChildren()) do
             if enemy:IsA("Model") and not byModel[enemy] then
@@ -382,8 +374,7 @@ BF.expandTargetsInHitRange = function(targets, maxDist)
                 local hum = enemy:FindFirstChildOfClass("Humanoid")
                 if root and hum and hum.Health > 0 then
                     if (root.Position - hrp.Position).Magnitude <= maxDist then
-                        -- only if name matches any already targeted type
-                        local match = false
+                                                local match = false
                         for t in pairs(byModel) do
                             if t.Name == enemy.Name then match = true break end
                         end
@@ -408,8 +399,7 @@ BF._hitTick = 0
 
 BF.fireCombatHit = function(targets)
     if not targets or #targets == 0 then return false end
-    -- expand every other hit only (full Enemies scan is expensive)
-    BF._hitTick = (BF._hitTick or 0) + 1
+        BF._hitTick = (BF._hitTick or 0) + 1
     if BF._hitTick % 2 == 1 then
         targets = BF.expandTargetsInHitRange(targets, 70)
     end
@@ -425,8 +415,7 @@ BF.fireCombatHit = function(targets)
     local RegisterAttack = BF._combatRemotesCache.attack
     local RegisterHit = BF._combatRemotesCache.hit
 
-    -- Prefer ONE real damage path to cut remote spam (FPS)
-    local send = BF.resolveSendHits()
+        local send = BF.resolveSendHits()
     if send then
         pcall(function() send(primary, hits) end)
     elseif RegisterHit then
@@ -435,19 +424,13 @@ BF.fireCombatHit = function(targets)
     if RegisterAttack then
         pcall(function() RegisterAttack:FireServer(0.05) end)
     end
-    -- skip fireLeftClickRemote + AssetsHit every frame (big FPS drain)
-    if BF._hitTick % 4 == 0 then
+        if BF._hitTick % 4 == 0 then
         BF.fireLeftClickRemote(primary)
     end
 
     return true
 end
 
--- Cluster / Bring (hub-style, less immortal desync):
--- 1) sethiddenproperty SimulationRadius so client can own NPC physics
--- 2) Bring same-name mobs to a FIXED stack point (first target), not under BF.flying player
--- 3) Player stands above that point and multi-hits
--- Constant CFrame under a moving flyer = server position desync = red markers, 0 damage
 BF.clusterStackPos = nil
 BF.lastBringAt = 0
 
@@ -586,8 +569,7 @@ local islands = {
     {Name = "Fountain 1",         Min = 625, Max = 650, Pos = Vector3.new(5572, 78, 4010), Quest = {"StartQuest","FountainQuest",1}, EnemyPatterns = {"Galley Pirate"}, isBoss = false},
     {Name = "Fountain 2",         Min = 650, Max = 675, Pos = Vector3.new(5634, 78, 4789), Quest = {"StartQuest","FountainQuest",2}, EnemyPatterns = {"Galley Captain"}, isBoss = false},
 
-    -- Sea1 Bosses (positions from dump) - Mob Boss is NOT a real boss quest target
-    {Name = "The Gorilla King", Min = 20, Max = 30, Pos = Vector3.new(-1194, 11, -550),
+        {Name = "The Gorilla King", Min = 20, Max = 30, Pos = Vector3.new(-1194, 11, -550),
         Quest = {"StartQuest","JungleQuest",2}, EnemyPatterns = {"Gorilla"},
         BossQuest = {"StartQuest","JungleQuest",3}, BossPatterns = {"The Gorilla King", "Gorilla King"},
         isBoss = true},
@@ -739,8 +721,6 @@ BF.flying = false
 BF.hoverY = nil
 BF._bossFlyUnlock = false
 
--- Keep the player on a stable horizontal flight plane.  The old implementation
--- always added upward velocity, which made the character arc and slowly sink.
 BF.enableFly = function()
     if BF.flying then return end
     local character = LocalPlayer.Character
@@ -777,8 +757,7 @@ BF.enableFly = function()
                 horizontalVelocity = horizontal.Unit * horizontalSpeed
             end
 
-            -- Controlled vertical movement; no permanent +Y velocity.
-            local verticalVelocity = math.clamp(verticalError * 5, -config.flySpeed, config.flySpeed)
+                        local verticalVelocity = math.clamp(verticalError * 5, -config.flySpeed, config.flySpeed)
             if math.abs(verticalError) < 0.75 then
                 verticalVelocity = 0
             end
@@ -790,8 +769,7 @@ BF.enableFly = function()
             )
             currentHrp.AssemblyAngularVelocity = Vector3.zero
         else
-            -- Hover exactly where we are instead of using a fixed upward velocity.
-            BF.hoverY = BF.hoverY or currentHrp.Position.Y
+                        BF.hoverY = BF.hoverY or currentHrp.Position.Y
             local verticalError = BF.hoverY - currentHrp.Position.Y
             currentHrp.AssemblyLinearVelocity = Vector3.new(0, math.clamp(verticalError * 6, -20, 20), 0)
             currentHrp.AssemblyAngularVelocity = Vector3.zero
@@ -856,8 +834,6 @@ BF.setHoverHeight = function(y)
     end
 end
 
--- Blox Fruits has an underwater entrance/whirlpool.  Servers can name the
--- object differently, so check both parts and models for common whirlpool names.
 BF._whirlpoolCache = nil
 BF._whirlpoolCacheAt = 0
 BF.findWhirlpool = function()
@@ -942,8 +918,7 @@ BF.acceptQuest = function(questArgs)
     if not remote then return false end
     local commF = remote:FindFirstChild("CommF_")
     if not commF then return false end
-    -- pcall so a hung remote cannot hard-crash the farm thread
-    local ok = pcall(function()
+        local ok = pcall(function()
         commF:InvokeServer(unpack(questArgs))
     end)
     BF.invalidateQuestCache()
@@ -973,9 +948,7 @@ BF.acceptQuestWrapper = function(questArgs, opts)
             return true
         end
     end
-    -- Stacking StartQuest spams the server and freezes the client near NPCs.
-    -- Only stack when explicitly requested via opts.allowStack.
-    if opts.allowStack and config.questStack and questArgs then
+            if opts.allowStack and config.questStack and questArgs then
         return BF.stackQuest(questArgs, math.min(config.stackCount or 2, 3))
     end
     return BF.acceptQuest(questArgs)
@@ -1055,7 +1028,6 @@ BF.getFruitHandle = function(obj)
     return obj:FindFirstChildWhichIsA("BasePart", true)
 end
 
--- Placeholder / always-present junk (NOT real drops)
 BF.isJunkFruitName = function(name)
     local n = string.lower(tostring(name or "")):gsub("%s+", "")
     -- Fruit, Fruit1, Fruit2, fruit_1, etc.
@@ -1069,15 +1041,13 @@ end
 BF.isRealFruitName = function(name)
     local n = string.lower(tostring(name or ""))
     if BF.isJunkFruitName(n) then return false end
-    -- Real drops are usually "Flame-Flame", "Dragon Fruit", "Buddha-Buddha", etc.
-    if string.find(n, "%-") then return true end -- Type-Type pattern
+        if string.find(n, "%-") then return true end -- Type-Type pattern
     if string.find(n, "fruit", 1, true) and not BF.isJunkFruitName(n) then
         -- "X Fruit" with a real prefix
         local base = n:gsub("%s*fruit%s*", ""):gsub("%s+", "")
         if #base >= 3 then return true end
     end
-    -- whitelist hit
-    if BF.isValuableFruit(n) then return true end
+        if BF.isValuableFruit(n) then return true end
     return false
 end
 
@@ -1085,8 +1055,7 @@ BF.isWorldFruit = function(obj)
     if not obj then return false end
     if BF.isJunkFruitName(obj.Name) then return false end
 
-    -- Only count real Tools on the ground (actual pickups)
-    if obj:IsA("Tool") then
+        if obj:IsA("Tool") then
         local parent = obj.Parent
         if parent and parent:IsA("Model") and parent:FindFirstChildOfClass("Humanoid") then
             return false
@@ -1096,8 +1065,7 @@ BF.isWorldFruit = function(obj)
         return BF.getFruitHandle(obj) ~= nil
     end
 
-    -- Models only if they look like a named fruit drop (not Fruit/Fruit1)
-    if obj:IsA("Model") and BF.isRealFruitName(obj.Name) then
+        if obj:IsA("Model") and BF.isRealFruitName(obj.Name) then
         return true
     end
     return false
@@ -1191,8 +1159,7 @@ BF.fruitScan = function()
         end
     end
 
-    -- keep notified keys so permanent junk never re-spams; size-cap only
-    local n = 0
+        local n = 0
     for _ in pairs(BF.fruitNotified) do n = n + 1 end
     if n > 80 then
         BF.fruitNotified = {}
@@ -1286,8 +1253,7 @@ BF.getTrackedQuestLabel = function()
     if label and (label:IsA("TextLabel") or label:IsA("TextButton")) then
         return label
     end
-    -- no GetDescendants fallback (was expensive every call)
-    return nil
+        return nil
 end
 
 BF.hasActiveQuest = function()
@@ -1328,9 +1294,7 @@ BF.activeQuestMatches = function(...)
     return false
 end
 
--- Derive farm patterns from tracked quest text when possible
 
--- While a quest is still active, farm THAT quest's mobs even if level unlocked the next island.
 BF.resolveFarmPatterns = function(island, questType)
     local patternInfo = BF.getPatterns(island, questType or "normal")
     if BF.hasActiveQuest() then
@@ -1457,8 +1421,7 @@ BF.enemyMatchesPatterns = function(enemy, patternInfo)
     local lower = string.lower(enemy.Name)
     local wantBoss = patternInfo.includeBossAttr == true
 
-    -- Boss-only mode
-    if wantBoss then
+        if wantBoss then
         if enemy:GetAttribute("isBoss") == true or string.find(lower, "%[boss%]") then
             return true
         end
@@ -1471,25 +1434,20 @@ BF.enemyMatchesPatterns = function(enemy, patternInfo)
         return false
     end
 
-    -- Normal farm: NEVER take bosses (Gorilla King while farming Gorilla)
-    if enemy:GetAttribute("isBoss") == true then return false end
+        if enemy:GetAttribute("isBoss") == true then return false end
     if string.find(lower, "%[boss%]") then return false end
 
     for _, pattern in ipairs(patternInfo.patterns or {}) do
         local p = string.lower(pattern)
-        -- must start with pattern as a name token (not mid-string)
-        if string.sub(lower, 1, #p) == p then
+                if string.sub(lower, 1, #p) == p then
             local nextc = string.sub(lower, #p + 1, #p + 1)
             if nextc == "" or nextc == " " or nextc == "[" then
                 local rest = string.sub(lower, #p + 1)
-                -- reject "Gorilla King", "Fishman Lord", etc. unless pattern includes that word
-                if string.find(rest, "^%s+king") or string.find(rest, "^%s+lord")
+                                if string.find(rest, "^%s+king") or string.find(rest, "^%s+lord")
                     or string.find(rest, "^%s+admiral") or string.find(rest, "^%s+boss") then
-                    -- allow if pattern itself was e.g. "Gorilla King"
-                    if not string.find(p, "king") and not string.find(p, "lord")
+                                        if not string.find(p, "king") and not string.find(p, "lord")
                         and not string.find(p, "admiral") and not string.find(p, "boss") then
-                        -- skip this pattern match
-                    else
+                                            else
                         return true
                     end
                 else
@@ -1548,14 +1506,12 @@ BF.attackTargets = function(targets, speed, hits)
     end
     if #validTargets == 0 then return end
 
-    -- weapon select at most every 2s
-    if os.clock() - (BF._lastWeaponSelectAt or 0) > 2 then
+        if os.clock() - (BF._lastWeaponSelectAt or 0) > 2 then
         BF._lastWeaponSelectAt = os.clock()
         pcall(BF.selectAttackWeapon)
     end
 
-    -- FPS-safe clamps: was 40 hits * 0.002s = freezes client
-    local delay = tonumber(speed) or 0.04
+        local delay = tonumber(speed) or 0.04
     if delay < 0.025 then delay = 0.025 end
     if delay > 0.12 then delay = 0.12 end
     local n = math.max(1, math.floor(tonumber(hits) or 1))
@@ -3289,8 +3245,7 @@ BF.startFarm = function()
             local island = BF.resolveFarmIsland(level)
             local hrp = character:FindFirstChild("HumanoidRootPart")
 
-            -- Level 700-725: make sure the normal Raider pattern is selected.
-            -- This is deliberately scoped to the user's existing "Season 2, 1"
+                        -- This is deliberately scoped to the user's existing "Season 2, 1"
             -- entry and does not alter other level ranges.
             if island and island.Name == "Season 2, 1" then
                 island.EnemyPatterns = {"Raider"}
@@ -3298,8 +3253,7 @@ BF.startFarm = function()
             end
             if not hrp then task.wait(0.5) continue end
 
-            -- Stats: throttle (remote spam near quest NPC freezes client)
-            if not _lastStatAt then _lastStatAt = 0 end
+                        if not _lastStatAt then _lastStatAt = 0 end
             if config.statEnabled and (os.clock() - _lastStatAt) > 2.5 then
                 _lastStatAt = os.clock()
                 local pts = BF.getAvailableStatPoints()
@@ -3318,8 +3272,7 @@ BF.startFarm = function()
                 if BF.hasActiveQuest() then
                     questAccepted = true
                 else
-                    -- frame gone = finished or none -> may take new quest (long CD avoids spam lag)
-                    if (os.clock() - _lastQuestAcceptAt) >= 8 then
+                                        if (os.clock() - _lastQuestAcceptAt) >= 8 then
                         questAccepted = false
                         if state == "COMBAT" or state == "PATROL" then
                             state = "QUEST"
@@ -3331,8 +3284,7 @@ BF.startFarm = function()
             if level ~= currentLevel then
                 currentLevel = level
                 lastLevelForStats = level
-                -- Keep fighting current quest mobs until TrackedQuestFrame is gone
-                if not BF.hasActiveQuest() then
+                                if not BF.hasActiveQuest() then
                     lockedEnemy = nil
                     heightLocked = false
                     isBossTarget = false
@@ -3346,8 +3298,7 @@ BF.startFarm = function()
                         BF.notifyUser("New Island", "Now farming: " .. island.Name)
                     end
                 else
-                    -- level-up mid-quest: stay on quest island/mobs, keep attacking
-                    BF.notifyUser("Level Up", "Finishing current quest first", 3)
+                                        BF.notifyUser("Level Up", "Finishing current quest first", 3)
                 end
             end
 
@@ -3393,21 +3344,18 @@ BF.startFarm = function()
             end
 
             if state == "QUEST" then
-                -- TrackedQuestFrame present = already have quest
-                if BF.hasActiveQuest() then
+                                if BF.hasActiveQuest() then
                     questAccepted = true
                     state = "COMBAT"
                     continue
                 end
                 if not _lastQuestAcceptAt then _lastQuestAcceptAt = 0 end
                 if (os.clock() - _lastQuestAcceptAt) < 6 then
-                    -- recently tried; farm without waiting on remote again
-                    state = "COMBAT"
+                                        state = "COMBAT"
                     continue
                 end
 
-                -- Settle before StartQuest: InvokeServer + enemy streaming at island
-                -- center was freezing the client (0 FPS). Hover, zero velocity, wait.
+                                -- center was freezing the client (0 FPS). Hover, zero velocity, wait.
                 pcall(function()
                     if hrp then
                         BF.flyTarget = Vector3.new(hrp.Position.X, hrp.Position.Y + 10, hrp.Position.Z)
@@ -3415,14 +3363,12 @@ BF.startFarm = function()
                         hrp.AssemblyAngularVelocity = Vector3.zero
                     end
                 end)
-                -- briefly pause heavy extras
-                local espWas = BF.enemyEspRunning
+                                local espWas = BF.enemyEspRunning
                 if espWas then pcall(BF.stopEnemyEsp) end
                 task.wait(0.45)
 
                 local desiredType = "normal"
-                -- skip boss workspace scan here (extra lag on arrive)
-                local questArgs = BF.getQuestArgs(island, desiredType)
+                                local questArgs = BF.getQuestArgs(island, desiredType)
                 if not questArgs and island.isBoss then
                     questArgs = BF.getQuestArgs(island, "boss")
                     if questArgs then desiredType = "boss" end
@@ -3430,8 +3376,7 @@ BF.startFarm = function()
 
                 _lastQuestAcceptAt = os.clock()
                 if questArgs then
-                    -- single StartQuest only (no stack) — stack freezes near NPC
-                    local success = BF.acceptQuestWrapper(questArgs, { allowStack = false })
+                                        local success = BF.acceptQuestWrapper(questArgs, { allowStack = false })
                     currentQuestType = desiredType
                     questAccepted = true
                     BF.invalidateQuestCache()
@@ -3445,16 +3390,13 @@ BF.startFarm = function()
             end
 
             if state == "COMBAT" then
-                -- Do not block target detection just because the Quest GUI has not
-                -- updated yet.  The quest remote can succeed before the GUI becomes
+                                -- updated yet.  The quest remote can succeed before the GUI becomes
                 -- visible, and at level 700+ this used to leave the farmer parked at
                 -- the waypoint instead of acquiring a Raider.
                 --
                 -- If the quest really is not active, the QUEST state will retry it
                 -- after target detection has had a chance to find the configured mob.
-                -- Never interrupt an accepted quest. Farm always.
-                -- New quest only via the 10s-hidden tracker above -> state QUEST.
-
+                                
                 local bossEnemy = nil
                 if island.isBoss then bossEnemy = BF.findBossInWorkspace(island) end
                 -- no AbandonQuest mid-run
@@ -3516,16 +3458,14 @@ BF.startFarm = function()
                             if config.clusterEnabled and not isBossTarget then
                                 local playerRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
                                 if playerRoot then
-                                    -- Stay CLOSE above the real enemy (too high => server ignores hits)
-                                    local hover = math.clamp(config.aboveHeight or 8, 4, 12)
+                                                                        local hover = math.clamp(config.aboveHeight or 8, 4, 12)
                                     BF.setFlyTarget(targetPos + Vector3.new(0, hover, 0), false)
                                     heightLocked = false
 
                                     local patternInfo = BF.resolveFarmPatterns(island, currentQuestType)
                                     local allTargets = BF.getMatchingEnemies(island, patternInfo)
                                     local maxN = config.maxClusterSize or 15
-                                    -- Pull range (large) vs attack range (small) were mixed before
-                                    local radius = config.clusterRange or 150
+                                                                        local radius = config.clusterRange or 150
                                     if radius < 80 then radius = 80 end
 
                                     local clusterTargets = BF.collectNearbyTargets(
@@ -3553,8 +3493,7 @@ BF.startFarm = function()
                                 BF.setFlyTarget(targetPos + Vector3.new(0, hover, 0), false)
                                 BF.attackEnemy(lockedEnemy, speed, hits)
                             end
-                            -- give the client a frame to breathe (was tight-loop 3-7 FPS)
-                            task.wait(0.03)
+                                                        task.wait(0.03)
                         end
                     else
                         lockedEnemy = nil
@@ -3568,8 +3507,7 @@ BF.startFarm = function()
             end
 
             if state == "PATROL" then
-                -- Keep patrol independent from the Quest GUI.  If the Raider quest
-                -- GUI is delayed, the farmer should still scan Workspace.Enemies
+                                -- GUI is delayed, the farmer should still scan Workspace.Enemies
                 -- and immediately switch back to COMBAT when a Raider appears.
 
                 -- No enemy: stay at the current safe Y. The old code used a
@@ -4020,6 +3958,7 @@ BF._fpsWhite = false
 BF.applyFpsBoost = function(on)
     BF.fpsBoostOn = on and true or false
     local lighting = game:GetService("Lighting")
+    local terrain = workspace:FindFirstChildOfClass("Terrain")
 
     if BF._fpsConn then
         pcall(function() BF._fpsConn:Disconnect() end)
@@ -4036,59 +3975,85 @@ BF.applyFpsBoost = function(on)
         return
     end
 
+    -- Graphics (hub-style)
     pcall(function()
         settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
+        settings().Rendering.MeshPartDetailLevel = Enum.MeshPartDetailLevel.Level01
+        settings().Rendering.EagerBulkExecution = false
     end)
     pcall(function()
         local ugs = UserSettings():GetService("UserGameSettings")
         ugs.SavedQualityLevel = Enum.SavedQualitySetting.QualityLevel1
-        ugs.MasterVolume = ugs.MasterVolume -- touch ok
     end)
+    pcall(function()
+        if setfpscap then setfpscap(999) end
+    end)
+
+    -- Lighting
     pcall(function()
         lighting.GlobalShadows = false
         lighting.FogEnd = 9e9
         lighting.FogStart = 0
-        lighting.Brightness = 0
-        lighting.ClockTime = 14
+        lighting.Brightness = 1
+        lighting.ClockTime = 12
         lighting.EnvironmentDiffuseScale = 0
         lighting.EnvironmentSpecularScale = 0
+        pcall(function()
+            lighting.Technology = Enum.Technology.Compatibility
+        end)
         for _, v in ipairs(lighting:GetChildren()) do
             if v:IsA("BlurEffect") or v:IsA("SunRaysEffect") or v:IsA("ColorCorrectionEffect")
-                or v:IsA("BloomEffect") or v:IsA("DepthOfFieldEffect") or v:IsA("Atmosphere") then
-                v.Enabled = false
+                or v:IsA("BloomEffect") or v:IsA("DepthOfFieldEffect") or v:IsA("Atmosphere")
+                or v:IsA("Sky") or v:IsA("Clouds") then
+                pcall(function() v.Enabled = false end)
             end
         end
     end)
+
+    -- Terrain / water
     pcall(function()
-        workspace.Terrain.WaterWaveSize = 0
-        workspace.Terrain.WaterWaveSpeed = 0
-        workspace.Terrain.WaterReflectance = 0
-        workspace.Terrain.WaterTransparency = 1
-        workspace.Terrain.Decoration = false
+        if terrain then
+            terrain.WaterWaveSize = 0
+            terrain.WaterWaveSpeed = 0
+            terrain.WaterReflectance = 0
+            terrain.WaterTransparency = 1
+            terrain.Decoration = false
+        end
     end)
 
-    local function stripEffects(root)
-        for _, v in ipairs(root:GetDescendants()) do
-            if v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Smoke")
-                or v:IsA("Fire") or v:IsA("Sparkles") or v:IsA("Beam") then
-                pcall(function() v.Enabled = false end)
-            elseif v:IsA("Explosion") then
-                pcall(function() v:Destroy() end)
-            end
+    local function strip(obj)
+        if not obj then return end
+        if obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Smoke")
+            or obj:IsA("Fire") or obj:IsA("Sparkles") or obj:IsA("Beam") then
+            pcall(function() obj.Enabled = false end)
+        elseif obj:IsA("Explosion") then
+            pcall(function() obj:Destroy() end)
+        elseif obj:IsA("Decal") or obj:IsA("Texture") then
+            pcall(function() obj.Transparency = 1 end)
+        elseif obj:IsA("PointLight") or obj:IsA("SpotLight") or obj:IsA("SurfaceLight") then
+            pcall(function() obj.Enabled = false end)
+        elseif obj:IsA("BasePart") and not obj:IsA("Terrain") then
+            pcall(function()
+                obj.CastShadow = false
+                obj.Material = Enum.Material.SmoothPlastic
+                obj.Reflectance = 0
+            end)
         end
     end
-    pcall(function() stripEffects(workspace) end)
 
-    -- keep killing new particles while boost is on
-    BF._fpsConn = workspace.DescendantAdded:Connect(function(v)
-        if not BF.fpsBoostOn then return end
-        if v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Smoke")
-            or v:IsA("Fire") or v:IsA("Sparkles") or v:IsA("Beam") then
-            pcall(function() v.Enabled = false end)
-        end
+    -- One-shot pass (can hitch briefly once)
+    task.spawn(function()
+        pcall(function()
+            for _, v in ipairs(workspace:GetDescendants()) do
+                strip(v)
+            end
+        end)
+        BF.notifyUser("FPS", "Boost applied (materials + effects)", 3)
     end)
 
-    BF.notifyUser("FPS", "Boost ON (low quality + no particles)", 3)
+    BF._fpsConn = workspace.DescendantAdded:Connect(function(v)
+        if BF.fpsBoostOn then strip(v) end
+    end)
 end
 
 BF.applyWhiteScreen = function(on)
