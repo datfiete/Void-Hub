@@ -932,14 +932,15 @@ end
 BF.acceptQuest = function(questArgs)
     if not questArgs then return false end
     local remote = ReplicatedStorage:FindFirstChild("Remotes")
-    if remote then
-        local commF = remote:FindFirstChild("CommF_")
-        if commF then
-            commF:InvokeServer(unpack(questArgs))
-            return true
-        end
-    end
-    return false
+    if not remote then return false end
+    local commF = remote:FindFirstChild("CommF_")
+    if not commF then return false end
+    -- pcall so a hung remote cannot hard-crash the farm thread
+    local ok = pcall(function()
+        commF:InvokeServer(unpack(questArgs))
+    end)
+    BF.invalidateQuestCache()
+    return ok
 end
 
 BF.stackQuest = function(questArgs, count)
@@ -955,7 +956,8 @@ BF.stackQuest = function(questArgs, count)
     return true
 end
 
-BF.acceptQuestWrapper = function(questArgs)
+BF.acceptQuestWrapper = function(questArgs, opts)
+    opts = opts or {}
     if questArgs and questArgs[2] and type(BF.activeQuestMatches) == "function" then
         local ok, matched = pcall(function()
             return BF.activeQuestMatches(tostring(questArgs[2]))
@@ -964,11 +966,12 @@ BF.acceptQuestWrapper = function(questArgs)
             return true
         end
     end
-    if config.questStack and questArgs then
-        return BF.stackQuest(questArgs, config.stackCount)
-    else
-        return BF.acceptQuest(questArgs)
+    -- Stacking StartQuest spams the server and freezes the client near NPCs.
+    -- Only stack when explicitly requested via opts.allowStack.
+    if opts.allowStack and config.questStack and questArgs then
+        return BF.stackQuest(questArgs, math.min(config.stackCount or 2, 3))
     end
+    return BF.acceptQuest(questArgs)
 end
 
 BF.abandonQuest = function()
@@ -1261,6 +1264,10 @@ end
 
 -- TrackedQuestFrame = has quest; gone = no quest / completed
 -- Text: TrackedQuestFrame.Frame.header.textLabel ContentText e.g. "Defeat 8 Brutes"
+BF._questCacheAt = 0
+BF._questCacheHas = false
+BF._questCacheLabel = nil
+
 BF.getTrackedQuestLabel = function()
     local pg = LocalPlayer:FindFirstChild("PlayerGui")
     if not pg then return nil end
@@ -1272,19 +1279,23 @@ BF.getTrackedQuestLabel = function()
     if label and (label:IsA("TextLabel") or label:IsA("TextButton")) then
         return label
     end
-    -- fallback: any TextLabel under TrackedQuestFrame
-    for _, d in ipairs(tqf:GetDescendants()) do
-        if d:IsA("TextLabel") and d.Text and #d.Text > 2 then
-            return d
-        end
-    end
+    -- no GetDescendants fallback (was expensive every call)
     return nil
 end
 
 BF.hasActiveQuest = function()
+    local now = os.clock()
+    if now - (BF._questCacheAt or 0) < 0.4 then
+        return BF._questCacheHas
+    end
+    BF._questCacheAt = now
     local pg = LocalPlayer:FindFirstChild("PlayerGui")
-    if not pg then return false end
-    return pg:FindFirstChild("TrackedQuestFrame") ~= nil
+    BF._questCacheHas = pg ~= nil and pg:FindFirstChild("TrackedQuestFrame") ~= nil
+    return BF._questCacheHas
+end
+
+BF.invalidateQuestCache = function()
+    BF._questCacheAt = 0
 end
 
 BF.getActiveQuestInfo = function()
@@ -3285,8 +3296,10 @@ BF.startFarm = function()
             end
             if not hrp then task.wait(0.5) continue end
 
-            -- Stats: always dump available points (not only on level-up)
-            if config.statEnabled then
+            -- Stats: throttle (remote spam near quest NPC freezes client)
+            if not _lastStatAt then _lastStatAt = 0 end
+            if config.statEnabled and (os.clock() - _lastStatAt) > 2.5 then
+                _lastStatAt = os.clock()
                 local pts = BF.getAvailableStatPoints()
                 if pts and pts > 0 then
                     pcall(function()
@@ -3303,8 +3316,8 @@ BF.startFarm = function()
                 if BF.hasActiveQuest() then
                     questAccepted = true
                 else
-                    -- frame gone = finished or none -> may take new quest
-                    if (os.clock() - _lastQuestAcceptAt) >= 3 then
+                    -- frame gone = finished or none -> may take new quest (long CD avoids spam lag)
+                    if (os.clock() - _lastQuestAcceptAt) >= 8 then
                         questAccepted = false
                         if state == "COMBAT" or state == "PATROL" then
                             state = "QUEST"
@@ -3385,30 +3398,47 @@ BF.startFarm = function()
                     continue
                 end
                 if not _lastQuestAcceptAt then _lastQuestAcceptAt = 0 end
-                if (os.clock() - _lastQuestAcceptAt) < 5 then
+                if (os.clock() - _lastQuestAcceptAt) < 6 then
+                    -- recently tried; farm without waiting on remote again
                     state = "COMBAT"
                     continue
                 end
 
-                local bossEnemy = nil
-                if island.isBoss then bossEnemy = BF.findBossInWorkspace(island) end
-                local desiredType = bossEnemy and "boss" or "normal"
-                local questArgs = BF.getQuestArgs(island, desiredType)
-
-                if questArgs then
-                    _lastQuestAcceptAt = os.clock()
-                    local success = BF.acceptQuestWrapper(questArgs)
-                    if success then
-                        currentQuestType = desiredType
-                        questAccepted = true
-                        state = "COMBAT"
-                        task.wait(0.8)
-                    else
-                        task.wait(1.5)
+                -- Settle before StartQuest: InvokeServer + enemy streaming at island
+                -- center was freezing the client (0 FPS). Hover, zero velocity, wait.
+                pcall(function()
+                    if hrp then
+                        BF.flyTarget = Vector3.new(hrp.Position.X, hrp.Position.Y + 10, hrp.Position.Z)
+                        hrp.AssemblyLinearVelocity = Vector3.zero
+                        hrp.AssemblyAngularVelocity = Vector3.zero
                     end
-                else
-                    state = "COMBAT"
+                end)
+                -- briefly pause heavy extras
+                local espWas = BF.enemyEspRunning
+                if espWas then pcall(BF.stopEnemyEsp) end
+                task.wait(0.45)
+
+                local desiredType = "normal"
+                -- skip boss workspace scan here (extra lag on arrive)
+                local questArgs = BF.getQuestArgs(island, desiredType)
+                if not questArgs and island.isBoss then
+                    questArgs = BF.getQuestArgs(island, "boss")
+                    if questArgs then desiredType = "boss" end
                 end
+
+                _lastQuestAcceptAt = os.clock()
+                if questArgs then
+                    -- single StartQuest only (no stack) — stack freezes near NPC
+                    local success = BF.acceptQuestWrapper(questArgs, { allowStack = false })
+                    currentQuestType = desiredType
+                    questAccepted = true
+                    BF.invalidateQuestCache()
+                    task.wait(0.6)
+                end
+                if espWas and config.enemyEspEnabled then
+                    pcall(BF.startEnemyEsp)
+                end
+                state = "COMBAT"
                 continue
             end
 
