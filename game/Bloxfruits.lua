@@ -685,15 +685,28 @@ table.sort(islands, function(a,b) return a.Min < b.Min end)
 -- =============================================
 BF.noclipConnection = nil
 
+BF._noclipParts = {}
+BF._noclipRefreshAt = 0
 BF.enableNoclip = function()
     if BF.noclipConnection then return end
     BF.noclipConnection = RunService.Heartbeat:Connect(function()
         local character = LocalPlayer.Character
         if not character then return end
-        for _, part in ipairs(character:GetDescendants()) do
-            if part:IsA("BasePart") then
-                part.CanCollide = false
+        local now = os.clock()
+        if now - (BF._noclipRefreshAt or 0) > 1.0 or not BF._noclipParts or #BF._noclipParts == 0 then
+            BF._noclipRefreshAt = now
+            local list = {}
+            for _, name in ipairs({"HumanoidRootPart", "Head", "UpperTorso", "LowerTorso", "Torso"}) do
+                local p = character:FindFirstChild(name)
+                if p and p:IsA("BasePart") then table.insert(list, p) end
             end
+            for _, p in ipairs(character:GetChildren()) do
+                if p:IsA("BasePart") then table.insert(list, p) end
+            end
+            BF._noclipParts = list
+        end
+        for _, part in ipairs(BF._noclipParts) do
+            if part and part.Parent then part.CanCollide = false end
         end
     end)
 end
@@ -703,12 +716,12 @@ BF.disableNoclip = function()
         BF.noclipConnection:Disconnect()
         BF.noclipConnection = nil
     end
+    BF._noclipParts = {}
     local character = LocalPlayer.Character
     if character then
-        for _, part in ipairs(character:GetDescendants()) do
-            if part:IsA("BasePart") then
-                part.CanCollide = true
-            end
+        for _, name in ipairs({"HumanoidRootPart", "Head", "UpperTorso", "LowerTorso", "Torso"}) do
+            local p = character:FindFirstChild(name)
+            if p and p:IsA("BasePart") then p.CanCollide = true end
         end
     end
 end
@@ -838,48 +851,72 @@ end
 
 -- Blox Fruits has an underwater entrance/whirlpool.  Servers can name the
 -- object differently, so check both parts and models for common whirlpool names.
+BF._whirlpoolCache = nil
+BF._whirlpoolCacheAt = 0
 BF.findWhirlpool = function()
     local character = LocalPlayer.Character
     local hrp = character and character:FindFirstChild("HumanoidRootPart")
     if not hrp then return nil end
 
-    local best = nil
-    local bestDistance = math.huge
+    local now = os.clock()
+    if BF._whirlpoolCache and (now - (BF._whirlpoolCacheAt or 0)) < 8 then
+        local c = BF._whirlpoolCache
+        if c and c.Position then
+            return {
+                Object = c.Object,
+                Position = c.Position,
+                Distance = (c.Position - hrp.Position).Magnitude,
+            }
+        end
+        return nil
+    end
+
+    local best, bestDistance = nil, math.huge
     local keywords = {"whirlpool", "vortex", "maelstrom", "swirl"}
 
-    for _, obj in ipairs(Workspace:GetDescendants()) do
-        local name = obj.Name:lower()
+    local function consider(obj)
+        if not obj then return end
+        local name = string.lower(obj.Name)
         local matches = false
         for _, keyword in ipairs(keywords) do
-            if name:find(keyword, 1, true) then
-                matches = true
-                break
+            if string.find(name, keyword, 1, true) then matches = true break end
+        end
+        if not matches then return end
+        local position = nil
+        if obj:IsA("BasePart") then
+            position = obj.Position
+        elseif obj:IsA("Model") then
+            if obj.PrimaryPart then
+                position = obj.PrimaryPart.Position
+            else
+                local part = obj:FindFirstChildWhichIsA("BasePart")
+                if part then position = part.Position end
             end
         end
-
-        if matches then
-            local position = nil
-            if obj:IsA("BasePart") then
-                position = obj.Position
-            elseif obj:IsA("Model") then
-                local primary = obj.PrimaryPart
-                if primary then
-                    position = primary.Position
-                else
-                    local part = obj:FindFirstChildWhichIsA("BasePart", true)
-                    if part then position = part.Position end
-                end
-            end
-
-            if position then
-                local distance = (position - hrp.Position).Magnitude
-                if distance < bestDistance then
-                    bestDistance = distance
-                    best = {Object = obj, Position = position, Distance = distance}
-                end
-            end
+        if not position then return end
+        local distance = (position - hrp.Position).Magnitude
+        if distance < bestDistance then
+            bestDistance = distance
+            best = { Object = obj, Position = position, Distance = distance }
         end
     end
+
+    pcall(function()
+        local wo = Workspace:FindFirstChild("_WorldOrigin")
+        if wo then
+            for _, obj in ipairs(wo:GetChildren()) do consider(obj) end
+            local locs = wo:FindFirstChild("Locations")
+            if locs then
+                for _, obj in ipairs(locs:GetChildren()) do consider(obj) end
+            end
+        end
+    end)
+    for _, obj in ipairs(Workspace:GetChildren()) do
+        consider(obj)
+    end
+
+    BF._whirlpoolCache = best
+    BF._whirlpoolCacheAt = now
     return best
 end
 
@@ -913,7 +950,7 @@ BF.stackQuest = function(questArgs, count)
     if not commF then return false end
     for i = 1, count do
         pcall(function() commF:InvokeServer(unpack(questArgs)) end)
-        task.wait(0.05)
+        task.wait(0.25)
     end
     return true
 end
@@ -1008,21 +1045,50 @@ BF.getFruitHandle = function(obj)
     return obj:FindFirstChildWhichIsA("BasePart", true)
 end
 
+-- Placeholder / always-present junk (NOT real drops)
+BF.isJunkFruitName = function(name)
+    local n = string.lower(tostring(name or "")):gsub("%s+", "")
+    -- Fruit, Fruit1, Fruit2, fruit_1, etc.
+    if n == "fruit" then return true end
+    if string.match(n, "^fruit%d+$") then return true end
+    if string.match(n, "^fruit[%-_]%d+$") then return true end
+    if n == "fruitspawn" or n == "fruitspawns" then return true end
+    return false
+end
+
+BF.isRealFruitName = function(name)
+    local n = string.lower(tostring(name or ""))
+    if BF.isJunkFruitName(n) then return false end
+    -- Real drops are usually "Flame-Flame", "Dragon Fruit", "Buddha-Buddha", etc.
+    if string.find(n, "%-") then return true end -- Type-Type pattern
+    if string.find(n, "fruit", 1, true) and not BF.isJunkFruitName(n) then
+        -- "X Fruit" with a real prefix
+        local base = n:gsub("%s*fruit%s*", ""):gsub("%s+", "")
+        if #base >= 3 then return true end
+    end
+    -- whitelist hit
+    if BF.isValuableFruit(n) then return true end
+    return false
+end
+
 BF.isWorldFruit = function(obj)
     if not obj then return false end
-    -- Tool on ground
+    if BF.isJunkFruitName(obj.Name) then return false end
+
+    -- Only count real Tools on the ground (actual pickups)
     if obj:IsA("Tool") then
         local parent = obj.Parent
         if parent and parent:IsA("Model") and parent:FindFirstChildOfClass("Humanoid") then
-            return false -- held by player
+            return false
         end
         if parent and parent:IsA("Backpack") then return false end
+        if not BF.isRealFruitName(obj.Name) then return false end
         return BF.getFruitHandle(obj) ~= nil
     end
-    -- Fruit model / spawn marker
-    local n = string.lower(obj.Name)
-    if string.find(n, "fruit", 1, true) then
-        return BF.getFruitHandle(obj) ~= nil or obj:IsA("Model") or obj:IsA("BasePart")
+
+    -- Models only if they look like a named fruit drop (not Fruit/Fruit1)
+    if obj:IsA("Model") and BF.isRealFruitName(obj.Name) then
+        return true
     end
     return false
 end
@@ -1045,11 +1111,10 @@ BF.fruitScan = function()
         local fs = wo and wo:FindFirstChild("FruitSpawns")
         if not fs then return end
         for _, v in ipairs(fs:GetChildren()) do
-            if BF.isWorldFruit(v) or v:IsA("BasePart") or v:IsA("Model") then
+            if BF.isWorldFruit(v) then
                 table.insert(candidates, v)
             end
         end
-        -- nested
         for _, v in ipairs(fs:GetDescendants()) do
             if v:IsA("Tool") and BF.isWorldFruit(v) then
                 table.insert(candidates, v)
@@ -1116,10 +1181,11 @@ BF.fruitScan = function()
         end
     end
 
-    if os.clock() % 30 < 2 then
-        for k in pairs(BF.fruitNotified) do
-            BF.fruitNotified[k] = nil
-        end
+    -- keep notified keys so permanent junk never re-spams; size-cap only
+    local n = 0
+    for _ in pairs(BF.fruitNotified) do n = n + 1 end
+    if n > 80 then
+        BF.fruitNotified = {}
     end
 end
 
@@ -3160,8 +3226,11 @@ BF.startFarm = function()
     if config.fruitNotifier then BF.startFruitNotifier() end
 
     if config.autoEquip then
-        BF.equipCheckConnection = RunService.Heartbeat:Connect(function()
-            if BF.farmRunning then BF.autoEquipWeapon() end
+        task.spawn(function()
+            while BF.farmRunning do
+                if config.autoEquip then pcall(BF.autoEquipWeapon) end
+                task.wait(1.5)
+            end
         end)
     end
 
@@ -3190,13 +3259,17 @@ BF.startFarm = function()
             if not humanoid or humanoid.Health <= 0 then task.wait(0.5) continue end
             if not BF.flying then BF.enableFly() end
             if config.autoHeal then BF.heal() end
-            local characters = workspace:FindFirstChild("Characters")
-            local localCharacter = characters and characters:FindFirstChild(LocalPlayer.Name)
-            local busoHumanoid = localCharacter and localCharacter:FindFirstChild("Humanoid")
-            if busoHumanoid and not busoHumanoid:FindFirstChild("LeftHand_BusoLayer1") then
-                local remotes = ReplicatedStorage:FindFirstChild("Remotes")
-                local commF = remotes and remotes:FindFirstChild("CommF_")
-                if commF then pcall(function() commF:InvokeServer("Buso") end) end
+            if not _lastBusoAt then _lastBusoAt = 0 end
+            if os.clock() - _lastBusoAt > 3 then
+                _lastBusoAt = os.clock()
+                local characters = workspace:FindFirstChild("Characters")
+                local localCharacter = characters and characters:FindFirstChild(LocalPlayer.Name)
+                local busoHumanoid = localCharacter and localCharacter:FindFirstChild("Humanoid")
+                if busoHumanoid and not busoHumanoid:FindFirstChild("LeftHand_BusoLayer1") then
+                    local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+                    local commF = remotes and remotes:FindFirstChild("CommF_")
+                    if commF then pcall(function() commF:InvokeServer("Buso") end) end
+                end
             end
 
             local level = BF.getPlayerLevel()
@@ -3295,7 +3368,7 @@ BF.startFarm = function()
                 local targetPos = island.Pos + Vector3.new(0, 25, 0)
                 if (hrp.Position - targetPos).Magnitude > 50 then
                     BF.setFlyTarget(targetPos, false)
-                    task.wait(0.08)
+                    task.wait(0.2)
                     continue
                 else
                     BF.setHoverHeight(hrp.Position.Y)
@@ -3312,7 +3385,7 @@ BF.startFarm = function()
                     continue
                 end
                 if not _lastQuestAcceptAt then _lastQuestAcceptAt = 0 end
-                if (os.clock() - _lastQuestAcceptAt) < 3 then
+                if (os.clock() - _lastQuestAcceptAt) < 5 then
                     state = "COMBAT"
                     continue
                 end
@@ -3909,40 +3982,89 @@ end
 -- =============================================
 BF.fpsBoostOn = false
 
+BF._fpsConn = nil
+BF._fpsWhite = false
+
 BF.applyFpsBoost = function(on)
     BF.fpsBoostOn = on and true or false
-    pcall(function()
-        local lighting = game:GetService("Lighting")
-        if BF.fpsBoostOn then
-            settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
-            pcall(function()
-                UserSettings():GetService("UserGameSettings").SavedQualityLevel = Enum.SavedQualitySetting.QualityLevel1
-            end)
-            lighting.GlobalShadows = false
-            lighting.FogEnd = 9e9
-            lighting.Brightness = 1
-            pcall(function()
-                workspace.Terrain.WaterWaveSize = 0
-                workspace.Terrain.WaterWaveSpeed = 0
-                workspace.Terrain.WaterReflectance = 0
-                workspace.Terrain.WaterTransparency = 1
-            end)
-            pcall(function()
-                for _, v in ipairs(workspace:GetDescendants()) do
-                    if v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Smoke") or v:IsA("Fire") or v:IsA("Sparkles") then
-                        v.Enabled = false
-                    elseif v:IsA("Explosion") then
-                        v:Destroy()
-                    end
-                end
-            end)
-            BF.notifyUser("FPS", "Boost ON", 2)
-        else
+    local lighting = game:GetService("Lighting")
+
+    if BF._fpsConn then
+        pcall(function() BF._fpsConn:Disconnect() end)
+        BF._fpsConn = nil
+    end
+
+    if not BF.fpsBoostOn then
+        pcall(function()
             settings().Rendering.QualityLevel = Enum.QualityLevel.Automatic
             lighting.GlobalShadows = true
-            BF.notifyUser("FPS", "Boost OFF", 2)
+            RunService:Set3dRenderingEnabled(true)
+        end)
+        BF.notifyUser("FPS", "Boost OFF", 2)
+        return
+    end
+
+    pcall(function()
+        settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
+    end)
+    pcall(function()
+        local ugs = UserSettings():GetService("UserGameSettings")
+        ugs.SavedQualityLevel = Enum.SavedQualitySetting.QualityLevel1
+        ugs.MasterVolume = ugs.MasterVolume -- touch ok
+    end)
+    pcall(function()
+        lighting.GlobalShadows = false
+        lighting.FogEnd = 9e9
+        lighting.FogStart = 0
+        lighting.Brightness = 0
+        lighting.ClockTime = 14
+        lighting.EnvironmentDiffuseScale = 0
+        lighting.EnvironmentSpecularScale = 0
+        for _, v in ipairs(lighting:GetChildren()) do
+            if v:IsA("BlurEffect") or v:IsA("SunRaysEffect") or v:IsA("ColorCorrectionEffect")
+                or v:IsA("BloomEffect") or v:IsA("DepthOfFieldEffect") or v:IsA("Atmosphere") then
+                v.Enabled = false
+            end
         end
     end)
+    pcall(function()
+        workspace.Terrain.WaterWaveSize = 0
+        workspace.Terrain.WaterWaveSpeed = 0
+        workspace.Terrain.WaterReflectance = 0
+        workspace.Terrain.WaterTransparency = 1
+        workspace.Terrain.Decoration = false
+    end)
+
+    local function stripEffects(root)
+        for _, v in ipairs(root:GetDescendants()) do
+            if v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Smoke")
+                or v:IsA("Fire") or v:IsA("Sparkles") or v:IsA("Beam") then
+                pcall(function() v.Enabled = false end)
+            elseif v:IsA("Explosion") then
+                pcall(function() v:Destroy() end)
+            end
+        end
+    end
+    pcall(function() stripEffects(workspace) end)
+
+    -- keep killing new particles while boost is on
+    BF._fpsConn = workspace.DescendantAdded:Connect(function(v)
+        if not BF.fpsBoostOn then return end
+        if v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Smoke")
+            or v:IsA("Fire") or v:IsA("Sparkles") or v:IsA("Beam") then
+            pcall(function() v.Enabled = false end)
+        end
+    end)
+
+    BF.notifyUser("FPS", "Boost ON (low quality + no particles)", 3)
+end
+
+BF.applyWhiteScreen = function(on)
+    BF._fpsWhite = on and true or false
+    pcall(function()
+        RunService:Set3dRenderingEnabled(not BF._fpsWhite)
+    end)
+    BF.notifyUser("FPS", BF._fpsWhite and "White screen ON" or "White screen OFF", 2)
 end
 
 BF.getIslandTeleportList = function()
@@ -4012,6 +4134,13 @@ if useVaxorin and window then
         Flag = "Misc.FPS",
         Save = true,
         Callback = function(v) BF.applyFpsBoost(v) end,
+    })
+    fpsSection:CreateToggle({
+        Name = "White Screen (max FPS)",
+        CurrentValue = false,
+        Flag = "Misc.WhiteScreen",
+        Save = false,
+        Callback = function(v) BF.applyWhiteScreen(v) end,
     })
 
     local islandSection = miscTab:CreateSection({Name = "Fly to Island"})
