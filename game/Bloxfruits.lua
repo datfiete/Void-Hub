@@ -705,29 +705,32 @@ table.sort(islands, function(a,b) return a.Min < b.Min end)
 -- NOCLIP & FLY
 -- =============================================
 BF.noclipConnection = nil
-
 BF._noclipParts = {}
 BF._noclipRefreshAt = 0
+BF._noclipChar = nil
+
 BF.enableNoclip = function()
     if BF.noclipConnection then return end
-    BF.noclipConnection = RunService.Heartbeat:Connect(function()
+    -- Stepped runs before physics; Heartbeat is too late for collisions
+    BF.noclipConnection = RunService.Stepped:Connect(function()
         local character = LocalPlayer.Character
         if not character then return end
         local now = os.clock()
-        if now - (BF._noclipRefreshAt or 0) > 1.0 or not BF._noclipParts or #BF._noclipParts == 0 then
+        if character ~= BF._noclipChar or now - (BF._noclipRefreshAt or 0) > 0.4 then
+            BF._noclipChar = character
             BF._noclipRefreshAt = now
             local list = {}
-            for _, name in ipairs({"HumanoidRootPart", "Head", "UpperTorso", "LowerTorso", "Torso"}) do
-                local p = character:FindFirstChild(name)
-                if p and p:IsA("BasePart") then table.insert(list, p) end
-            end
-            for _, p in ipairs(character:GetChildren()) do
-                if p:IsA("BasePart") then table.insert(list, p) end
+            for _, p in ipairs(character:GetDescendants()) do
+                if p:IsA("BasePart") then
+                    table.insert(list, p)
+                end
             end
             BF._noclipParts = list
         end
-        for _, part in ipairs(BF._noclipParts) do
-            if part and part.Parent then part.CanCollide = false end
+        for _, p in ipairs(BF._noclipParts) do
+            if p and p.Parent then
+                p.CanCollide = false
+            end
         end
     end)
 end
@@ -738,11 +741,14 @@ BF.disableNoclip = function()
         BF.noclipConnection = nil
     end
     BF._noclipParts = {}
+    BF._noclipChar = nil
     local character = LocalPlayer.Character
     if character then
-        for _, name in ipairs({"HumanoidRootPart", "Head", "UpperTorso", "LowerTorso", "Torso"}) do
-            local p = character:FindFirstChild(name)
-            if p and p:IsA("BasePart") then p.CanCollide = true end
+        for _, p in ipairs(character:GetDescendants()) do
+            if p:IsA("BasePart") and p.Name ~= "HumanoidRootPart" then
+                -- leave default; HRP often stays non-collide in fly
+                pcall(function() p.CanCollide = true end)
+            end
         end
     end
 end
@@ -3931,23 +3937,118 @@ BF.stopAutoRandomFruit = function()
 end
 
 -- =============================================
--- SEA1 ISLAND SECRETS (Update 30) - partial auto
--- Pirate Village: Free the Windmill = cut 5 ropes with sword
--- More secrets: toggle flies you to island; full puzzles still partial
+-- =============================================
+-- SEA1 ISLAND SECRETS (Update 30) — auto where possible
+-- Sources: Pro Game Guides / community routes
+-- Puzzle/combat secrets we can automate:
+--   Pirate Village: Windmill (5 ropes), Tavern Pirates
+--   Desert: Stone circle / pillars (hit 8)
+--   Jungle: hit trees (hat monkey), fly to zipline area
+--   Marine Fortress: find rope-like + flag parts
+-- Awakened bosses / timed harvests still need player/manual.
 -- =============================================
 BF.secretsRunning = false
 BF.secretsTask = nil
+BF._secretDone = {} -- key -> true after one attempt cycle
 
-BF.findRopeLikeParts = function(nearPos, radius)
+BF.equipSword = function()
+    local char = LocalPlayer.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    local bp = LocalPlayer:FindFirstChild("Backpack")
+    if not hum then return false end
+    local tool = char and char:FindFirstChildOfClass("Tool")
+    if tool and (tool.ToolTip == "Sword" or string.find(string.lower(tool.Name), "sword", 1, true)) then
+        return true
+    end
+    if bp then
+        for _, t in ipairs(bp:GetChildren()) do
+            if t:IsA("Tool") then
+                local tip = tostring(t.ToolTip or "")
+                local n = string.lower(t.Name)
+                if tip == "Sword" or string.find(n, "sword", 1, true) or string.find(n, "blade", 1, true)
+                    or string.find(n, "cutlass", 1, true) or string.find(n, "katana", 1, true) then
+                    hum:EquipTool(t)
+                    return true
+                end
+            end
+        end
+        -- any melee tool fallback
+        for _, t in ipairs(bp:GetChildren()) do
+            if t:IsA("Tool") and (t.ToolTip == "Melee" or t.ToolTip == "") then
+                hum:EquipTool(t)
+                return true
+            end
+        end
+    end
+    return false
+end
+
+BF.hitPart = function(part)
+    if not part then return end
+    pcall(function()
+        if not BF.flying then BF.enableFly() end
+        BF.setFlyTarget(part.Position + Vector3.new(0, 4, 0), false)
+    end)
+    task.wait(0.4)
+    BF.equipSword()
+    for _ = 1, 4 do
+        pcall(BF.fireVirtualClick)
+        pcall(function()
+            local tool = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
+            if tool then tool:Activate() end
+        end)
+        if fireclickdetector then
+            local cd = part:FindFirstChildOfClass("ClickDetector")
+            if not cd and part.Parent then
+                cd = part.Parent:FindFirstChildOfClass("ClickDetector")
+            end
+            if cd then pcall(fireclickdetector, cd) end
+        end
+        task.wait(0.15)
+    end
+end
+
+BF.findPartsByKeywords = function(nearPos, radius, keywords)
     local found = {}
-    radius = radius or 120
-    for _, d in ipairs(workspace:GetDescendants()) do
-        if d:IsA("BasePart") then
-            local n = string.lower(d.Name)
-            if string.find(n, "rope") or string.find(n, "rigging") or string.find(n, "cord")
-                or string.find(n, "line") or string.find(n, "cable") then
-                if nearPos and (d.Position - nearPos).Magnitude <= radius then
+    radius = radius or 150
+    keywords = keywords or {}
+    local function matchName(n)
+        n = string.lower(n)
+        for _, k in ipairs(keywords) do
+            if string.find(n, k, 1, true) then return true end
+        end
+        return false
+    end
+    -- prefer Locations / island folders over full map scan when possible
+    local roots = { Workspace }
+    pcall(function()
+        local wo = Workspace:FindFirstChild("_WorldOrigin")
+        if wo then table.insert(roots, 1, wo) end
+    end)
+    for _, root in ipairs(roots) do
+        for _, d in ipairs(root:GetDescendants()) do
+            if d:IsA("BasePart") and matchName(d.Name) then
+                if not nearPos or (d.Position - nearPos).Magnitude <= radius then
                     table.insert(found, d)
+                end
+            end
+        end
+        if #found > 0 and root ~= Workspace then break end
+    end
+    -- if still empty, limited Workspace children only (not full descendants — FPS)
+    if #found == 0 and nearPos then
+        for _, child in ipairs(Workspace:GetChildren()) do
+            if child:IsA("BasePart") and matchName(child.Name) then
+                if (child.Position - nearPos).Magnitude <= radius then
+                    table.insert(found, child)
+                end
+            elseif child:IsA("Model") then
+                for _, d in ipairs(child:GetDescendants()) do
+                    if d:IsA("BasePart") and matchName(d.Name) then
+                        if (d.Position - nearPos).Magnitude <= radius then
+                            table.insert(found, d)
+                        end
+                    end
                 end
             end
         end
@@ -3955,68 +4056,174 @@ BF.findRopeLikeParts = function(nearPos, radius)
     return found
 end
 
-BF.tryCutWindmillRopes = function()
-    -- Pirate Village windmill center ~ dock/village
-    local windmillPos = Vector3.new(-1140, 55, 3975)
+BF.flyTo = function(pos, waitSec)
     pcall(function()
         if not BF.flying then BF.enableFly() end
-        BF.setFlyTarget(windmillPos, false)
+        BF.setFlyTarget(pos + Vector3.new(0, 10, 0), false)
     end)
-    task.wait(2)
-    local ropes = BF.findRopeLikeParts(windmillPos, 150)
+    task.wait(waitSec or 2)
+end
+
+-- --- Individual secrets ---
+
+BF.secretWindmill = function()
+    local key = "windmill"
+    if BF._secretDone[key] then return end
+    local pos = Vector3.new(-1140, 55, 3975) -- Pirate Village
+    BF.notifyUser("Secrets", "Windmill: cutting ropes", 3)
+    BF.flyTo(pos, 2.5)
+    local ropes = BF.findPartsByKeywords(pos, 180, {"rope", "rigging", "cord", "cable"})
     if #ropes == 0 then
-        -- broader search on island
-        ropes = BF.findRopeLikeParts(windmillPos, 250)
+        ropes = BF.findPartsByKeywords(pos, 280, {"rope", "rigging"})
     end
-    BF.notifyUser("Secrets", "Windmill ropes found: " .. tostring(#ropes), 3)
+    BF.notifyUser("Secrets", "Ropes: " .. #ropes, 2)
     for _, rope in ipairs(ropes) do
-        pcall(function()
-            if not BF.flying then BF.enableFly() end
-            BF.setFlyTarget(rope.Position + Vector3.new(0, 3, 0), false)
-            task.wait(0.35)
-            -- equip sword and M1 / hit
-            local char = LocalPlayer.Character
-            if char then
-                local hum = char:FindFirstChildOfClass("Humanoid")
-                local bp = LocalPlayer:FindFirstChild("Backpack")
-                if hum and bp then
-                    for _, t in ipairs(bp:GetChildren()) do
-                        if t:IsA("Tool") and (t.ToolTip == "Sword" or string.find(string.lower(t.Name), "sword")) then
-                            hum:EquipTool(t)
-                            break
+        if not BF.secretsRunning then return end
+        BF.hitPart(rope)
+    end
+    -- claim area: docks NPC
+    BF.flyTo(Vector3.new(-1140, 20, 3850), 1.5)
+    BF._secretDone[key] = true
+end
+
+BF.secretTavern = function()
+    local key = "tavern"
+    if BF._secretDone[key] then return end
+    local pos = Vector3.new(-1200, 35, 4300) -- near Chef / tavern
+    BF.notifyUser("Secrets", "Tavern: looking for pirates", 3)
+    BF.flyTo(pos, 2)
+    local enemies = Workspace:FindFirstChild("Enemies")
+    if enemies then
+        for _, m in ipairs(enemies:GetChildren()) do
+            if not BF.secretsRunning then return end
+            local n = string.lower(m.Name)
+            if string.find(n, "tavern", 1, true) or string.find(n, "brawler", 1, true) then
+                local root = m:FindFirstChild("HumanoidRootPart")
+                local hum = m:FindFirstChildOfClass("Humanoid")
+                if root and hum and hum.Health > 0 then
+                    BF.flyTo(root.Position, 1)
+                    for _ = 1, 20 do
+                        if not m.Parent or hum.Health <= 0 then break end
+                        pcall(function() BF.attackEnemy(m, 0.04, 4) end)
+                        task.wait(0.3)
+                    end
+                end
+            end
+        end
+    end
+    BF._secretDone[key] = true
+end
+
+BF.secretDesertPillars = function()
+    local key = "desert_pillars"
+    if BF._secretDone[key] then return end
+    local pos = Vector3.new(1100, 20, 4400) -- desert / pyramid area
+    BF.notifyUser("Secrets", "Desert: cleaning pillars", 3)
+    BF.flyTo(pos, 2.5)
+    local pillars = BF.findPartsByKeywords(pos, 220, {
+        "pillar", "stone", "monolith", "obelisk", "circle", "rune", "slab"
+    })
+    BF.notifyUser("Secrets", "Pillars/stones: " .. #pillars, 2)
+    for _, p in ipairs(pillars) do
+        if not BF.secretsRunning then return end
+        BF.hitPart(p)
+    end
+    BF._secretDone[key] = true
+end
+
+BF.secretJungleTrees = function()
+    local key = "jungle_trees"
+    if BF._secretDone[key] then return end
+    local pos = Vector3.new(-1520, 30, 150)
+    BF.notifyUser("Secrets", "Jungle: hitting trees (hat)", 3)
+    BF.flyTo(pos, 2)
+    local trees = BF.findPartsByKeywords(pos, 250, {"tree", "trunk", "leaf", "wood"})
+    -- limit hits
+    local n = 0
+    for _, t in ipairs(trees) do
+        if not BF.secretsRunning then return end
+        if n >= 25 then break end
+        BF.hitPart(t)
+        n = n + 1
+        -- monkey thief spawn
+        local enemies = Workspace:FindFirstChild("Enemies")
+        if enemies then
+            for _, m in ipairs(enemies:GetChildren()) do
+                local ln = string.lower(m.Name)
+                if string.find(ln, "monkey", 1, true) and (string.find(ln, "thief", 1, true) or string.find(ln, "hat", 1, true)) then
+                    local root = m:FindFirstChild("HumanoidRootPart")
+                    local hum = m:FindFirstChildOfClass("Humanoid")
+                    if root and hum and hum.Health > 0 then
+                        BF.flyTo(root.Position, 1)
+                        for _ = 1, 15 do
+                            if not m.Parent or hum.Health <= 0 then break end
+                            pcall(function() BF.attackEnemy(m, 0.04, 4) end)
+                            task.wait(0.25)
                         end
                     end
                 end
             end
-            BF.fireVirtualClick()
-            -- also tool activate
-            pcall(function()
-                local tool = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
-                if tool then tool:Activate() end
-            end)
-            -- click detectors on rope
-            if fireclickdetector then
-                local cd = rope:FindFirstChildOfClass("ClickDetector") or rope.Parent and rope.Parent:FindFirstChildOfClass("ClickDetector")
-                if cd then fireclickdetector(cd) end
-            end
-            task.wait(0.25)
-        end)
+        end
     end
+    BF._secretDone[key] = true
+end
+
+BF.secretMarineFlag = function()
+    local key = "marine_flag"
+    if BF._secretDone[key] then return end
+    local pos = Vector3.new(-4800, 30, 4300)
+    BF.notifyUser("Secrets", "Marine Fortress: rope/flag", 3)
+    BF.flyTo(pos, 2)
+    local parts = BF.findPartsByKeywords(pos, 300, {"rope", "flag", "parlus", "pole"})
+    for _, p in ipairs(parts) do
+        if not BF.secretsRunning then return end
+        BF.hitPart(p)
+        if fireproximityprompt then
+            local pp = p:FindFirstChildOfClass("ProximityPrompt")
+            if pp then pcall(fireproximityprompt, pp) end
+        end
+    end
+    BF._secretDone[key] = true
+end
+
+BF.runSecretsCycle = function()
+    if BF.getCurrentSea and BF.getCurrentSea() ~= "Sea1" and BF.getCurrentSea() ~= 1 then
+        local sea = tostring(BF.getCurrentSea and BF.getCurrentSea() or "?")
+        if sea ~= "Sea1" and not string.find(sea, "1") then
+            BF.notifyUser("Secrets", "Sea1 only (current: " .. sea .. ")", 4)
+            task.wait(5)
+            return
+        end
+    end
+    BF.secretWindmill()
+    if not BF.secretsRunning then return end
+    BF.secretTavern()
+    if not BF.secretsRunning then return end
+    BF.secretDesertPillars()
+    if not BF.secretsRunning then return end
+    BF.secretJungleTrees()
+    if not BF.secretsRunning then return end
+    BF.secretMarineFlag()
 end
 
 BF.startAutoSecrets = function()
     if BF.secretsRunning then return end
     BF.secretsRunning = true
-    BF.notifyUser("Secrets", "Auto Secrets ON (Windmill first)", 3)
+    BF._secretDone = {}
+    BF.notifyUser("Secrets", "Auto Secrets ON (Sea1 puzzles)", 4)
     BF.secretsTask = task.spawn(function()
         while BF.secretsRunning do
             local ok, err = pcall(function()
                 if not config.autoSecrets then return end
-                BF.tryCutWindmillRopes()
-                task.wait(8)
+                BF.runSecretsCycle()
             end)
             if not ok then warn("[BF] secrets:", err) end
-            task.wait(1)
+            -- full cycle then wait before retrying incomplete ones
+            task.wait(15)
+            -- allow retry of failed finds after a while
+            if os.clock() % 120 < 20 then
+                BF._secretDone = {}
+            end
         end
     end)
 end
@@ -4027,155 +4234,326 @@ BF.stopAutoSecrets = function()
     BF.notifyUser("Secrets", "Auto Secrets OFF", 2)
 end
 
-
-
 -- =============================================
--- ENEMY ESP (through walls) - Highlight + name/HP
--- =============================================
-BF.enemyEspRunning = false
-BF.enemyEspTask = nil
-BF.enemyEspObjects = {} -- [model] = {hl=, bb=, nameLbl=, hpLbl=}
+BF.raidRunning = false
+BF.raidTask = nil
+BF.lastRaidChipAt = 0
 
-BF.clearEnemyEsp = function()
-    for model, data in pairs(BF.enemyEspObjects) do
-        pcall(function()
-            if data.hl then data.hl:Destroy() end
-            if data.bb then data.bb:Destroy() end
-        end)
-        BF.enemyEspObjects[model] = nil
-    end
+local RAID_TYPES = {
+    "Flame", "Ice", "Quake", "Light", "Dark", "Magma", "Sand",
+    "Buddha", "Spider", "Rumble", "Phoenix", "Dough",
+}
+
+-- Lab / lobby approximate positions
+local RAID_LAB_SEA2 = Vector3.new(-6520, 308, -4812) -- chip insert pad (user)
+local RAID_LAB_SEA3 = Vector3.new(-5550, 314, -2980) -- Castle on the Sea (approx)
+
+-- ========== RAID CORE (hub-style Locations + death/end handling) ==========
+BF.getRaidLocations = function()
+    local wo = workspace:FindFirstChild("_WorldOrigin")
+    return wo and wo:FindFirstChild("Locations")
 end
 
-BF.isBossModel = function(model)
-    if not model then return false end
-    if model:GetAttribute("isBoss") == true then return true end
-    local n = string.lower(model.Name)
-    if string.find(n, "boss", 1, true) then return true end
+BF.raidTimerVisible = function()
+    local ok, vis = pcall(function()
+        local main = LocalPlayer:FindFirstChild("PlayerGui") and LocalPlayer.PlayerGui:FindFirstChild("Main")
+        if not main then return false end
+        local timer = main:FindFirstChild("Timer")
+        if timer and timer:IsA("GuiObject") then
+            return timer.Visible == true
+        end
+        return false
+    end)
+    return ok and vis == true
+end
+
+BF.isPlayerDead = function()
+    local char = LocalPlayer.Character
+    if not char then return true end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum or hum.Health <= 0 then return true end
     return false
 end
 
-BF.ensureEnemyEsp = function(model)
-    if BF.enemyEspObjects[model] then return BF.enemyEspObjects[model] end
-    local data = {}
-    pcall(function()
-        local hl = Instance.new("Highlight")
-        hl.Name = "BF_EnemyESP"
-        hl.Enabled = true
-        pcall(function()
-            hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-        end)
-        hl.FillTransparency = 0.5
-        hl.OutlineTransparency = 0
-        if BF.isBossModel(model) then
-            hl.FillColor = Color3.fromRGB(255, 60, 60)
-            hl.OutlineColor = Color3.fromRGB(255, 200, 50)
-        else
-            hl.FillColor = Color3.fromRGB(80, 180, 255)
-            hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+BF.isInRaid = function()
+    -- Timer HUD OR any Island part under Locations
+    if BF.raidTimerVisible() then return true end
+    local locs = BF.getRaidLocations()
+    if not locs then return false end
+    for _, ch in ipairs(locs:GetChildren()) do
+        local n = string.lower(ch.Name)
+        if string.find(n, "island") then
+            return true
         end
-        hl.Adornee = model
-        -- Parent to PlayerGui folder so it survives enemy streaming better
-        local pg = LocalPlayer:FindFirstChild("PlayerGui")
-        local folder = pg and pg:FindFirstChild("BF_ESP_FOLDER")
-        if not folder and pg then
-            folder = Instance.new("Folder")
-            folder.Name = "BF_ESP_FOLDER"
-            folder.Parent = pg
-        end
-        hl.Parent = folder or model
-        data.hl = hl
-    end)
-    pcall(function()
-        local root = model:FindFirstChild("HumanoidRootPart") or model:FindFirstChild("Head")
-        if not root then return end
-        local bb = Instance.new("BillboardGui")
-        bb.Name = "BF_EnemyESP_BB"
-        bb.AlwaysOnTop = true
-        bb.Size = UDim2.new(0, 160, 0, 40)
-        bb.StudsOffset = Vector3.new(0, 3.2, 0)
-        bb.MaxDistance = config.enemyEspMaxDist or 2000
-        bb.Adornee = root
-        bb.Parent = root
-
-        local nameLbl = Instance.new("TextLabel")
-        nameLbl.BackgroundTransparency = 1
-        nameLbl.Size = UDim2.new(1, 0, 0.5, 0)
-        nameLbl.Font = Enum.Font.GothamBold
-        nameLbl.TextSize = 14
-        nameLbl.TextColor3 = Color3.new(1, 1, 1)
-        nameLbl.TextStrokeTransparency = 0.4
-        nameLbl.Text = model.Name
-        nameLbl.Parent = bb
-
-        local hpLbl = Instance.new("TextLabel")
-        hpLbl.BackgroundTransparency = 1
-        hpLbl.Position = UDim2.new(0, 0, 0.5, 0)
-        hpLbl.Size = UDim2.new(1, 0, 0.5, 0)
-        hpLbl.Font = Enum.Font.Gotham
-        hpLbl.TextSize = 12
-        hpLbl.TextColor3 = Color3.fromRGB(120, 255, 120)
-        hpLbl.TextStrokeTransparency = 0.4
-        hpLbl.Text = ""
-        hpLbl.Parent = bb
-
-        data.bb = bb
-        data.nameLbl = nameLbl
-        data.hpLbl = hpLbl
-    end)
-    BF.enemyEspObjects[model] = data
-    return data
+    end
+    return false
 end
 
-BF.updateEnemyEsp = function()
-    if not config.enemyEspEnabled then
-        BF.clearEnemyEsp()
-        return
-    end
-    local folder = Workspace:FindFirstChild("Enemies")
-    if not folder then return end
-    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    local maxD = config.enemyEspMaxDist or 2000
-    local seen = {}
+BF.getPartCFrame = function(obj)
+    if not obj then return nil end
+    local cf = nil
+    pcall(function()
+        if obj:IsA("BasePart") then
+            cf = obj.CFrame
+        elseif obj:IsA("Model") then
+            cf = obj:GetPivot()
+        else
+            local p = obj:FindFirstChildWhichIsA("BasePart", true)
+            if p then cf = p.CFrame end
+        end
+    end)
+    return cf
+end
 
-    for _, model in ipairs(folder:GetChildren()) do
-        if model:IsA("Model") then
-            local hum = model:FindFirstChildOfClass("Humanoid")
-            local root = model:FindFirstChild("HumanoidRootPart")
-            if hum and root and hum.Health > 0 then
-                local dist = hrp and (root.Position - hrp.Position).Magnitude or 0
-                if not hrp or dist <= maxD then
-                    seen[model] = true
-                    local data = BF.ensureEnemyEsp(model)
-                    if data then
-                        if data.nameLbl then
-                            data.nameLbl.Visible = config.enemyEspShowName ~= false
-                            data.nameLbl.Text = model.Name
-                        end
-                        if data.hpLbl then
-                            data.hpLbl.Visible = config.enemyEspShowHealth ~= false
-                            local maxH = math.max(hum.MaxHealth, 1)
-                            data.hpLbl.Text = string.format("%d / %d", math.floor(hum.Health), math.floor(maxH))
-                        end
-                        if data.hl and BF.isBossModel(model) and config.enemyEspBossColor ~= false then
-                            data.hl.FillColor = Color3.fromRGB(255, 60, 60)
-                            data.hl.OutlineColor = Color3.fromRGB(255, 200, 50)
-                        end
-                    end
+-- Prefer highest Island N; also accept "Island1" / loose names
+BF.getActiveRaidIsland = function()
+    local locs = BF.getRaidLocations()
+    if not locs then return nil, 0, nil end
+
+    for i = 5, 1, -1 do
+        local island = locs:FindFirstChild("Island " .. i) or locs:FindFirstChild("Island" .. i)
+        if island then
+            local cf = BF.getPartCFrame(island)
+            if cf then return island, i, cf end
+        end
+    end
+
+    -- fallback: any child with Island in name, pick furthest from player or first
+    local best, bestI, bestCf, bestScore = nil, 0, nil, -1
+    for _, ch in ipairs(locs:GetChildren()) do
+        local n = string.lower(ch.Name)
+        if string.find(n, "island") then
+            local cf = BF.getPartCFrame(ch)
+            if cf then
+                local num = tonumber(string.match(ch.Name, "%d+")) or 1
+                if num >= bestScore then
+                    best, bestI, bestCf, bestScore = ch, num, cf, num
                 end
             end
         end
     end
+    return best, bestI, bestCf
+end
 
-    for model, data in pairs(BF.enemyEspObjects) do
-        if not seen[model] or not model.Parent then
-            pcall(function()
-                if data.hl then data.hl:Destroy() end
-                if data.bb then data.bb:Destroy() end
-            end)
-            BF.enemyEspObjects[model] = nil
+BF.getRaidEnemiesNear = function(pos, radius)
+    local list = {}
+    local en = workspace:FindFirstChild("Enemies")
+    if not en then return list end
+    radius = radius or 250
+    for _, m in ipairs(en:GetChildren()) do
+        local h = m:FindFirstChildOfClass("Humanoid")
+        local r = m:FindFirstChild("HumanoidRootPart")
+        if h and r and h.Health > 0 then
+            if not pos or (r.Position - pos).Magnitude <= radius then
+                table.insert(list, m)
+            end
         end
     end
+    return list
 end
+
+BF.getAllRaidEnemies = function()
+    return BF.getRaidEnemiesNear(nil, 1e9)
+end
+
+BF.raidOrbitAngle = 0
+BF.raidHoverY = 22
+BF.raidDodgeAmp = 35 -- side-to-side dodge distance (not stuck mid-island)
+BF.currentRaidIslandIndex = 0
+BF.raidEndedAt = 0
+local RAID_REENTRY_COOLDOWN = 8
+
+-- Stay over the island, but STRAFE left/right (real dodge), not tiny circle in the center
+BF.raidFlyToPos = function(pos)
+    if not pos then return end
+    pcall(function()
+        BF._bossFlyUnlock = true
+        if not BF.flying then BF.enableFly() end
+
+        -- smooth left-right + slight forward/back (figure-8-ish)
+        BF.raidOrbitAngle = BF.raidOrbitAngle + 0.07
+        local ox = math.sin(BF.raidOrbitAngle) * BF.raidDodgeAmp
+        local oz = math.sin(BF.raidOrbitAngle * 0.5) * (BF.raidDodgeAmp * 0.45)
+        local target = Vector3.new(pos.X + ox, pos.Y + BF.raidHoverY, pos.Z + oz)
+        BF.setFlyTarget(target, false)
+
+        local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            local flat = Vector3.new(hrp.Position.X - target.X, 0, hrp.Position.Z - target.Z)
+            if flat.Magnitude < 6 then
+                local v = hrp.AssemblyLinearVelocity
+                hrp.AssemblyLinearVelocity = Vector3.new(v.X * 0.35, v.Y * 0.5, v.Z * 0.35)
+            elseif flat.Magnitude > 160 then
+                hrp.AssemblyLinearVelocity = Vector3.zero
+                BF.setFlyTarget(target, false)
+            end
+        end
+        BF._bossFlyUnlock = false
+    end)
+end
+
+BF.raidKillLoop = function()
+    if BF.isPlayerDead() then
+        return false
+    end
+
+    BF.ensureSimRadius()
+
+    local island, idx, cf = BF.getActiveRaidIsland()
+    local focusPos = cf and cf.Position or nil
+
+    -- Fallback: no Locations parts -> use living enemies as focus (still progress raid)
+    if not focusPos then
+        local all = BF.getAllRaidEnemies()
+        if #all > 0 then
+            local sum = Vector3.zero
+            for _, m in ipairs(all) do
+                sum = sum + m.HumanoidRootPart.Position
+            end
+            focusPos = sum / #all
+            if BF.currentRaidIslandIndex ~= -1 then
+                BF.currentRaidIslandIndex = -1
+                BF.notifyUser("Raid", "No Island parts - following enemies", 2)
+            end
+        end
+    end
+
+    if not focusPos then
+        -- truly nothing: stay put briefly (island between spawns)
+        return false
+    end
+
+    if idx > 0 and idx ~= BF.currentRaidIslandIndex then
+        BF.currentRaidIslandIndex = idx
+        BF.notifyUser("Raid", "Island " .. idx, 2)
+    end
+
+    BF.raidFlyToPos(focusPos)
+
+    local aura = BF.getRaidEnemiesNear(focusPos, 250)
+    if #aura == 0 then
+        aura = BF.getAllRaidEnemies()
+    end
+    if #aura == 0 then
+        return false
+    end
+
+    pcall(function()
+        for i, m in ipairs(aura) do
+            if i > 14 then break end
+            local r = m:FindFirstChild("HumanoidRootPart")
+            if r and focusPos then
+                local d = (r.Position - focusPos).Magnitude
+                if d > 20 and d < 200 then
+                    local ang = (i - 1) * 0.55
+                    r.CFrame = CFrame.new(focusPos + Vector3.new(math.cos(ang) * 6, 2, math.sin(ang) * 6))
+                end
+            end
+        end
+    end)
+
+    pcall(function()
+        BF.attackTargets(aura, config.raidAttackSpeed or 0.001, config.raidHitsPerCycle or 40)
+    end)
+    return true
+end
+
+BF.startAutoRaid = function()
+    if BF.raidRunning then return end
+    BF.raidRunning = true
+    BF.raidEndedAt = 0
+    BF.currentRaidIslandIndex = 0
+    BF.notifyUser("Raid", "Auto Raid ON (" .. tostring(config.raidType) .. ")", 3)
+    BF.raidTask = task.spawn(function()
+        while BF.raidRunning do
+            local ok, err = pcall(function()
+                if not config.autoRaid then return end
+
+                -- DEAD: wait for respawn, do not fly to old raid
+                if BF.isPlayerDead() then
+                    BF.notifyUser("Raid", "Dead - waiting respawn", 2)
+                    task.wait(1)
+                    return
+                end
+
+                if BF.isInRaid() then
+                    BF.raidEndedAt = 0
+                    local fighting = BF.raidKillLoop()
+                    if not fighting then
+                        task.wait(0.8)
+                    end
+                    return
+                end
+
+                -- Raid ended (timer gone, no islands)
+                BF.currentRaidIslandIndex = 0
+                if BF.raidEndedAt == 0 then
+                    BF.raidEndedAt = os.clock()
+                    BF.notifyUser("Raid", "Raid ended - cooldown then new chip", 3)
+                end
+                -- short cooldown so we don't path back into a finishing raid
+                if os.clock() - BF.raidEndedAt < RAID_REENTRY_COOLDOWN then
+                    task.wait(0.5)
+                    return
+                end
+
+                if BF.getPlayerLevel() < 1100 then
+                    BF.notifyUser("Raid", "Need level 1100+", 3)
+                    task.wait(10)
+                    return
+                end
+
+                selectRaidType(config.raidType)
+                if not hasMicrochip() then
+                    buyRaidChip()
+                    if not hasMicrochip() then
+                        BF.notifyUser("Raid", "No Microchip - lobby / CD", 3)
+                        goToRaidLobby()
+                        task.wait(4)
+                        return
+                    end
+                end
+
+                BF.notifyUser("Raid", "Lobby -> start", 2)
+                goToRaidLobby()
+                tryStartRaid()
+                task.wait(2.5)
+            end)
+            if not ok then
+                warn("[BF] autoRaid:", err)
+            end
+            task.wait(0.35)
+        end
+    end)
+end
+
+BF.stopAutoRaid = function()
+    BF.raidRunning = false
+    config.autoRaid = false
+    BF.notifyUser("Raid", "Auto Raid OFF", 2)
+end
+
+
+BF.farmRunning = false
+BF.farmTask = nil
+BF.lastIslandName = ""
+BF.respawnConnection = nil
+BF.equipCheckConnection = nil
+
+BF.setupRespawnRecovery = function()
+    if BF.respawnConnection then BF.respawnConnection:Disconnect() end
+    BF.respawnConnection = LocalPlayer.CharacterAdded:Connect(function(character)
+        if not BF.farmRunning then return end
+        local humanoid = character:WaitForChild("Humanoid", 10)
+        local hrp = character:WaitForChild("HumanoidRootPart", 10)
+        if humanoid and hrp and BF.farmRunning then
+            task.wait(0.5)
+            if BF.flying then BF.disableFly() end
+            BF.enableFly()
+        end
+    end)
+end
+
 
 BF.startEnemyEsp = function()
     if BF.enemyEspRunning then return end
