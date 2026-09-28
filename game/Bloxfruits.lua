@@ -542,23 +542,23 @@ end
 -- ISLAND DATA (full list)
 -- =============================================
 local islands = {
-    -- Sea1 (from EnemySpawns dump MAP=Sea1 PlaceId=2753915549)
+    -- Sea1 normals (EnemySpawns dump 2026-09-27)
     {Name = "Pirate Starter",     Min = 0,   Max = 10,  Pos = Vector3.new(1137, 13, 1594), Quest = {"StartQuest","BanditQuest1",1}, EnemyPatterns = {"Bandit"}, isBoss = false},
     {Name = "Marine Starter",     Min = 0,   Max = 10,  Pos = Vector3.new(-2723, 32, 2090), Quest = {"StartQuest","MarineQuest1",1}, EnemyPatterns = {"Trainee"}, isBoss = false},
-    {Name = "Jungle (Normal)",    Min = 10,  Max = 15,  Pos = Vector3.new(-1520, 30, 150), Quest = {"StartQuest","JungleQuest",1}, EnemyPatterns = {"Monkey"}, isBoss = false},
-    {Name = "Jungle (Stage 2)",   Min = 15,  Max = 20,  Pos = Vector3.new(-1313, 18, -548), Quest = {"StartQuest","JungleQuest",2}, EnemyPatterns = {"Gorilla"}, isBoss = false},
+    {Name = "Jungle (Normal)",    Min = 10,  Max = 15,  Pos = Vector3.new(-1593, 28, 137), Quest = {"StartQuest","JungleQuest",1}, EnemyPatterns = {"Monkey"}, isBoss = false},
+    {Name = "Jungle (Stage 2)",   Min = 15,  Max = 25,  Pos = Vector3.new(-1313, 18, -548), Quest = {"StartQuest","JungleQuest",2}, EnemyPatterns = {"Gorilla"}, isBoss = false},
     {Name = "Pirate Village",     Min = 30,  Max = 40,  Pos = Vector3.new(-1141, 22, 3976), Quest = {"StartQuest","BuggyQuest1",1}, EnemyPatterns = {"Pirate"}, isBoss = false},
     {Name = "Pirate Village Stage 2", Min = 40, Max = 55, Pos = Vector3.new(-1204, 28, 4370), Quest = {"StartQuest","BuggyQuest1",2}, EnemyPatterns = {"Brute"}, isBoss = false},
-    {Name = "Desert 1",           Min = 60, Max = 75, Pos = Vector3.new(924, 8, 4514), Quest = {"StartQuest","DesertQuest",1}, EnemyPatterns = {"Desert Bandit"}, isBoss = false},
-    {Name = "Desert 2",           Min = 75, Max = 90, Pos = Vector3.new(1573, 14, 4159), Quest = {"StartQuest","DesertQuest",2}, EnemyPatterns = {"Desert Officer"}, isBoss = false},
-    {Name = "Snow 1",             Min = 90, Max = 100, Pos = Vector3.new(1416, 78, -1435), Quest = {"StartQuest","SnowQuest",1}, EnemyPatterns = {"Snow Bandit"}, isBoss = false},
-    {Name = "Snow 2",             Min = 100, Max = 120, Pos = Vector3.new(1198, 98, -1603), Quest = {"StartQuest","SnowQuest",2}, EnemyPatterns = {"Snowman"}, isBoss = false},
+    {Name = "Desert 1",           Min = 60,  Max = 70,  Pos = Vector3.new(924, 8, 4514), Quest = {"StartQuest","DesertQuest",1}, EnemyPatterns = {"Desert Bandit"}, isBoss = false},
+    {Name = "Desert 2",           Min = 70,  Max = 90,  Pos = Vector3.new(1573, 14, 4159), Quest = {"StartQuest","DesertQuest",2}, EnemyPatterns = {"Desert Officer"}, isBoss = false},
+    {Name = "Snow 1",             Min = 90,  Max = 100, Pos = Vector3.new(1416, 78, -1435), Quest = {"StartQuest","SnowQuest",1}, EnemyPatterns = {"Snow Bandit"}, isBoss = false},
+    {Name = "Snow 2",             Min = 100, Max = 110, Pos = Vector3.new(1198, 98, -1603), Quest = {"StartQuest","SnowQuest",2}, EnemyPatterns = {"Snowman"}, isBoss = false},
     {Name = "Marine Fortress",    Min = 120, Max = 150, Pos = Vector3.new(-4809, 13, 4302), Quest = {"StartQuest","MarineQuest2",1}, EnemyPatterns = {"Chief Petty Officer"}, isBoss = false},
     {Name = "Sky 1",              Min = 150, Max = 175, Pos = Vector3.new(-5092, 281, -1019), Quest = {"StartQuest","SkyQuest",1}, EnemyPatterns = {"Sky Bandit"}, isBoss = false},
     {Name = "Sky 2",              Min = 175, Max = 190, Pos = Vector3.new(-5293, 505, -351), Quest = {"StartQuest","SkyQuest",2}, EnemyPatterns = {"Dark Master"}, isBoss = false},
-    {Name = "Prison 1",           Min = 190, Max = 210, Pos = Vector3.new(5272, 7, 468), Quest = {"StartQuest","PrisonerQuest",1}, EnemyPatterns = {"Prisoner"}, isBoss = false},
-    {Name = "Prison 2",           Min = 210, Max = 230, Pos = Vector3.new(5224, 9, 998), Quest = {"StartQuest","PrisonerQuest",2}, EnemyPatterns = {"Dangerous Prisoner"}, isBoss = false},
-    {Name = "Colosseum 1",        Min = 250, Max = 300, Pos = Vector3.new(-1745, 10, -2705), Quest = {"StartQuest","ColosseumQuest",1}, EnemyPatterns = {"Toga Warrior"}, isBoss = false},
+    {Name = "Prison 1",           Min = 190, Max = 210, Pos = Vector3.new(5270, 9, 470), Quest = {"StartQuest","PrisonerQuest",1}, EnemyPatterns = {"Prisoner"}, isBoss = false},
+    {Name = "Prison 2",           Min = 210, Max = 230, Pos = Vector3.new(5330, 20, 750), Quest = {"StartQuest","PrisonerQuest",2}, EnemyPatterns = {"Ruthless Prisoner","Dangerous Prisoner"}, isBoss = false},
+    {Name = "Colosseum 1",        Min = 230, Max = 300, Pos = Vector3.new(-1745, 10, -2705), Quest = {"StartQuest","ColosseumQuest",1}, EnemyPatterns = {"Toga Warrior"}, isBoss = false},
     --{Name = "Colosseum 2",        Min = 275, Max = 300, Pos = Vector3.new(-1175, 12, -3214), Quest = {"StartQuest","ColosseumQuest",2}, EnemyPatterns = {"Gladiator"}, isBoss = false},
     {Name = "Magma 1",            Min = 300, Max = 325, Pos = Vector3.new(-5468, 17, 8450), Quest = {"StartQuest","MagmaQuest",1}, EnemyPatterns = {"Military Soldier"}, isBoss = false},
     {Name = "Magma 2",            Min = 325, Max = 350, Pos = Vector3.new(-5842, 77, 8773), Quest = {"StartQuest","MagmaQuest",2}, EnemyPatterns = {"Military Spy"}, isBoss = false},
@@ -569,9 +569,9 @@ local islands = {
     {Name = "Sky Upper 3",        Min = 525, Max = 550, Pos = Vector3.new(-6798, 5552, 1214), Quest = {"StartQuest","SkyExp2Quest",1}, EnemyPatterns = {"Royal Squad"}, isBoss = false},
     {Name = "Sky Upper 4",        Min = 550, Max = 575, Pos = Vector3.new(-7064, 5541, 939), Quest = {"StartQuest","SkyExp2Quest",2}, EnemyPatterns = {"Royal Soldier"}, isBoss = false},
     {Name = "Fountain 1",         Min = 625, Max = 650, Pos = Vector3.new(5572, 78, 4010), Quest = {"StartQuest","FountainQuest",1}, EnemyPatterns = {"Galley Pirate"}, isBoss = false},
-    {Name = "Fountain 2",         Min = 650, Max = 675, Pos = Vector3.new(5634, 78, 4789), Quest = {"StartQuest","FountainQuest",2}, EnemyPatterns = {"Galley Captain"}, isBoss = false},
+    {Name = "Fountain 2",         Min = 650, Max = 700, Pos = Vector3.new(5634, 78, 4789), Quest = {"StartQuest","FountainQuest",2}, EnemyPatterns = {"Galley Captain"}, isBoss = false},
 
-    --El Bosses de Sea1
+    -- Sea1 bosses (names from live EnemySpawns dump)
     {Name = "The Gorilla King", Min = 20, Max = 30, Pos = Vector3.new(-1194, 11, -550),
         Quest = {"StartQuest","JungleQuest",2}, EnemyPatterns = {"Gorilla"},
         BossQuest = {"StartQuest","JungleQuest",3}, BossPatterns = {"The Gorilla King", "Gorilla King"},
@@ -592,9 +592,18 @@ local islands = {
         Quest = {"StartQuest","PrisonerQuest",2}, EnemyPatterns = {"Dangerous Prisoner","Ruthless Prisoner"},
         BossQuest = nil, BossPatterns = {"Warden"},
         isBoss = true},
-    {Name = "Magma Admiral", Min = 350, Max = 375, Pos = Vector3.new(-5626, 55, 8623),
+    {Name = "Chief Warden", Min = 230, Max = 250, Pos = Vector3.new(5117, 2, 483),
+        Quest = {"StartQuest","PrisonerQuest",2}, EnemyPatterns = {"Dangerous Prisoner"},
+        BossQuest = {"StartQuest","ImpelQuest",2}, BossPatterns = {"Chief Warden"},
+        isBoss = true},
+    {Name = "Swan", Min = 240, Max = 250, Pos = Vector3.new(5117, 2, 483),
+        Quest = {"StartQuest","PrisonerQuest",2}, EnemyPatterns = {"Dangerous Prisoner"},
+        BossQuest = {"StartQuest","ImpelQuest",3}, BossPatterns = {"Swan"},
+        isBoss = true},
+    -- Dump name is Magma General (not Admiral)
+    {Name = "Magma General", Min = 350, Max = 375, Pos = Vector3.new(-5626, 55, 8623),
         Quest = {"StartQuest","MagmaQuest",2}, EnemyPatterns = {"Military Spy"},
-        BossQuest = {"StartQuest","MagmaQuest",3}, BossPatterns = {"Magma Admiral"},
+        BossQuest = {"StartQuest","MagmaQuest",3}, BossPatterns = {"Magma General", "Magma Admiral"},
         isBoss = true},
     {Name = "Fishman Lord", Min = 425, Max = 450, Pos = Vector3.new(61353, 67, 1029),
         Quest = {"StartQuest","FishmanQuest",2}, EnemyPatterns = {"Fishman Commando"},
@@ -606,7 +615,7 @@ local islands = {
         isBoss = true},
     {Name = "Lightning God", Min = 575, Max = 625, Pos = Vector3.new(-7125, 5596, 112),
         Quest = {"StartQuest","SkyExp2Quest",2}, EnemyPatterns = {"Royal Soldier"},
-        BossQuest = {"StartQuest","SkyExp2Quest",3}, BossPatterns = {"Lightning God"},
+        BossQuest = {"StartQuest","SkyExp2Quest",3}, BossPatterns = {"Lightning God", "Thunder God"},
         isBoss = true},
     {Name = "Cyborg", Min = 675, Max = 700, Pos = Vector3.new(6252, 9, 4941),
         Quest = {"StartQuest","FountainQuest",2}, EnemyPatterns = {"Galley Captain"},
@@ -629,7 +638,7 @@ local islands = {
     {Name = "Snow Trooper",       Min = 1000, Max = 1049, Pos = Vector3.new(483, 411, -5425), Quest = {"StartQuest","SnowMountainQuest",1}, EnemyPatterns = {"Snow Trooper"}, isBoss = false},
     {Name = "Winter Warrior",     Min = 1050, Max = 1099, Pos = Vector3.new(1216, 429, -5307), Quest = {"StartQuest","SnowMountainQuest",2}, EnemyPatterns = {"Winter Warrior"}, isBoss = false},
     {Name = "Lab Subordinate",    Min = 1100, Max = 1124, Pos = Vector3.new(-5821, 84, -4409), Quest = {"StartQuest","IceSideQuest",1}, EnemyPatterns = {"Lab Subordinate"}, isBoss = false},
-    {Name = "Horned Warrior",     Min = 1125, Max = 1150, Pos = Vector3.new(-6342, 29, -5818), Quest = {"StartQuest","IceSideQuest",2}, EnemyPatterns = {"Horned Warrior"}, isBoss = false},
+    {Name = "Horned Warrior",     Min = 1125, Max = 1174, Pos = Vector3.new(-6342, 29, -5818), Quest = {"StartQuest","IceSideQuest",2}, EnemyPatterns = {"Horned Warrior"}, isBoss = false},
     {Name = "Magma Ninja",        Min = 1175, Max = 1199, Pos = Vector3.new(-5784, 37, -5559), Quest = {"StartQuest","FireSideQuest",1}, EnemyPatterns = {"Magma Ninja"}, isBoss = false},
     {Name = "Lava Pirate",        Min = 1200, Max = 1249, Pos = Vector3.new(-5078, 29, -4934), Quest = {"StartQuest","FireSideQuest",2}, EnemyPatterns = {"Lava Pirate"}, isBoss = false},
     {Name = "Ship Deckhand",      Min = 1250, Max = 1274, Pos = Vector3.new(861, 126, 33085), Quest = {"StartQuest","ShipQuest1",1}, EnemyPatterns = {"Ship Deckhand"}, isBoss = false},
@@ -640,16 +649,6 @@ local islands = {
     {Name = "Snow Lurker",        Min = 1375, Max = 1424, Pos = Vector3.new(5557, 28, -6784), Quest = {"StartQuest","FrostQuest",2}, EnemyPatterns = {"Snow Lurker"}, isBoss = false},
     {Name = "Sea Soldier",        Min = 1425, Max = 1449, Pos = Vector3.new(-3147, 22, -9793), Quest = {"StartQuest","ForgottenQuest",1}, EnemyPatterns = {"Sea Soldier"}, isBoss = false},
     {Name = "Water Fighter",      Min = 1450, Max = 1500, Pos = Vector3.new(-3414, 239, -10335), Quest = {"StartQuest","ForgottenQuest",2}, EnemyPatterns = {"Water Fighter"}, isBoss = false},
-
-    -- Sea1 bosses (deduped positions from dump)
-    {Name = "Chief Warden",       Min = 230, Max = 250, Pos = Vector3.new(5117, 2, 483),
-        Quest = {"StartQuest","PrisonerQuest",2}, EnemyPatterns = {"Dangerous Prisoner"},
-        BossQuest = {"StartQuest","ImpelQuest",2}, BossPatterns = {"Chief Warden"},
-        isBoss = true},
-    {Name = "Swan",               Min = 240, Max = 250, Pos = Vector3.new(5117, 2, 483),
-        Quest = {"StartQuest","PrisonerQuest",2}, EnemyPatterns = {"Dangerous Prisoner"},
-        BossQuest = {"StartQuest","ImpelQuest",3}, BossPatterns = {"Swan"},
-        isBoss = true},
 
     -- Sea2 bosses
     {Name = "Diamond",            Min = 750, Max = 775, Pos = Vector3.new(-1711, 206, -97),
@@ -1442,23 +1441,46 @@ BF.getIslandForLevel = function(level)
     local candidates = {}
     for _, island in ipairs(islands) do
         if level >= island.Min and level <= island.Max then
-            if island.Pos.Magnitude > 0.1 then
+            if island.Pos and island.Pos.Magnitude > 0.1 then
                 table.insert(candidates, island)
             end
         end
     end
     if #candidates == 0 then return islands[#islands] end
+
     local bossCandidates, normalCandidates = {}, {}
     for _, island in ipairs(candidates) do
-        if island.isBoss then table.insert(bossCandidates, island) else table.insert(normalCandidates, island) end
+        if island.isBoss then
+            table.insert(bossCandidates, island)
+        else
+            table.insert(normalCandidates, island)
+        end
     end
-    local selectedList
-    if config.bossPriority then
-        selectedList = #bossCandidates > 0 and bossCandidates or normalCandidates
-    else
-        selectedList = #normalCandidates > 0 and normalCandidates or bossCandidates
+
+    -- Boss Priority: only use boss island if that boss is actually alive
+    if config.bossPriority and #bossCandidates > 0 then
+        for _, island in ipairs(bossCandidates) do
+            local alive = false
+            pcall(function()
+                alive = BF.findBossInWorkspace(island) ~= nil
+            end)
+            if alive then
+                return island
+            end
+        end
+        -- boss not spawned -> farm normals for this level
+        if #normalCandidates > 0 then
+            table.sort(normalCandidates, function(a, b)
+                if a.Max ~= b.Max then return a.Max > b.Max end
+                return a.Min > b.Min
+            end)
+            return normalCandidates[1]
+        end
+        return bossCandidates[1]
     end
-    table.sort(selectedList, function(a,b)
+
+    local selectedList = #normalCandidates > 0 and normalCandidates or bossCandidates
+    table.sort(selectedList, function(a, b)
         if a.Max ~= b.Max then return a.Max > b.Max end
         return a.Min > b.Min
     end)
