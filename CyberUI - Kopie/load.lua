@@ -1,5 +1,5 @@
 --!strict
--- Vaxorin remote loader
+-- Vaxorin remote loader / V4
 -- Current repository:
 -- https://github.com/datfiete/Void-Hub/tree/main/CyberUI%20-%20Kopie
 
@@ -96,10 +96,10 @@ local function createBootstrapLoader()
 
 	local card = Instance.new("Frame")
 	card.Name = "Card"
-	card.Size = UDim2.fromOffset(360, 150)
+	card.Size = UDim2.fromOffset(440, 190)
 	card.Position = UDim2.fromScale(0.5, 0.5)
 	card.AnchorPoint = Vector2.new(0.5, 0.5)
-	card.BackgroundColor3 = Color3.fromRGB(22, 22, 30)
+	card.BackgroundColor3 = Color3.fromRGB(8, 10, 17)
 	card.BorderSizePixel = 0
 	card.Parent = gui
 
@@ -129,7 +129,7 @@ local function createBootstrapLoader()
 	title.Size = UDim2.new(1, -48, 0, 28)
 	title.Position = UDim2.fromOffset(34, 18)
 	title.BackgroundTransparency = 1
-	title.Text = "Vaxorin"
+	title.Text = "VAXORIN  /  BOOT SEQUENCE"
 	title.TextColor3 = Color3.fromRGB(240, 240, 240)
 	title.TextSize = 20
 	title.Font = Enum.Font.GothamBold
@@ -141,7 +141,7 @@ local function createBootstrapLoader()
 	status.Size = UDim2.new(1, -48, 0, 20)
 	status.Position = UDim2.fromOffset(34, 52)
 	status.BackgroundTransparency = 1
-	status.Text = "Loading library..."
+	status.Text = "Initializing core modules..."
 	status.TextColor3 = Color3.fromRGB(160, 160, 170)
 	status.TextSize = 13
 	status.Font = Enum.Font.GothamMedium
@@ -150,8 +150,8 @@ local function createBootstrapLoader()
 
 	local track = Instance.new("Frame")
 	track.Name = "Track"
-	track.Size = UDim2.new(1, -48, 0, 6)
-	track.Position = UDim2.fromOffset(34, 102)
+	track.Size = UDim2.new(1, -48, 0, 8)
+	track.Position = UDim2.fromOffset(34, 132)
 	track.BackgroundColor3 = Color3.fromRGB(13, 13, 18)
 	track.BorderSizePixel = 0
 	track.Parent = card
@@ -162,7 +162,7 @@ local function createBootstrapLoader()
 
 	local fill = Instance.new("Frame")
 	fill.Name = "Fill"
-	fill.Size = UDim2.fromScale(0.08, 1)
+	fill.Size = UDim2.fromScale(0.03, 1)
 	fill.BackgroundColor3 = Color3.fromRGB(0, 255, 200)
 	fill.BorderSizePixel = 0
 	fill.Parent = track
@@ -171,8 +171,8 @@ local function createBootstrapLoader()
 	fillCorner.CornerRadius = UDim.new(0, 3)
 	fillCorner.Parent = fill
 
-	TweenService:Create(fill, TweenInfo.new(2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-		Size = UDim2.fromScale(0.88, 1),
+	TweenService:Create(fill, TweenInfo.new(3.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+		Size = UDim2.fromScale(0.94, 1),
 	}):Play()
 
 	sharedState.CyberUI_BootstrapLoader = gui

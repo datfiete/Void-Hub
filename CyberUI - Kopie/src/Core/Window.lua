@@ -14,7 +14,7 @@ local SoundService = game:GetService("SoundService")
 local Stats = game:GetService("Stats")
 
 local GUI_NAME = "Vaxorin"
-local VERSION = "3.2"
+local VERSION = "4.0"
 local Vaxorin_Logo = "rbxassetid://135320038058277"
 local LEGACY_LOGO = "rbxassetid://128228297210141"
 
@@ -334,91 +334,71 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	)
 
 	-- ============================================
-	-- LOADING SCREEN
+	-- V4 BOOT SEQUENCE
 	-- ============================================
-	local loadingFrame = Helpers.CreateFrame({
-		Name = "Loading",
-		Size = UDim2.fromOffset(420, 180),
-		Position = UDim2.fromScale(0.5, 0.5),
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundColor3 = library.Theme.Secondary,
-		Parent = screenGui,
-	})
-	Helpers.Corner(loadingFrame, Theme.CornerRadius)
-	Helpers.Stroke(loadingFrame, library.Theme.Border, 1)
-	Helpers.Padding(loadingFrame, 20)
+	local loadingGui = Instance.new("ScreenGui")
+	loadingGui.Name = "VaxorinBoot"
+	loadingGui.ResetOnSpawn = false
+	loadingGui.IgnoreGuiInset = true
+	loadingGui.DisplayOrder = 2147483647
+	loadingGui.Parent = screenGui
 
-	local loadingAccent = Helpers.CreateFrame({
-		Name = "Accent",
-		Size = UDim2.new(0, 4, 1, -40),
-		Position = UDim2.new(0, 20, 0, 20),
-		BackgroundColor3 = library.Theme.Accent,
-		Parent = loadingFrame,
-	})
-	Helpers.Corner(loadingAccent, 2)
+	local bootBackdrop = Helpers.CreateFrame({ Name = "Backdrop", Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(2, 3, 7), BackgroundTransparency = 0.02, Parent = loadingGui })
+	local bootGlow = Helpers.CreateFrame({ Name = "Glow", Size = UDim2.fromOffset(460, 460), Position = UDim2.fromScale(0.5, 0.48), AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = library.Theme.Accent, BackgroundTransparency = 0.92, Parent = bootBackdrop })
+	Helpers.Corner(bootGlow, 999)
 
-	local loadingTitle = Helpers.CreateLabel({
-		Name = "LoadingTitle",
-		Size = UDim2.new(1, -44, 0, 34),
-		Position = UDim2.fromOffset(20, 0),
-		Text = windowName,
-		Font = Theme.FontBold,
-		TextColor3 = library.Theme.Text,
-		TextSize = 22,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		Parent = loadingFrame,
-	})
+	local bootCard = Helpers.CreateFrame({ Name = "Card", Size = UDim2.fromOffset(520, 320), Position = UDim2.fromScale(0.5, 0.5), AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = library.Theme.Secondary, Parent = bootBackdrop })
+	Helpers.Corner(bootCard, 22)
+	local bootStroke = Helpers.Stroke(bootCard, library.Theme.BorderStrong or library.Theme.Border, 1)
 
-	local loadingSubtitle = Helpers.CreateLabel({
-		Name = "LoadingSubtitle",
-		Size = UDim2.new(1, -44, 0, 24),
-		Position = UDim2.fromOffset(20, 38),
-		Text = windowSubtitle or "Welcome to " .. windowName,
-		TextColor3 = library.Theme.TextMuted,
-		TextSize = 14,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		Parent = loadingFrame,
-	})
+	local bootTopLine = Helpers.CreateFrame({ Name = "TopLine", Size = UDim2.new(1, -56, 0, 2), Position = UDim2.fromOffset(28, 20), BackgroundColor3 = library.Theme.Accent, Parent = bootCard })
+	Helpers.Corner(bootTopLine, 2)
 
-	local loadingVersion = Helpers.CreateLabel({
-		Name = "LoadingVersion",
-		Size = UDim2.new(1, -44, 0, 20),
-		Position = UDim2.fromOffset(20, 62),
-		Text = VERSION,
-		TextColor3 = library.Theme.TextMuted,
-		TextSize = 12,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		Parent = loadingFrame,
-	})
+	local bootTitle = Helpers.CreateLabel({ Name = "Title", Size = UDim2.new(1, -56, 0, 34), Position = UDim2.fromOffset(28, 42), Text = windowName, Font = Theme.FontBold, TextSize = 28, TextColor3 = library.Theme.Text, Parent = bootCard })
+	local bootSub = Helpers.CreateLabel({ Name = "Sub", Size = UDim2.new(1, -56, 0, 18), Position = UDim2.fromOffset(28, 76), Text = "INITIALIZING COMMAND INTERFACE", Font = Theme.FontBold, TextSize = 9, TextColor3 = library.Theme.Accent, Parent = bootCard })
+	local bootStatus = Helpers.CreateLabel({ Name = "Status", Size = UDim2.new(1, -56, 0, 22), Position = UDim2.fromOffset(28, 112), Text = "Preparing interface...", Font = Theme.Font, TextSize = 12, TextColor3 = library.Theme.TextMuted, Parent = bootCard })
 
-	local loadingStatus = Helpers.CreateLabel({
-		Name = "LoadingStatus",
-		Size = UDim2.new(1, -44, 0, 20),
-		Position = UDim2.fromOffset(20, 90),
-		Text = "Loading components...",
-		TextColor3 = library.Theme.TextMuted,
-		TextSize = 12,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		Parent = loadingFrame,
-	})
+	local bootTrack = Helpers.CreateFrame({ Name = "Track", Size = UDim2.new(1, -56, 0, 8), Position = UDim2.fromOffset(28, 156), BackgroundColor3 = library.Theme.Background, Parent = bootCard })
+	Helpers.Corner(bootTrack, 4)
+	local bootFill = Helpers.CreateFrame({ Name = "Fill", Size = UDim2.fromScale(0, 1), BackgroundColor3 = library.Theme.Accent, Parent = bootTrack })
+	Helpers.Corner(bootFill, 4)
 
-	local progressTrack = Helpers.CreateFrame({
-		Name = "ProgressTrack",
-		Size = UDim2.new(1, -44, 0, 6),
-		Position = UDim2.fromOffset(20, 130),
-		BackgroundColor3 = library.Theme.Background,
-		Parent = loadingFrame,
-	})
-	Helpers.Corner(progressTrack, 3)
+	local bootPercent = Helpers.CreateLabel({ Name = "Percent", Size = UDim2.fromOffset(70, 22), Position = UDim2.new(1, -98, 0, 176), Text = "0%", Font = Theme.FontBold, TextSize = 12, TextColor3 = library.Theme.Text, TextXAlignment = Enum.TextXAlignment.Right, Parent = bootCard })
+	local bootStage = Helpers.CreateLabel({ Name = "Stage", Size = UDim2.new(1, -56, 0, 18), Position = UDim2.fromOffset(28, 204), Text = "CORE / 00", Font = Theme.FontBold, TextSize = 9, TextColor3 = library.Theme.TextMuted, Parent = bootCard })
 
-	local progressFill = Helpers.CreateFrame({
-		Name = "ProgressFill",
-		Size = UDim2.fromScale(0, 1),
-		BackgroundColor3 = library.Theme.Accent,
-		Parent = progressTrack,
-	})
-	Helpers.Corner(progressFill, 3)
-	Tween.Play(progressFill, { Size = UDim2.fromScale(1, 1) }, { Time = 0.85 })
+	local bootPips = {}
+	for i = 1, 5 do
+		local pip = Helpers.CreateFrame({ Name = "Pip" .. i, Size = UDim2.fromOffset(54, 4), Position = UDim2.fromOffset(28 + (i - 1) * 62, 244), BackgroundColor3 = library.Theme.BorderStrong or library.Theme.Border, Parent = bootCard })
+		Helpers.Corner(pip, 2)
+		table.insert(bootPips, pip)
+	end
+
+	local bootFooter = Helpers.CreateLabel({ Name = "Footer", Size = UDim2.new(1, -56, 0, 18), Position = UDim2.fromOffset(28, 274), Text = "VAXORIN / CYBERUI  " .. VERSION, Font = Theme.FontBold, TextSize = 8, TextColor3 = library.Theme.TextMuted, Parent = bootCard })
+
+	local bootPhases = {
+		{0.16, "Mounting interface...", "CORE / 01"},
+		{0.34, "Registering components...", "CORE / 02"},
+		{0.55, "Building workspace...", "UI / 03"},
+		{0.76, "Linking interactions...", "INPUT / 04"},
+		{1.00, "System ready", "READY / 05"},
+	}
+	task.spawn(function()
+		for index, phase in bootPhases do
+			local value, status, stage = phase[1], phase[2], phase[3]
+			bootStatus.Text = status
+			bootStage.Text = stage
+			bootPercent.Text = tostring(math.floor(value * 100)) .. "%"
+			Tween.Play(bootFill, { Size = UDim2.fromScale(value, 1) }, { Time = 0.22 })
+			for i, pip in bootPips do
+				Tween.Play(pip, { BackgroundColor3 = if i <= index then library.Theme.Accent else (library.Theme.BorderStrong or library.Theme.Border) }, { Time = 0.14 })
+			end
+			task.wait(0.18)
+		end
+	end)
+	self._BootGui = loadingGui
+	self._BootCard = bootCard
+	self._BootStatus = bootStatus
+	self._BootFill = bootFill
 
 	-- Remove old bootstrap loader
 	local bootstrapLoader = sharedState.CyberUI_BootstrapLoader
@@ -1734,7 +1714,12 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	self._SearchIconHandle = searchIconHandle
 	self._FooterName = footerName
 	self._FooterStatus = footerStatus
-	self._LoadingFrame = loadingFrame
+	self._LoadingFrame = loadingGui
+	self._BootGui = loadingGui
+	self._ContentArea = contentArea
+	self._TopBarHeight = topBarHeight
+	self._SidebarWidth = Theme.SidebarWidth
+	self._LayoutMode = data.Layout or "Expanded"
 	self._Visible = true
 	self._Minimized = false
 	self._StartupComplete = false
@@ -1872,29 +1857,21 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	-- ============================================
 	-- STARTUP COMPLETE
 	-- ============================================
-	self._Maid:GiveTask(task.delay(0.8, function()
-		if not self.Gui then
-			return
-		end
-
-		if loadingFrame and loadingFrame.Parent then
-			loadingStatus.Text = "Ready"
-
-			Tween.Play(loadingFrame, { BackgroundTransparency = 1 }, { Time = 0.2 })
-			Tween.Play(loadingAccent, { BackgroundTransparency = 1 }, { Time = 0.2 })
-			Tween.Play(loadingTitle, { TextTransparency = 1 }, { Time = 0.2 })
-			Tween.Play(loadingSubtitle, { TextTransparency = 1 }, { Time = 0.2 })
-			Tween.Play(loadingVersion, { TextTransparency = 1 }, { Time = 0.2 })
-			Tween.Play(loadingStatus, { TextTransparency = 1 }, { Time = 0.2 })
-			Tween.Play(progressTrack, { BackgroundTransparency = 1 }, { Time = 0.2 })
-			Tween.Play(progressFill, { BackgroundTransparency = 1 }, { Time = 0.2 })
-
-			task.wait(0.2)
-			if loadingFrame and loadingFrame.Parent then
-				loadingFrame:Destroy()
+	self._Maid:GiveTask(task.delay(1.15, function()
+		if not self.Gui then return end
+		if self._BootGui and self._BootGui.Parent then
+			Tween.Play(self._BootCard, { Size = UDim2.fromOffset(560, 344) }, { Time = 0.18 })
+			task.wait(0.08)
+			Tween.Play(self._BootGui:FindFirstChild("Backdrop"), { BackgroundTransparency = 1 }, { Time = 0.18 })
+			Tween.Play(self._BootCard, { BackgroundTransparency = 1 }, { Time = 0.18 })
+			for _, child in self._BootCard:GetDescendants() do
+				if child:IsA("TextLabel") then Tween.Play(child, { TextTransparency = 1 }, { Time = 0.16 }) end
+				if child:IsA("Frame") then Tween.Play(child, { BackgroundTransparency = 1 }, { Time = 0.16 }) end
+				if child:IsA("UIStroke") then Tween.Play(child, { Transparency = 1 }, { Time = 0.16 }) end
 			end
+			task.wait(0.2)
+			if self._BootGui.Parent then self._BootGui:Destroy() end
 		end
-
 		self._StartupComplete = true
 		self:SetVisible(self._Visible)
 	end))
@@ -1975,6 +1952,22 @@ function Window:_selectTab(tab: any)
 	Tween.Play(newPage, { Position = UDim2.fromOffset(0, 0) }, { Time = 0.2 })
 end
 
+function Window:SetLayout(mode: string)
+	mode = (mode == "Classic" and "Classic") or "Expanded"
+	self._LayoutMode = mode
+	local compact = mode == "Classic"
+	local top = compact and 60 or (Theme.TopBarHeight or 72)
+	local side = compact and 180 or Theme.SidebarWidth
+	local size = compact and Vector2.new(820, 540) or (self._WindowSize and self._WindowSize() or Theme.WindowSize)
+	if self.Main then self.Main.Size = UDim2.fromOffset(size.X, size.Y) end
+	if self.TopBar then self.TopBar.Size = UDim2.new(1, 0, 0, top) end
+	if self._ContentArea then self._ContentArea.Position = UDim2.fromOffset(0, top); self._ContentArea.Size = UDim2.new(1, 0, 1, -top) end
+	if self.Sidebar then self.Sidebar.Size = UDim2.new(0, side, 1, 0) end
+	if self.Pages then self.Pages.Position = UDim2.fromOffset(side, 0); self.Pages.Size = UDim2.new(1, -side, 1, 0) end
+	if self._LayoutModeLabel then self._LayoutModeLabel.Text = mode .. " layout" end
+	return mode
+end
+
 function Window:CreateTab(name: string)
 	local tab = Tab.new(self, name)
 	table.insert(self._Tabs, tab)
@@ -2019,6 +2012,16 @@ function Window:_createOptionsTab()
 		Flag = "Vaxorin.Theme.Style",
 		Callback = function(value)
 			self.Library.Theme.Style = value
+		end,
+	})
+
+	visualSection:CreateDropdown({
+		Name = "Layout",
+		Options = { "Expanded", "Classic" },
+		CurrentOption = self._LayoutMode,
+		Flag = "Vaxorin.Visual.Layout",
+		Callback = function(value)
+			self:SetLayout(value)
 		end,
 	})
 
@@ -2112,6 +2115,12 @@ function Window:_createOptionsTab()
 			end
 		end,
 	})
+
+	local featuresSection = optionsTab:CreateSection("✨ New in V4")
+	featuresSection:CreateBadge({ Text = "V4 UPDATE", Color = self.Library.Theme.Accent, Width = 110 })
+	featuresSection:CreateCard({ Title = "New component system", Content = "Cards, badges, progress indicators and live status rows are now available to every tab." })
+	featuresSection:CreateStatus({ Title = "Interface", Content = "All systems operational" })
+	featuresSection:CreateProgress({ Title = "UI engine", CurrentValue = 1 })
 
 	local generalSection = optionsTab:CreateSection("🧩 General")
 	generalSection:CreateParagraph({
