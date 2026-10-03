@@ -7,6 +7,7 @@ local Helpers = require(script.Parent.Parent.Utils.Helpers)
 local Tween = require(script.Parent.Parent.Utils.Tween)
 local ESPBuilder = require(script.Parent.ESPBuilder)
 local ESPWorldRenderer = require(script.Parent.ESPWorldRenderer)
+local LayoutVariants = require(script.Parent.LayoutVariants)
 
 local TweenService = game:GetService("TweenService")
 local Lighting = game:GetService("Lighting")
@@ -14,7 +15,7 @@ local SoundService = game:GetService("SoundService")
 local Stats = game:GetService("Stats")
 
 local GUI_NAME = "Vaxorin"
-local VERSION = "4.0"
+local VERSION = "5.0"
 local Vaxorin_Logo = "rbxassetid://135320038058277"
 local LEGACY_LOGO = "rbxassetid://128228297210141"
 
@@ -115,6 +116,14 @@ export type WindowHandle = {
 	OpenDeveloperWindow: (self: WindowHandle, options: any?) -> DeveloperPanelHandle,
 	CreateESPBuilder: (self: WindowHandle, options: any?) -> any,
 	CreateESPWorldRenderer: (self: WindowHandle, options: any?) -> any,
+	CreateNotice: (self: WindowHandle, data: any) -> any,
+	CreateStat: (self: WindowHandle, data: any) -> any,
+	CreateDivider: (self: WindowHandle, data: any?) -> any,
+	CreateIconButton: (self: WindowHandle, data: any?) -> any,
+	CreateCard: (self: WindowHandle, data: any) -> any,
+	CreateBadge: (self: WindowHandle, data: any) -> any,
+	CreateProgress: (self: WindowHandle, data: any) -> any,
+	CreateStatus: (self: WindowHandle, data: any) -> any,
 	Notify: (self: WindowHandle, options: any) -> any,
 	Destroy: (self: WindowHandle) -> (),
 }
@@ -149,7 +158,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	}, Window)
 
 	local Players = game:GetService("Players")
-	local localPlayer = Players.LocalPlayer.Name
+	local localPlayer = Players.LocalPlayer and Players.LocalPlayer.Name or "Player"
 	local UserInputService = game:GetService("UserInputService")
 	local RunService = game:GetService("RunService")
 	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
@@ -1361,10 +1370,15 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 
 	local avatarImage = Instance.new("ImageLabel")
 	avatarImage.Name = "Avatar"
+	local defaultAvatar = ""
+	pcall(function()
+		local image, ready = Players:GetUserThumbnailAsync(Players.LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
+		if ready then defaultAvatar = image end
+	end)
 	avatarImage.Size = UDim2.fromOffset(42, 42)
 	avatarImage.Position = UDim2.fromOffset(10, 17)
 	avatarImage.BackgroundTransparency = 1
-	avatarImage.Image = data.Footer and data.Footer.Avatar or ""
+	avatarImage.Image = if data.Footer and data.Footer.Avatar then data.Footer.Avatar else defaultAvatar
 	avatarImage.ScaleType = Enum.ScaleType.Crop
 	avatarImage.Parent = footer
 	Helpers.Corner(avatarImage, 22)
@@ -1712,6 +1726,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	self.SearchBox = searchBox
 	self._SearchIconStroke = searchIconStroke
 	self._SearchIconHandle = searchIconHandle
+	self._AvatarImage = avatarImage
 	self._FooterName = footerName
 	self._FooterStatus = footerStatus
 	self._LoadingFrame = loadingGui
@@ -1732,6 +1747,8 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		return windowSize
 	end
 	self._CornerInstances = { mainCorner, topBarCorner, sidebarCorner, infoBarCorner }
+
+	self._LayoutVariants = LayoutVariants.new(self, data.Layout or "Vaxorin")
 
 	local function clearSearchResults()
 		for _, child in searchResults:GetChildren() do
@@ -1876,6 +1893,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		self:SetVisible(self._Visible)
 	end))
 
+	self:SetLayout(data.Layout or "Vaxorin")
 	return self :: any
 end
 
@@ -1953,24 +1971,19 @@ function Window:_selectTab(tab: any)
 end
 
 function Window:SetLayout(mode: string)
-	mode = (mode == "Classic" and "Classic") or "Expanded"
-	self._LayoutMode = mode
-	local compact = mode == "Classic"
-	local top = compact and 60 or (Theme.TopBarHeight or 72)
-	local side = compact and 180 or Theme.SidebarWidth
-	local size = compact and Vector2.new(820, 540) or (self._WindowSize and self._WindowSize() or Theme.WindowSize)
-	if self.Main then self.Main.Size = UDim2.fromOffset(size.X, size.Y) end
-	if self.TopBar then self.TopBar.Size = UDim2.new(1, 0, 0, top) end
-	if self._ContentArea then self._ContentArea.Position = UDim2.fromOffset(0, top); self._ContentArea.Size = UDim2.new(1, 0, 1, -top) end
-	if self.Sidebar then self.Sidebar.Size = UDim2.new(0, side, 1, 0) end
-	if self.Pages then self.Pages.Position = UDim2.fromOffset(side, 0); self.Pages.Size = UDim2.new(1, -side, 1, 0) end
-	if self._LayoutModeLabel then self._LayoutModeLabel.Text = mode .. " layout" end
-	return mode
+	local normalized = ({ Vaxorin = "Vaxorin", Classic = "Classic", Minecraft = "Minecraft", Expanded = "Vaxorin" })[mode] or "Vaxorin"
+	self._LayoutMode = normalized
+	if self._LayoutVariants then
+		self._LayoutVariants:SetMode(normalized)
+	end
+	if self._LayoutModeLabel then self._LayoutModeLabel.Text = normalized .. " interface" end
+	return normalized
 end
 
 function Window:CreateTab(name: string)
 	local tab = Tab.new(self, name)
 	table.insert(self._Tabs, tab)
+	if self._LayoutVariants and self._LayoutVariants.SyncTabs then self._LayoutVariants:SyncTabs() end
 
 	if not self._OptionsTab then
 		self:_createOptionsTab()
@@ -1988,9 +2001,10 @@ function Window:_createOptionsTab()
 		return self._OptionsTab
 	end
 
-	local optionsTab = Tab.new(self, "⚙️ Options")
+	local optionsTab = Tab.new(self, "Options")
 	self._OptionsTab = optionsTab
 	table.insert(self._Tabs, optionsTab)
+	if self._LayoutVariants and self._LayoutVariants.SyncTabs then self._LayoutVariants:SyncTabs() end
 
 	self.Library.Theme.Style = self.Library:_getSavedFlag("Vaxorin.Theme.Style", self.Library.Theme.Style, true)
 	self.Library.Theme.Background = self.Library:_getSavedFlag("Vaxorin.Theme.Background", self.Library.Theme.Background, true)
@@ -2017,7 +2031,7 @@ function Window:_createOptionsTab()
 
 	visualSection:CreateDropdown({
 		Name = "Layout",
-		Options = { "Expanded", "Classic" },
+		Options = { "Vaxorin", "Classic", "Minecraft" },
 		CurrentOption = self._LayoutMode,
 		Flag = "Vaxorin.Visual.Layout",
 		Callback = function(value)
@@ -2116,11 +2130,16 @@ function Window:_createOptionsTab()
 		end,
 	})
 
-	local featuresSection = optionsTab:CreateSection("✨ New in V4")
-	featuresSection:CreateBadge({ Text = "V4 UPDATE", Color = self.Library.Theme.Accent, Width = 110 })
-	featuresSection:CreateCard({ Title = "New component system", Content = "Cards, badges, progress indicators and live status rows are now available to every tab." })
+	local featuresSection = optionsTab:CreateSection("✨ New in V5")
+	featuresSection:CreateBadge({ Text = "V5 MEGA UPDATE", Color = self.Library.Theme.Accent, Width = 128 })
+	featuresSection:CreateCard({ Title = "New component system", Content = "Cards, badges, progress, status, notices, stats, dividers and icon actions are now first-class elements." })
 	featuresSection:CreateStatus({ Title = "Interface", Content = "All systems operational" })
 	featuresSection:CreateProgress({ Title = "UI engine", CurrentValue = 1 })
+	featuresSection:CreateNotice({ Title = "Interface variants", Content = "Switch the entire shell between Vaxorin, the classic Minecraft-style category menu, and the inventory-inspired Minecraft skin." })
+	featuresSection:CreateStat({ Label = "Element modules", Value = "20+", Delta = "NEW" })
+	featuresSection:CreateDivider({})
+	featuresSection:CreateIconButton({ Text = "Preview Classic Interface", Callback = function() self:SetLayout("Classic") end })
+	featuresSection:CreateIconButton({ Text = "Preview Minecraft Interface", Callback = function() self:SetLayout("Minecraft") end })
 
 	local generalSection = optionsTab:CreateSection("🧩 General")
 	generalSection:CreateParagraph({
@@ -2604,6 +2623,15 @@ function Window:CreateParagraph(data: any)
 	return tab:CreateParagraph(data)
 end
 
+function Window:CreateNotice(data: any) local tab=self:_getActiveTab(); if not tab then return nil end; return tab:CreateNotice(data) end
+function Window:CreateStat(data: any) local tab=self:_getActiveTab(); if not tab then return nil end; return tab:CreateStat(data) end
+function Window:CreateDivider(data: any?) local tab=self:_getActiveTab(); if not tab then return nil end; return tab:CreateDivider(data) end
+function Window:CreateIconButton(data: any?) local tab=self:_getActiveTab(); if not tab then return nil end; return tab:CreateIconButton(data) end
+function Window:CreateCard(data: any) local tab=self:_getActiveTab(); if not tab then return nil end; return tab:CreateCard(data) end
+function Window:CreateBadge(data: any) local tab=self:_getActiveTab(); if not tab then return nil end; return tab:CreateBadge(data) end
+function Window:CreateProgress(data: any) local tab=self:_getActiveTab(); if not tab then return nil end; return tab:CreateProgress(data) end
+function Window:CreateStatus(data: any) local tab=self:_getActiveTab(); if not tab then return nil end; return tab:CreateStatus(data) end
+
 function Window:SetVisible(visible: boolean)
 	self._FloatDragging = false
 	self._FloatDragInputType = nil
@@ -2612,6 +2640,9 @@ function Window:SetVisible(visible: boolean)
 	if self.Gui then
 		self.Gui.Enabled = true
 	end
+	if self._LayoutVariants and self._LayoutVariants.SetVisible then
+		self._LayoutVariants:SetVisible(visible)
+	end
 
 	if self._ApplyBlurTarget then
 		self._ApplyBlurTarget()
@@ -2619,7 +2650,7 @@ function Window:SetVisible(visible: boolean)
 
 	if visible then
 		if self.Main then
-			self.Main.Visible = self._StartupComplete
+			self.Main.Visible = self._StartupComplete and self._LayoutMode == "Vaxorin"
 		end
 
 		if self._FloatingButton and self._FloatingButton.Visible then
@@ -2684,6 +2715,10 @@ function Window:Notify(options: any)
 end
 
 function Window:Destroy()
+	if self._LayoutVariants then
+		pcall(function() self._LayoutVariants:Destroy() end)
+		self._LayoutVariants = nil
+	end
 	if self._DeveloperGui then
 		self._DeveloperGui:Destroy()
 		self._DeveloperGui = nil

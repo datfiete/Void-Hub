@@ -12,6 +12,14 @@ local Paragraph = require(script.Parent.Parent.Elements.Paragraph)
 local WorldRadar = require(script.Parent.WorldRadar)
 local Maid = require(script.Parent.Parent.Utils.Maid)
 local Helpers = require(script.Parent.Parent.Utils.Helpers)
+local Card = require(script.Parent.Parent.Elements.Card)
+local Badge = require(script.Parent.Parent.Elements.Badge)
+local Progress = require(script.Parent.Parent.Elements.Progress)
+local Status = require(script.Parent.Parent.Elements.Status)
+local Notice = require(script.Parent.Parent.Elements.Notice)
+local Stat = require(script.Parent.Parent.Elements.Stat)
+local Divider = require(script.Parent.Parent.Elements.Divider)
+local IconButton = require(script.Parent.Parent.Elements.IconButton)
 
 local Section = {}
 Section.__index = Section
@@ -30,6 +38,10 @@ export type SectionHandle = {
     CreateBadge: (self: SectionHandle, data: any) -> any,
     CreateProgress: (self: SectionHandle, data: any) -> any,
     CreateStatus: (self: SectionHandle, data: any) -> any,
+    CreateNotice: (self: SectionHandle, data: any) -> any,
+    CreateStat: (self: SectionHandle, data: any) -> any,
+    CreateDivider: (self: SectionHandle, data: any?) -> any,
+    CreateIconButton: (self: SectionHandle, data: any?) -> any,
     Destroy: (self: SectionHandle) -> (),
 }
 
@@ -216,70 +228,14 @@ function Section:CreateColorPicker(data: any) return self:_track(ColorPicker.new
 function Section:CreateParagraph(data: any) return self:_track(Paragraph.new(self, data)) end
 function Section:CreateWorldRadar(data: any?) return self:_track(WorldRadar.new(self, data or {})) end
 
-local function simpleCard(section, data, kind)
-    data = data or {}
-    local theme = section.Tab.Window.Library.Theme
-    local card = Helpers.CreateFrame({
-        Name = data.Name or kind,
-        Size = UDim2.new(1, 0, 0, data.Height or 64),
-        BackgroundColor3 = data.BackgroundColor or theme.ElementBackground,
-        BackgroundTransparency = data.BackgroundTransparency or 0.04,
-        Parent = section.Inner,
-    })
-    Helpers.Corner(card, Theme.CornerRadiusSmall)
-    local stroke = Helpers.Stroke(card, data.BorderColor or theme.Border, 1)
-    stroke.Transparency = 0.18
-    if data.Title then
-        Helpers.CreateLabel({ Name = "Title", Size = UDim2.new(1, -24, 0, 18), Position = UDim2.fromOffset(12, 10), Text = tostring(data.Title), Font = Theme.FontBold, TextSize = 13, TextColor3 = theme.Text, TextXAlignment = Enum.TextXAlignment.Left, Parent = card })
-    end
-    if data.Content then
-        Helpers.CreateLabel({ Name = "Content", Size = UDim2.new(1, -24, 0, 30), Position = UDim2.fromOffset(12, data.Title and 30 or 10), Text = tostring(data.Content), Font = Theme.Font, TextSize = 11, TextColor3 = theme.TextMuted, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, Parent = card })
-    end
-    local handle = { Instance = card, Destroy = function() if card.Parent then card:Destroy() end end, RefreshTheme = function() card.BackgroundColor3 = theme.ElementBackground; stroke.Color = theme.Border end }
-    return handle
-end
-
-function Section:CreateCard(data: any) return self:_track(simpleCard(self, data, "Card")) end
-
-function Section:CreateBadge(data: any)
-    data = data or {}
-    local theme = self.Tab.Window.Library.Theme
-    local badge = Helpers.CreateFrame({ Name = data.Name or "Badge", Size = UDim2.fromOffset(data.Width or 96, data.Height or 28), BackgroundColor3 = data.Color or theme.Accent, BackgroundTransparency = 0.78, Parent = self.Inner })
-    Helpers.Corner(badge, 999)
-    local stroke = Helpers.Stroke(badge, data.Color or theme.Accent, 1)
-    stroke.Transparency = 0.28
-    Helpers.CreateLabel({ Name = "Text", Size = UDim2.new(1, -16, 1, 0), Position = UDim2.fromOffset(8, 0), Text = data.Text or "STATUS", Font = Theme.FontBold, TextSize = data.TextSize or 10, TextColor3 = data.Color or theme.Accent, TextXAlignment = Enum.TextXAlignment.Center, Parent = badge })
-    return self:_track({ Instance = badge, Destroy = function() if badge.Parent then badge:Destroy() end end, RefreshTheme = function() if not data.Color then stroke.Color = theme.Accent end end })
-end
-
-function Section:CreateProgress(data: any)
-    data = data or {}
-    local theme = self.Tab.Window.Library.Theme
-    local root = Helpers.CreateFrame({ Name = data.Name or "Progress", Size = UDim2.new(1, 0, 0, 52), BackgroundTransparency = 1, Parent = self.Inner })
-    local label = Helpers.CreateLabel({ Name = "Label", Size = UDim2.new(1, -70, 0, 18), Text = data.Title or "Progress", Font = Theme.FontBold, TextSize = 11, TextColor3 = theme.Text, TextXAlignment = Enum.TextXAlignment.Left, Parent = root })
-    local valueLabel = Helpers.CreateLabel({ Name = "Value", Size = UDim2.fromOffset(60, 18), Position = UDim2.new(1, -60, 0, 0), Text = "0%", Font = Theme.FontBold, TextSize = 10, TextColor3 = theme.Accent, TextXAlignment = Enum.TextXAlignment.Right, Parent = root })
-    local track = Helpers.CreateFrame({ Name = "Track", Size = UDim2.new(1, 0, 0, 7), Position = UDim2.fromOffset(0, 30), BackgroundColor3 = theme.Background, Parent = root })
-    Helpers.Corner(track, 4)
-    local fill = Helpers.CreateFrame({ Name = "Fill", Size = UDim2.fromScale(0, 1), BackgroundColor3 = data.Color or theme.Accent, Parent = track })
-    Helpers.Corner(fill, 4)
-    local TweenService = game:GetService("TweenService")
-    local handle = { Instance = root, Set = function(_, value) value = math.clamp(tonumber(value) or 0, 0, 1); valueLabel.Text = tostring(math.floor(value * 100 + 0.5)) .. "%"; TweenService:Create(fill, TweenInfo.new(0.22, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Size = UDim2.fromScale(value, 1) }):Play() end, Destroy = function() if root.Parent then root:Destroy() end end, RefreshTheme = function() if not data.Color then fill.BackgroundColor3 = theme.Accent end; label.TextColor3 = theme.Text; valueLabel.TextColor3 = theme.Accent end }
-    handle:Set(data.CurrentValue or 0)
-    return self:_track(handle)
-end
-
-function Section:CreateStatus(data: any)
-    data = data or {}
-    local theme = self.Tab.Window.Library.Theme
-    local root = Helpers.CreateFrame({ Name = data.Name or "Status", Size = UDim2.new(1, 0, 0, 48), BackgroundColor3 = theme.ElementBackground, BackgroundTransparency = 0.02, Parent = self.Inner })
-    Helpers.Corner(root, Theme.CornerRadiusSmall)
-    local dot = Helpers.CreateFrame({ Name = "Dot", Size = UDim2.fromOffset(8, 8), Position = UDim2.fromOffset(14, 20), BackgroundColor3 = data.Color or theme.Success, Parent = root })
-    Helpers.Corner(dot, 4)
-    local title = Helpers.CreateLabel({ Name = "Title", Size = UDim2.new(1, -44, 0, 18), Position = UDim2.fromOffset(32, 8), Text = data.Title or "System Status", Font = Theme.FontBold, TextSize = 11, TextColor3 = theme.Text, Parent = root })
-    local body = Helpers.CreateLabel({ Name = "Content", Size = UDim2.new(1, -44, 0, 16), Position = UDim2.fromOffset(32, 26), Text = data.Content or "Operational", Font = Theme.Font, TextSize = 10, TextColor3 = theme.TextMuted, Parent = root })
-    local handle = { Instance = root, Set = function(_, titleText, contentText) title.Text = tostring(titleText or title.Text); body.Text = tostring(contentText or body.Text) end, Destroy = function() if root.Parent then root:Destroy() end end, RefreshTheme = function() title.TextColor3 = theme.Text; body.TextColor3 = theme.TextMuted end }
-    return self:_track(handle)
-end
+function Section:CreateCard(data: any) return self:_track(Card.new(self, data or {})) end
+function Section:CreateBadge(data: any) return self:_track(Badge.new(self, data or {})) end
+function Section:CreateProgress(data: any) return self:_track(Progress.new(self, data or {})) end
+function Section:CreateStatus(data: any) return self:_track(Status.new(self, data or {})) end
+function Section:CreateNotice(data: any) return self:_track(Notice.new(self, data or {})) end
+function Section:CreateStat(data: any) return self:_track(Stat.new(self, data or {})) end
+function Section:CreateDivider(data: any?) return self:_track(Divider.new(self, data or {})) end
+function Section:CreateIconButton(data: any?) return self:_track(IconButton.new(self, data or {})) end
 function Section:CreateLabel(data: any) return self:CreateParagraph(data) end
 function Section:CreateInfo(data: any) return self:CreateParagraph(data) end
 

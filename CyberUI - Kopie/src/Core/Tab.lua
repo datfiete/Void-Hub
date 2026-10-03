@@ -478,6 +478,14 @@ function Tab:CreateKeybind(data: any) return self:_getDefaultSection():CreateKey
 function Tab:CreateColorPicker(data: any) return self:_getDefaultSection():CreateColorPicker(data) end
 function Tab:CreateParagraph(data: any) return self:_getDefaultSection():CreateParagraph(data) end
 function Tab:CreateWorldRadar(data: any?) return self:_getDefaultSection():CreateWorldRadar(data) end
+function Tab:CreateIconButton(data: any?) return self:_getDefaultSection():CreateIconButton(data) end
+function Tab:CreateDivider(data: any?) return self:_getDefaultSection():CreateDivider(data) end
+function Tab:CreateStat(data: any?) return self:_getDefaultSection():CreateStat(data) end
+function Tab:CreateNotice(data: any?) return self:_getDefaultSection():CreateNotice(data) end
+function Tab:CreateCard(data: any?) return self:_getDefaultSection():CreateCard(data) end
+function Tab:CreateBadge(data: any?) return self:_getDefaultSection():CreateBadge(data) end
+function Tab:CreateProgress(data: any?) return self:_getDefaultSection():CreateProgress(data) end
+function Tab:CreateStatus(data: any?) return self:_getDefaultSection():CreateStatus(data) end
 
 function Tab:Destroy()
     for _, section in self._Sections do
