@@ -1727,6 +1727,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	self._SearchIconStroke = searchIconStroke
 	self._SearchIconHandle = searchIconHandle
 	self._AvatarImage = avatarImage
+	self._NavLabel = navLabel
 	self._FooterName = footerName
 	self._FooterStatus = footerStatus
 	self._LoadingFrame = loadingGui
@@ -1971,7 +1972,7 @@ function Window:_selectTab(tab: any)
 end
 
 function Window:SetLayout(mode: string)
-	local normalized = ({ Vaxorin = "Vaxorin", Classic = "Classic", Minecraft = "Minecraft", Expanded = "Vaxorin" })[mode] or "Vaxorin"
+	local normalized = ({ Vaxorin = "Vaxorin", Classic = "Classic", Minecraft = "Minecraft", Compact = "Compact", Expanded = "Vaxorin" })[mode] or "Vaxorin"
 	self._LayoutMode = normalized
 	if self._LayoutVariants then
 		self._LayoutVariants:SetMode(normalized)
@@ -2031,7 +2032,7 @@ function Window:_createOptionsTab()
 
 	visualSection:CreateDropdown({
 		Name = "Layout",
-		Options = { "Vaxorin", "Classic", "Minecraft" },
+		Options = { "Vaxorin", "Classic", "Minecraft", "Compact" },
 		CurrentOption = self._LayoutMode,
 		Flag = "Vaxorin.Visual.Layout",
 		Callback = function(value)
@@ -2651,7 +2652,7 @@ function Window:SetVisible(visible: boolean)
 	if visible then
 		if self.Main then
 			-- Main shell is used by Vaxorin and Classic; Minecraft uses its own ScreenGui.
-			local useMain = self._LayoutMode ~= "Minecraft"
+			local useMain = self._LayoutMode ~= "Minecraft" and self._LayoutMode ~= "Compact"
 			self.Main.Visible = self._StartupComplete and useMain
 		end
 

@@ -1,8 +1,9 @@
 --!strict
 -- Layout variants:
---   Vaxorin   = current default shell
---   Classic   = old CyberUI 3.0 proportions + hide V5 chrome (READY ribbon, CONTROL MODULE, product meta)
---   Minecraft = Sirius-style home cards + bottom dock with real tabs (scrollable, centered)
+--   Vaxorin  = current default shell
+--   Classic  = old Vaxorin look (screenshot): NAVIGATION, no CONTROL MODULE / READY ribbon / product meta
+--   Minecraft= Sirius-style home + bottom dock with real tab names + close (X)
+--   Compact  = minimal floating bottom bar (extra idea)
 
 local Theme = require(script.Parent.Theme)
 local Helpers = require(script.Parent.Parent.Utils.Helpers)
@@ -39,8 +40,6 @@ local function detectExecutor(): (string, string)
 			name = "Synapse X"
 		elseif rawget(_G, "KRNL_LOADED") then
 			name = "Krnl"
-		elseif typeof(is_sirhurt_closure) == "function" then
-			name = "SirHurt"
 		elseif typeof(fluxus) == "table" or rawget(_G, "Fluxus") then
 			name = "Fluxus"
 		elseif typeof(isexecutorclosure) == "function" then
@@ -57,6 +56,8 @@ local function detectExecutor(): (string, string)
 		subtitle = "Krnl — free executor"
 	elseif string.find(lower, "fluxus") then
 		subtitle = "Fluxus — mobile & PC"
+	elseif string.find(lower, "delta") then
+		subtitle = "Delta — supported client"
 	elseif name == "Roblox Client" then
 		subtitle = "Running inside Roblox (no executor detected)"
 	end
@@ -64,7 +65,7 @@ local function detectExecutor(): (string, string)
 end
 
 local function clean(name: string): string
-	local s = name:gsub("^[%s%c]+", "")
+	local s = tostring(name or ""):gsub("^[%s%c]+", "")
 	for _, prefix in {
 		"⚙️ ", "⚙ ", "🎨 ", "🧩 ", "⌨️ ", "🔧 ", "💡 ", "🌐 ", "👤 ", "⚔️ ",
 		"🧠 ", "📦 ", "⭐ ", "✨ ", "💎 ", "🛠️ ", "🛠 ",
@@ -74,7 +75,25 @@ local function clean(name: string): string
 			break
 		end
 	end
-	return s ~= "" and s or name
+	return s ~= "" and s or tostring(name or "Tab")
+end
+
+local function tabDisplayName(tab: any): string
+	if type(tab) ~= "table" then
+		return "Tab"
+	end
+	local raw = tab._Name or tab.Name or tab.Title
+	if type(raw) == "string" and raw ~= "" then
+		return clean(raw)
+	end
+	-- fallback: read label text from sidebar button
+	if tab.Button then
+		local label = tab.Button:FindFirstChild("Label")
+		if label and label:IsA("TextLabel") and label.Text ~= "" then
+			return clean(label.Text)
+		end
+	end
+	return "Tab"
 end
 
 function LayoutVariants.new(window: any, initial: string): any
@@ -88,9 +107,10 @@ function LayoutVariants.new(window: any, initial: string): any
 		_ContentHost = nil,
 		_PageHost = nil,
 		_Dock = nil,
-		_DockTabs = nil, -- scrolling frame of tab chips
+		_DockTabRow = nil,
 		_DockTabButtons = {},
 		_HomeBtn = nil,
+		_CloseBtn = nil,
 		_ClockLabel = nil,
 		_ActiveTabName = nil,
 		_ShowingHome = true,
@@ -120,7 +140,7 @@ function LayoutVariants.new(window: any, initial: string): any
 end
 
 ----------------------------------------------------------------------
--- Classic geometry + hide V5-only chrome
+-- Classic
 ----------------------------------------------------------------------
 function LayoutVariants:_snapshotClassic()
 	local w = self._Window
@@ -137,6 +157,7 @@ function LayoutVariants:_snapshotClassic()
 		PagesPos = w.Pages and w.Pages.Position or nil,
 		SidebarWidth = w._SidebarWidth,
 		TopBarHeight = w._TopBarHeight,
+		NavText = (w._NavLabel and w._NavLabel.Text) or "WORKSPACE",
 	}
 end
 
@@ -145,28 +166,25 @@ function LayoutVariants:_setClassicChrome(hidden: boolean)
 	if not w then
 		return
 	end
-	-- V5-only decorations that did not exist in old CyberUI
+
 	if w._StatusRibbon then
 		w._StatusRibbon.Visible = not hidden
 	end
 	if w._ProductMeta then
 		w._ProductMeta.Visible = not hidden
 	end
-	-- Hide "CONTROL MODULE" eyebrow on every tab page
+	if w._NavLabel then
+		w._NavLabel.Text = if hidden then "NAVIGATION" else (self._ClassicSnapshot and self._ClassicSnapshot.NavText) or "WORKSPACE"
+	end
+
 	if w._Tabs then
 		for _, tab in ipairs(w._Tabs) do
 			if tab._PageEyebrow then
 				tab._PageEyebrow.Visible = not hidden
 			end
-			-- Tighten page header when eyebrow is gone
-			if tab._PageHeader and hidden then
-				if tab._PageTitle then
-					tab._PageTitle.Position = UDim2.fromOffset(0, 4)
-				end
-			elseif tab._PageHeader and not hidden then
-				if tab._PageTitle then
-					tab._PageTitle.Position = UDim2.fromOffset(0, 18)
-				end
+			-- Old UI had simpler page tops — hide the whole V5 page header block in Classic
+			if tab._PageHeader then
+				tab._PageHeader.Visible = not hidden
 			end
 		end
 	end
@@ -335,7 +353,31 @@ function LayoutVariants:_buildMinecraftShell()
 		Parent = root,
 	}).ZIndex = 0
 
-	-- HOME (scrollable)
+	-- Top-right close (X) — always visible in Minecraft
+	local closeBtn = Helpers.CreateButton({
+		Name = "Close",
+		Size = UDim2.fromOffset(40, 40),
+		Position = UDim2.new(1, -56, 0, 16),
+		Text = "×",
+		Font = Theme.FontBold,
+		TextSize = 22,
+		TextColor3 = Color3.fromRGB(230, 230, 240),
+		BackgroundColor3 = Color3.fromRGB(22, 24, 32),
+		BackgroundTransparency = 0.1,
+		Parent = root,
+	})
+	Helpers.Corner(closeBtn, 12)
+	Helpers.Stroke(closeBtn, Color3.fromRGB(55, 58, 72), 1)
+	closeBtn.ZIndex = 10
+	self._CloseBtn = closeBtn
+	closeBtn.MouseButton1Click:Connect(function()
+		-- Close the whole UI (same as window close / toggle)
+		if w.SetVisible then
+			w:SetVisible(false)
+		end
+	end)
+
+	-- HOME
 	local homeScroll = Instance.new("ScrollingFrame")
 	homeScroll.Name = "HomeScroll"
 	homeScroll.Size = UDim2.new(1, -48, 1, -110)
@@ -395,8 +437,10 @@ function LayoutVariants:_buildMinecraftShell()
 		LayoutOrder = 2,
 		Parent = homeInner,
 	})
-	Instance.new("UIListLayout", row1).FillDirection = Enum.FillDirection.Horizontal
-	row1:FindFirstChildOfClass("UIListLayout").Padding = UDim.new(0, 12)
+	local r1 = Instance.new("UIListLayout")
+	r1.FillDirection = Enum.FillDirection.Horizontal
+	r1.Padding = UDim.new(0, 12)
+	r1.Parent = row1
 	self:_buildServerCard(row1)
 	self:_buildFriendsCard(row1)
 
@@ -413,7 +457,7 @@ function LayoutVariants:_buildMinecraftShell()
 	r2.Parent = row2
 	self:_buildProfileStrip(row2)
 
-	-- Content host: full area above dock (no left tab rail — tabs live in dock)
+	-- Content (above dock)
 	local contentHost = Helpers.CreateFrame({
 		Name = "ContentHost",
 		Size = UDim2.new(1, -48, 1, -110),
@@ -502,7 +546,6 @@ function LayoutVariants:_buildServerCard(parent: Instance)
 	grid.CellPadding = UDim2.fromOffset(8, 6)
 	grid.SortOrder = Enum.SortOrder.LayoutOrder
 	grid.Parent = stats
-
 	local function stat(name: string, label: string, order: number): TextLabel
 		local box = Helpers.CreateFrame({
 			Name = name,
@@ -684,11 +727,10 @@ function LayoutVariants:_buildProfileStrip(parent: Instance)
 end
 
 function LayoutVariants:_buildDock(root: Frame)
-	-- Outer dock bar — centered on screen
 	local dock = Helpers.CreateFrame({
 		Name = "Dock",
-		Size = UDim2.fromOffset(520, 54),
-		Position = UDim2.new(0.5, -260, 1, -74),
+		Size = UDim2.fromOffset(560, 54),
+		Position = UDim2.new(0.5, -280, 1, -74),
 		BackgroundColor3 = Color3.fromRGB(14, 16, 22),
 		BackgroundTransparency = 0.06,
 		Parent = root,
@@ -698,7 +740,6 @@ function LayoutVariants:_buildDock(root: Frame)
 	dock.ZIndex = 5
 	self._Dock = dock
 
-	-- Clock (left)
 	local clock = Helpers.CreateLabel({
 		Name = "Clock",
 		Size = UDim2.fromOffset(52, 54),
@@ -711,7 +752,6 @@ function LayoutVariants:_buildDock(root: Frame)
 	})
 	self._ClockLabel = clock
 
-	-- Home button
 	local homeBtn = Helpers.CreateButton({
 		Name = "Home",
 		Size = UDim2.fromOffset(40, 40),
@@ -730,10 +770,30 @@ function LayoutVariants:_buildDock(root: Frame)
 		self:_showHome()
 	end)
 
-	-- Horizontal scrolling tab chips (center of dock)
+	-- Dock close (also on dock for discoverability)
+	local dockClose = Helpers.CreateButton({
+		Name = "DockClose",
+		Size = UDim2.fromOffset(40, 40),
+		Position = UDim2.new(1, -48, 0, 7),
+		Text = "×",
+		Font = Theme.FontBold,
+		TextSize = 20,
+		TextColor3 = Color3.fromRGB(230, 230, 240),
+		BackgroundColor3 = Color3.fromRGB(40, 28, 32),
+		BackgroundTransparency = 0.25,
+		Parent = dock,
+	})
+	Helpers.Corner(dockClose, 12)
+	dockClose.MouseButton1Click:Connect(function()
+		local w = self._Window
+		if w and w.SetVisible then
+			w:SetVisible(false)
+		end
+	end)
+
 	local tabScroll = Instance.new("ScrollingFrame")
 	tabScroll.Name = "DockTabs"
-	tabScroll.Size = UDim2.new(1, -180, 0, 40)
+	tabScroll.Size = UDim2.new(1, -172, 0, 40)
 	tabScroll.Position = UDim2.fromOffset(112, 7)
 	tabScroll.BackgroundTransparency = 1
 	tabScroll.BorderSizePixel = 0
@@ -743,7 +803,6 @@ function LayoutVariants:_buildDock(root: Frame)
 	tabScroll.AutomaticCanvasSize = Enum.AutomaticSize.X
 	tabScroll.ClipsDescendants = true
 	tabScroll.Parent = dock
-	self._DockTabs = tabScroll
 
 	local tabRow = Helpers.CreateFrame({
 		Name = "Row",
@@ -755,7 +814,6 @@ function LayoutVariants:_buildDock(root: Frame)
 	local rowLayout = Instance.new("UIListLayout")
 	rowLayout.FillDirection = Enum.FillDirection.Horizontal
 	rowLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-	rowLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
 	rowLayout.Padding = UDim.new(0, 6)
 	rowLayout.Parent = tabRow
 	self._DockTabRow = tabRow
@@ -787,7 +845,7 @@ function LayoutVariants:SyncTabs()
 	end
 
 	for i, tab in ipairs(w._Tabs) do
-		local label = clean(tab.Name or ("Tab " .. i))
+		local label = tabDisplayName(tab)
 		local btn = Helpers.CreateButton({
 			Name = "DockTab_" .. i,
 			Size = UDim2.fromOffset(0, 34),
@@ -826,11 +884,7 @@ function LayoutVariants:_refreshDockHighlight()
 		local selected = (not onHome) and name == active
 		btn.BackgroundTransparency = if selected then 0.05 else 0.35
 		btn.TextColor3 = if selected then Color3.fromRGB(255, 255, 255) else Color3.fromRGB(190, 195, 210)
-		if selected then
-			btn.BackgroundColor3 = Color3.fromRGB(50, 54, 72)
-		else
-			btn.BackgroundColor3 = Color3.fromRGB(28, 30, 40)
-		end
+		btn.BackgroundColor3 = if selected then Color3.fromRGB(50, 54, 72) else Color3.fromRGB(28, 30, 40)
 	end
 end
 
@@ -864,13 +918,11 @@ function LayoutVariants:_startStats()
 	task.spawn(function()
 		while self._AltGui and self._AltGui.Parent do
 			local lp = Players.LocalPlayer
-			local count = #Players:GetPlayers()
-			local maxP = Players.MaxPlayers
 			if self._StatPlayers then
-				self._StatPlayers.Text = tostring(count)
+				self._StatPlayers.Text = tostring(#Players:GetPlayers())
 			end
 			if self._StatMax then
-				self._StatMax.Text = tostring(maxP)
+				self._StatMax.Text = tostring(Players.MaxPlayers)
 			end
 			if self._StatLatency then
 				local ping = 0
@@ -878,9 +930,6 @@ function LayoutVariants:_startStats()
 					ping = math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
 				end)
 				self._StatLatency.Text = string.format("%d ms", ping)
-			end
-			if self._StatRegion then
-				self._StatRegion.Text = "—"
 			end
 			if self._FriendInServer and lp then
 				local inServer = 0
@@ -902,12 +951,12 @@ end
 -- Public API
 ----------------------------------------------------------------------
 function LayoutVariants:SetMode(mode: string)
-	mode = ({ Vaxorin = "Vaxorin", Classic = "Classic", Minecraft = "Minecraft" })[mode] or "Vaxorin"
+	mode = ({ Vaxorin = "Vaxorin", Classic = "Classic", Minecraft = "Minecraft", Compact = "Compact" })[mode] or "Vaxorin"
 	local prev = self._Mode
 	self._Mode = mode
 	local w = self._Window
 
-	if prev == "Minecraft" and mode ~= "Minecraft" then
+	if (prev == "Minecraft" or prev == "Compact") and mode ~= "Minecraft" and mode ~= "Compact" then
 		self:_restorePagesToWindow()
 		if self._AltGui then
 			self._AltGui.Enabled = false
@@ -956,7 +1005,7 @@ function LayoutVariants:SetMode(mode: string)
 		return
 	end
 
-	-- Minecraft
+	-- Minecraft / Compact share the alt shell; Compact starts on first tab not home
 	self:_restoreClassicWindow()
 	w._Minimized = false
 	if w.Main then
@@ -966,11 +1015,19 @@ function LayoutVariants:SetMode(mode: string)
 		self._AltGui.Enabled = w._Visible ~= false
 	end
 	self:SyncTabs()
-	self:_showHome()
+	if mode == "Compact" and w._Tabs and w._Tabs[1] then
+		local first = tabDisplayName(w._Tabs[1])
+		if w._selectTab then
+			w:_selectTab(w._Tabs[1])
+		end
+		self:_showTabContent(first)
+	else
+		self:_showHome()
+	end
 end
 
 function LayoutVariants:SetVisible(visible: boolean)
-	if self._Mode == "Minecraft" then
+	if self._Mode == "Minecraft" or self._Mode == "Compact" then
 		if self._AltGui then
 			self._AltGui.Enabled = visible
 		end
