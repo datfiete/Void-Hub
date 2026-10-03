@@ -727,10 +727,11 @@ function LayoutVariants:_buildProfileStrip(parent: Instance)
 end
 
 function LayoutVariants:_buildDock(root: Frame)
+	-- Centered dock: [clock] ........ [home + tabs centered] ........ [close]
 	local dock = Helpers.CreateFrame({
 		Name = "Dock",
-		Size = UDim2.fromOffset(560, 54),
-		Position = UDim2.new(0.5, -280, 1, -74),
+		Size = UDim2.fromOffset(580, 56),
+		Position = UDim2.new(0.5, -290, 1, -76),
 		BackgroundColor3 = Color3.fromRGB(14, 16, 22),
 		BackgroundTransparency = 0.06,
 		Parent = root,
@@ -742,8 +743,8 @@ function LayoutVariants:_buildDock(root: Frame)
 
 	local clock = Helpers.CreateLabel({
 		Name = "Clock",
-		Size = UDim2.fromOffset(52, 54),
-		Position = UDim2.fromOffset(12, 0),
+		Size = UDim2.fromOffset(48, 56),
+		Position = UDim2.fromOffset(14, 0),
 		Text = os.date("%H:%M"),
 		Font = Theme.FontBold,
 		TextSize = 13,
@@ -752,29 +753,10 @@ function LayoutVariants:_buildDock(root: Frame)
 	})
 	self._ClockLabel = clock
 
-	local homeBtn = Helpers.CreateButton({
-		Name = "Home",
-		Size = UDim2.fromOffset(40, 40),
-		Position = UDim2.fromOffset(64, 7),
-		Text = "⌂",
-		Font = Theme.FontBold,
-		TextSize = 18,
-		TextColor3 = Color3.fromRGB(255, 255, 255),
-		BackgroundColor3 = Color3.fromRGB(40, 44, 58),
-		BackgroundTransparency = 0.2,
-		Parent = dock,
-	})
-	Helpers.Corner(homeBtn, 12)
-	self._HomeBtn = homeBtn
-	homeBtn.MouseButton1Click:Connect(function()
-		self:_showHome()
-	end)
-
-	-- Dock close (also on dock for discoverability)
 	local dockClose = Helpers.CreateButton({
 		Name = "DockClose",
 		Size = UDim2.fromOffset(40, 40),
-		Position = UDim2.new(1, -48, 0, 7),
+		Position = UDim2.new(1, -50, 0.5, -20),
 		Text = "×",
 		Font = Theme.FontBold,
 		TextSize = 20,
@@ -791,10 +773,44 @@ function LayoutVariants:_buildDock(root: Frame)
 		end
 	end)
 
+	-- Center cluster (home + tabs) — truly centered in the dock
+	local center = Helpers.CreateFrame({
+		Name = "CenterCluster",
+		Size = UDim2.new(1, -120, 0, 44),
+		Position = UDim2.new(0.5, 0, 0.5, 0),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundTransparency = 1,
+		Parent = dock,
+	})
+
+	local centerLayout = Instance.new("UIListLayout")
+	centerLayout.FillDirection = Enum.FillDirection.Horizontal
+	centerLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	centerLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+	centerLayout.Padding = UDim.new(0, 8)
+	centerLayout.Parent = center
+
+	local homeBtn = Helpers.CreateButton({
+		Name = "Home",
+		Size = UDim2.fromOffset(40, 40),
+		Text = "⌂",
+		Font = Theme.FontBold,
+		TextSize = 18,
+		TextColor3 = Color3.fromRGB(255, 255, 255),
+		BackgroundColor3 = Color3.fromRGB(40, 44, 58),
+		BackgroundTransparency = 0.2,
+		LayoutOrder = 0,
+		Parent = center,
+	})
+	Helpers.Corner(homeBtn, 12)
+	self._HomeBtn = homeBtn
+	homeBtn.MouseButton1Click:Connect(function()
+		self:_showHome()
+	end)
+
 	local tabScroll = Instance.new("ScrollingFrame")
 	tabScroll.Name = "DockTabs"
-	tabScroll.Size = UDim2.new(1, -172, 0, 40)
-	tabScroll.Position = UDim2.fromOffset(112, 7)
+	tabScroll.Size = UDim2.new(0, 360, 0, 40)
 	tabScroll.BackgroundTransparency = 1
 	tabScroll.BorderSizePixel = 0
 	tabScroll.ScrollBarThickness = 0
@@ -802,7 +818,8 @@ function LayoutVariants:_buildDock(root: Frame)
 	tabScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
 	tabScroll.AutomaticCanvasSize = Enum.AutomaticSize.X
 	tabScroll.ClipsDescendants = true
-	tabScroll.Parent = dock
+	tabScroll.LayoutOrder = 1
+	tabScroll.Parent = center
 
 	local tabRow = Helpers.CreateFrame({
 		Name = "Row",
@@ -813,6 +830,7 @@ function LayoutVariants:_buildDock(root: Frame)
 	})
 	local rowLayout = Instance.new("UIListLayout")
 	rowLayout.FillDirection = Enum.FillDirection.Horizontal
+	rowLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 	rowLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 	rowLayout.Padding = UDim.new(0, 6)
 	rowLayout.Parent = tabRow
@@ -871,6 +889,9 @@ function LayoutVariants:SyncTabs()
 	end
 
 	self:_refreshDockHighlight()
+	if self._Mode == "Orbit" then
+		self:_syncOrbitTabs()
+	end
 end
 
 function LayoutVariants:_refreshDockHighlight()
@@ -947,20 +968,280 @@ function LayoutVariants:_startStats()
 	end)
 end
 
+
+----------------------------------------------------------------------
+-- Orbit layout (unique): vertical neon rail + floating content stage
+----------------------------------------------------------------------
+function LayoutVariants:_ensureOrbit()
+	if self._OrbitGui then
+		self:_syncOrbitTabs()
+		return
+	end
+	local w = self._Window
+	local parent = w._TopGuiParent or (w.Gui and w.Gui.Parent)
+	if not parent then
+		return
+	end
+
+	local gui = Instance.new("ScreenGui")
+	gui.Name = "VaxorinOrbitShell"
+	gui.ResetOnSpawn = false
+	gui.IgnoreGuiInset = true
+	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	gui.DisplayOrder = 2147483645
+	gui.Enabled = false
+	gui.Parent = parent
+	self._OrbitGui = gui
+
+	local root = Helpers.CreateFrame({
+		Name = "Root",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Parent = gui,
+	})
+	self._OrbitRoot = root
+
+	-- soft radial dim
+	local dim = Helpers.CreateFrame({
+		Name = "Dim",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Color3.fromRGB(4, 6, 12),
+		BackgroundTransparency = 0.35,
+		Parent = root,
+	})
+	dim.ZIndex = 0
+
+	-- Left neon rail
+	local rail = Helpers.CreateFrame({
+		Name = "Rail",
+		Size = UDim2.fromOffset(72, 0),
+		Position = UDim2.fromOffset(18, 0),
+		AnchorPoint = Vector2.new(0, 0.5),
+		BackgroundColor3 = Color3.fromRGB(10, 12, 20),
+		BackgroundTransparency = 0.08,
+		Parent = root,
+	})
+	rail.Position = UDim2.new(0, 18, 0.5, 0)
+	rail.Size = UDim2.fromOffset(72, 420)
+	Helpers.Corner(rail, 24)
+	local railStroke = Helpers.Stroke(rail, Color3.fromRGB(120, 80, 255), 1)
+	railStroke.Transparency = 0.35
+	-- accent glow line
+	local glow = Helpers.CreateFrame({
+		Name = "Glow",
+		Size = UDim2.new(0, 3, 1, -32),
+		Position = UDim2.new(1, -3, 0.5, 0),
+		AnchorPoint = Vector2.new(1, 0.5),
+		BackgroundColor3 = Color3.fromRGB(140, 90, 255),
+		Parent = rail,
+	})
+	Helpers.Corner(glow, 2)
+	self._OrbitRail = rail
+
+	local railScroll = Instance.new("ScrollingFrame")
+	railScroll.Name = "OrbScroll"
+	railScroll.Size = UDim2.new(1, -8, 1, -56)
+	railScroll.Position = UDim2.fromOffset(4, 12)
+	railScroll.BackgroundTransparency = 1
+	railScroll.BorderSizePixel = 0
+	railScroll.ScrollBarThickness = 0
+	railScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+	railScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	railScroll.ScrollingDirection = Enum.ScrollingDirection.Y
+	railScroll.Parent = rail
+
+	local orbList = Helpers.CreateFrame({
+		Name = "Orbs",
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		Parent = railScroll,
+	})
+	local ol = Instance.new("UIListLayout")
+	ol.FillDirection = Enum.FillDirection.Vertical
+	ol.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	ol.Padding = UDim.new(0, 10)
+	ol.Parent = orbList
+	self._OrbitOrbList = orbList
+	self._OrbitOrbs = {}
+
+	-- Floating stage (content)
+	local stage = Helpers.CreateFrame({
+		Name = "Stage",
+		Size = UDim2.new(1, -130, 1, -48),
+		Position = UDim2.fromOffset(110, 24),
+		BackgroundColor3 = Color3.fromRGB(12, 14, 22),
+		BackgroundTransparency = 0.06,
+		Parent = root,
+	})
+	Helpers.Corner(stage, 20)
+	local stageStroke = Helpers.Stroke(stage, Color3.fromRGB(100, 70, 220), 1)
+	stageStroke.Transparency = 0.45
+	self._OrbitStage = stage
+
+	local stageHost = Helpers.CreateFrame({
+		Name = "Host",
+		Size = UDim2.new(1, -24, 1, -24),
+		Position = UDim2.fromOffset(12, 12),
+		BackgroundTransparency = 1,
+		ClipsDescendants = true,
+		Parent = stage,
+	})
+	self._OrbitPageHost = stageHost
+
+	-- Close
+	local closeBtn = Helpers.CreateButton({
+		Name = "Close",
+		Size = UDim2.fromOffset(40, 40),
+		Position = UDim2.new(1, -56, 0, 16),
+		Text = "×",
+		Font = Theme.FontBold,
+		TextSize = 22,
+		TextColor3 = Color3.fromRGB(240, 240, 250),
+		BackgroundColor3 = Color3.fromRGB(28, 18, 40),
+		BackgroundTransparency = 0.1,
+		Parent = root,
+	})
+	Helpers.Corner(closeBtn, 12)
+	Helpers.Stroke(closeBtn, Color3.fromRGB(120, 80, 255), 1)
+	closeBtn.ZIndex = 10
+	closeBtn.MouseButton1Click:Connect(function()
+		if w.SetVisible then
+			w:SetVisible(false)
+		end
+	end)
+
+	-- Brand pip under rail
+	local brand = Helpers.CreateLabel({
+		Name = "Brand",
+		Size = UDim2.fromOffset(72, 20),
+		Position = UDim2.new(0, 18, 0.5, 220),
+		Text = "ORBIT",
+		Font = Theme.FontBold,
+		TextSize = 10,
+		TextColor3 = Color3.fromRGB(160, 140, 255),
+		Parent = root,
+	})
+
+	self:_syncOrbitTabs()
+end
+
+function LayoutVariants:_setOrbitVisible(visible: boolean)
+	if self._OrbitGui then
+		self._OrbitGui.Enabled = visible
+	end
+	if visible then
+		self:_mountOrbitPages()
+		self:_syncOrbitTabs()
+	else
+		-- only restore if we were using orbit host
+		if self._OrbitPageHost and self._Window and self._Window.Pages then
+			if self._Window.Pages.Parent == self._OrbitPageHost then
+				self:_restorePagesToWindow()
+			end
+		end
+	end
+end
+
+function LayoutVariants:_mountOrbitPages()
+	local w = self._Window
+	if not w or not w.Pages or not self._OrbitPageHost then
+		return
+	end
+	self:_ensurePagesHome()
+	if w.Pages.Parent ~= self._OrbitPageHost then
+		w.Pages.Parent = self._OrbitPageHost
+	end
+	w.Pages.Size = UDim2.fromScale(1, 1)
+	w.Pages.Position = UDim2.fromScale(0, 0)
+	w.Pages.Visible = true
+end
+
+function LayoutVariants:_syncOrbitTabs()
+	if not self._OrbitOrbList then
+		return
+	end
+	for _, child in ipairs(self._OrbitOrbList:GetChildren()) do
+		if child:IsA("TextButton") then
+			child:Destroy()
+		end
+	end
+	self._OrbitOrbs = {}
+
+	local w = self._Window
+	if not w or not w._Tabs then
+		return
+	end
+
+	for i, tab in ipairs(w._Tabs) do
+		local label = tabDisplayName(tab)
+		local letter = string.upper(string.sub(label, 1, 1))
+		local btn = Helpers.CreateButton({
+			Name = "Orb_" .. i,
+			Size = UDim2.fromOffset(48, 48),
+			Text = letter,
+			Font = Theme.FontBold,
+			TextSize = 16,
+			TextColor3 = Color3.fromRGB(210, 200, 255),
+			BackgroundColor3 = Color3.fromRGB(24, 22, 40),
+			BackgroundTransparency = 0.1,
+			LayoutOrder = i,
+			Parent = self._OrbitOrbList,
+		})
+		Helpers.Corner(btn, 24)
+		local stroke = Helpers.Stroke(btn, Color3.fromRGB(120, 90, 255), 1)
+		stroke.Transparency = 0.55
+		self._OrbitOrbs[label] = { btn = btn, stroke = stroke, tab = tab }
+
+		btn.MouseButton1Click:Connect(function()
+			if w._selectTab then
+				w:_selectTab(tab)
+			end
+			self:_highlightOrbit(label)
+			self:_mountOrbitPages()
+		end)
+	end
+
+	-- select active or first
+	local activeLabel = nil
+	if w._ActiveTab then
+		activeLabel = tabDisplayName(w._ActiveTab)
+	elseif w._Tabs[1] then
+		activeLabel = tabDisplayName(w._Tabs[1])
+		if w._selectTab then
+			w:_selectTab(w._Tabs[1])
+		end
+	end
+	if activeLabel then
+		self:_highlightOrbit(activeLabel)
+		self:_mountOrbitPages()
+	end
+end
+
+function LayoutVariants:_highlightOrbit(label: string)
+	for name, data in pairs(self._OrbitOrbs or {}) do
+		local on = name == label
+		data.btn.BackgroundColor3 = if on then Color3.fromRGB(90, 60, 200) else Color3.fromRGB(24, 22, 40)
+		data.btn.TextColor3 = if on then Color3.fromRGB(255, 255, 255) else Color3.fromRGB(210, 200, 255)
+		data.stroke.Transparency = if on then 0.15 else 0.55
+	end
+end
+
 ----------------------------------------------------------------------
 -- Public API
 ----------------------------------------------------------------------
 function LayoutVariants:SetMode(mode: string)
-	mode = ({ Vaxorin = "Vaxorin", Classic = "Classic", Minecraft = "Minecraft", Compact = "Compact" })[mode] or "Vaxorin"
+	mode = ({ Vaxorin = "Vaxorin", Classic = "Classic", Minecraft = "Minecraft", Orbit = "Orbit", Compact = "Orbit" })[mode] or "Vaxorin"
 	local prev = self._Mode
 	self._Mode = mode
 	local w = self._Window
 
-	if (prev == "Minecraft" or prev == "Compact") and mode ~= "Minecraft" and mode ~= "Compact" then
+	if (prev == "Minecraft" or prev == "Orbit") and mode ~= "Minecraft" and mode ~= "Orbit" then
 		self:_restorePagesToWindow()
 		if self._AltGui then
 			self._AltGui.Enabled = false
 		end
+		self:_setOrbitVisible(false)
 	end
 
 	if mode == "Vaxorin" then
@@ -1005,32 +1286,46 @@ function LayoutVariants:SetMode(mode: string)
 		return
 	end
 
-	-- Minecraft / Compact share the alt shell; Compact starts on first tab not home
-	self:_restoreClassicWindow()
-	w._Minimized = false
-	if w.Main then
-		w.Main.Visible = false
-	end
-	if self._AltGui then
-		self._AltGui.Enabled = w._Visible ~= false
-	end
-	self:SyncTabs()
-	if mode == "Compact" and w._Tabs and w._Tabs[1] then
-		local first = tabDisplayName(w._Tabs[1])
-		if w._selectTab then
-			w:_selectTab(w._Tabs[1])
+	-- Minecraft
+	if mode == "Minecraft" then
+		self:_restoreClassicWindow()
+		self:_setOrbitVisible(false)
+		w._Minimized = false
+		if w.Main then
+			w.Main.Visible = false
 		end
-		self:_showTabContent(first)
-	else
+		if self._AltGui then
+			self._AltGui.Enabled = w._Visible ~= false
+		end
+		self:SyncTabs()
 		self:_showHome()
+		return
+	end
+
+	-- Orbit — unique vertical neon rail layout
+	if mode == "Orbit" then
+		self:_restoreClassicWindow()
+		if self._AltGui then
+			self._AltGui.Enabled = false
+		end
+		w._Minimized = false
+		if w.Main then
+			w.Main.Visible = false
+		end
+		self:_ensureOrbit()
+		self:_setOrbitVisible(w._Visible ~= false)
+		self:SyncTabs()
+		return
 	end
 end
 
 function LayoutVariants:SetVisible(visible: boolean)
-	if self._Mode == "Minecraft" or self._Mode == "Compact" then
+	if self._Mode == "Minecraft" then
 		if self._AltGui then
 			self._AltGui.Enabled = visible
 		end
+	elseif self._Mode == "Orbit" then
+		self:_setOrbitVisible(visible)
 	else
 		local w = self._Window
 		if w and w.Main then
@@ -1050,6 +1345,9 @@ function LayoutVariants:Destroy()
 	end
 	if self._AltGui and self._AltGui.Parent then
 		self._AltGui:Destroy()
+	end
+	if self._OrbitGui and self._OrbitGui.Parent then
+		self._OrbitGui:Destroy()
 	end
 end
 

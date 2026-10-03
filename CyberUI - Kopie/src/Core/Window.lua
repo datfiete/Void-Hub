@@ -1972,7 +1972,7 @@ function Window:_selectTab(tab: any)
 end
 
 function Window:SetLayout(mode: string)
-	local normalized = ({ Vaxorin = "Vaxorin", Classic = "Classic", Minecraft = "Minecraft", Compact = "Compact", Expanded = "Vaxorin" })[mode] or "Vaxorin"
+	local normalized = ({ Vaxorin = "Vaxorin", Classic = "Classic", Minecraft = "Minecraft", Orbit = "Orbit", Compact = "Orbit", Expanded = "Vaxorin" })[mode] or "Vaxorin"
 	self._LayoutMode = normalized
 	if self._LayoutVariants then
 		self._LayoutVariants:SetMode(normalized)
@@ -2032,7 +2032,7 @@ function Window:_createOptionsTab()
 
 	visualSection:CreateDropdown({
 		Name = "Layout",
-		Options = { "Vaxorin", "Classic", "Minecraft", "Compact" },
+		Options = { "Vaxorin", "Classic", "Minecraft", "Orbit" },
 		CurrentOption = self._LayoutMode,
 		Flag = "Vaxorin.Visual.Layout",
 		Callback = function(value)
@@ -2141,6 +2141,7 @@ function Window:_createOptionsTab()
 	featuresSection:CreateDivider({})
 	featuresSection:CreateIconButton({ Text = "Preview Classic Interface", Callback = function() self:SetLayout("Classic") end })
 	featuresSection:CreateIconButton({ Text = "Preview Minecraft Interface", Callback = function() self:SetLayout("Minecraft") end })
+	featuresSection:CreateIconButton({ Text = "Preview Orbit Interface", Callback = function() self:SetLayout("Orbit") end })
 
 	local generalSection = optionsTab:CreateSection("🧩 General")
 	generalSection:CreateParagraph({
@@ -2652,7 +2653,7 @@ function Window:SetVisible(visible: boolean)
 	if visible then
 		if self.Main then
 			-- Main shell is used by Vaxorin and Classic; Minecraft uses its own ScreenGui.
-			local useMain = self._LayoutMode ~= "Minecraft" and self._LayoutMode ~= "Compact"
+			local useMain = self._LayoutMode ~= "Minecraft" and self._LayoutMode ~= "Orbit"
 			self.Main.Visible = self._StartupComplete and useMain
 		end
 
