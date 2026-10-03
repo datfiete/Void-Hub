@@ -1,8 +1,8 @@
 --!strict
 -- Layout variants:
---   Vaxorin  = default modern shell (current Window)
---   Classic  = old CyberUI / Vaxorin 3.0 window look (from CyberUI - Kopie (3))
---   Minecraft= Sirius-style home cards + bottom dock (reference screenshots)
+--   Vaxorin   = current default shell (Main window as-is)
+--   Classic   = same Main window, restored to old CyberUI 3.0 proportions (ZIP "Kopie (3)")
+--   Minecraft = Sirius-style overlay: home cards + dock + scrollable tab content
 
 local Theme = require(script.Parent.Theme)
 local Helpers = require(script.Parent.Parent.Utils.Helpers)
@@ -12,23 +12,87 @@ local Maid = require(script.Parent.Parent.Utils.Maid)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Stats = game:GetService("Stats")
-local TweenService = game:GetService("TweenService")
 
 local LayoutVariants = {}
 LayoutVariants.__index = LayoutVariants
 
-local DOCK_ICONS = {
-	{ id = "home", label = "Home", emoji = "⌂" },
-	{ id = "people", label = "Friends", emoji = "👤" },
-	{ id = "tabs", label = "Menu", emoji = "☰" },
-	{ id = "music", label = "Music", emoji = "♪" },
-	{ id = "settings", label = "Settings", emoji = "⚙" },
+-- Old CyberUI / Vaxorin 3.0 geometry (from CyberUI - Kopie (3).zip Theme.lua)
+local CLASSIC = {
+	WindowSize = Vector2.new(820, 540),
+	TopBarHeight = 82,
+	SidebarWidth = 216,
+	FooterHeight = 68,
 }
+
+local function detectExecutor(): (string, string)
+	-- returns displayName, subtitle
+	local name: string? = nil
+
+	pcall(function()
+		if typeof(identifyexecutor) == "function" then
+			name = tostring(identifyexecutor())
+		end
+	end)
+	if not name or name == "" or name == "nil" then
+		pcall(function()
+			if typeof(getexecutorname) == "function" then
+				name = tostring(getexecutorname())
+			end
+		end)
+	end
+	if not name or name == "" or name == "nil" then
+		-- Heuristic fallbacks used by common clients
+		if rawget(getfenv(), "syn") or rawget(_G, "syn") or (typeof(secure_call) == "function") then
+			name = "Synapse X"
+		elseif rawget(_G, "KRNL_LOADED") or rawget(getfenv(), "KRNL_LOADED") then
+			name = "Krnl"
+		elseif typeof(is_sirhurt_closure) == "function" then
+			name = "SirHurt"
+		elseif typeof(fluxus) == "table" or rawget(_G, "Fluxus") then
+			name = "Fluxus"
+		elseif typeof(isexecutorclosure) == "function" then
+			name = "Unknown Executor"
+		else
+			name = "Roblox Client"
+		end
+	end
+
+	local lower = string.lower(name :: string)
+	local subtitle = "Your very own, always supported client"
+	if string.find(lower, "synapse") then
+		subtitle = "Synapse X — supported client"
+	elseif string.find(lower, "krnl") then
+		subtitle = "Krnl — free executor"
+	elseif string.find(lower, "fluxus") then
+		subtitle = "Fluxus — mobile & PC"
+	elseif string.find(lower, "wave") then
+		subtitle = "Wave — supported client"
+	elseif string.find(lower, "solara") then
+		subtitle = "Solara — supported client"
+	elseif string.find(lower, "electron") then
+		subtitle = "Electron — supported client"
+	elseif string.find(lower, "script") and string.find(lower, "ware") then
+		subtitle = "Script-Ware — supported client"
+	elseif name == "Roblox Client" then
+		subtitle = "Running inside Roblox (no executor detected)"
+	else
+		subtitle = name .. " — detected"
+	end
+
+	return name :: string, subtitle
+end
 
 local function clean(name: string): string
 	local s = name:gsub("^[%s%c]+", "")
-	s = s:gsub("^⚙️ ", ""):gsub("^⚙ ", "")
-	s = s:gsub("^🎨 ", ""):gsub("^🧩 ", ""):gsub("^⚔️ ", "")
+	for _, prefix in {
+		"⚙️ ", "⚙ ", "🎨 ", "🧩 ", "⌨️ ", "🔧 ", "💡 ", "🌐 ", "👤 ", "⚔️ ",
+		"🧠 ", "📦 ", "⭐ ", "✨ ", "💎 ", "🛠️ ", "🛠 ",
+	} do
+		if s:sub(1, #prefix) == prefix then
+			s = s:sub(#prefix + 1)
+			break
+		end
+	end
 	return s ~= "" and s or name
 end
 
@@ -41,16 +105,32 @@ function LayoutVariants.new(window: any, initial: string): any
 		_Root = nil,
 		_Home = nil,
 		_ContentHost = nil,
+		_TabScroll = nil,
+		_TabList = nil,
+		_PageHost = nil,
 		_Dock = nil,
 		_DockButtons = {},
 		_ClockLabel = nil,
 		_ActiveDock = "home",
-		_PageHost = nil,
-		_Original = {},
+		_ExecutorName = "Unknown",
+		_ExecutorSub = "",
+		_PagesHome = nil :: { Parent: Instance?, Size: UDim2?, Position: UDim2? }?,
+		_ClassicSnapshot = nil :: any,
 		_ClassicApplied = false,
-		_ClockConn = nil,
-		_StatsConn = nil,
 	}, LayoutVariants)
+
+	-- Snapshot native Pages placement so Minecraft can restore 1:1
+	if window.Pages then
+		self._PagesHome = {
+			Parent = window.Pages.Parent,
+			Size = window.Pages.Size,
+			Position = window.Pages.Position,
+		}
+	end
+
+	local execName, execSub = detectExecutor()
+	self._ExecutorName = execName
+	self._ExecutorSub = execSub
 
 	self:_buildMinecraftShell()
 	self:SetMode(initial or "Vaxorin")
@@ -58,72 +138,147 @@ function LayoutVariants.new(window: any, initial: string): any
 end
 
 ----------------------------------------------------------------------
--- Classic: restore old window proportions / styling from ZIP (3)
+-- Classic: old CyberUI 3.0 proportions on the real Main window
 ----------------------------------------------------------------------
+function LayoutVariants:_snapshotClassic()
+	local w = self._Window
+	if self._ClassicSnapshot or not w or not w.Main then
+		return
+	end
+	self._ClassicSnapshot = {
+		MainSize = w.Main.Size,
+		TopBarSize = w.TopBar and w.TopBar.Size or nil,
+		ContentSize = w._ContentArea and w._ContentArea.Size or nil,
+		ContentPos = w._ContentArea and w._ContentArea.Position or nil,
+		SidebarSize = w.Sidebar and w.Sidebar.Size or nil,
+		PagesSize = w.Pages and w.Pages.Size or nil,
+		PagesPos = w.Pages and w.Pages.Position or nil,
+		SidebarWidth = w._SidebarWidth,
+		TopBarHeight = w._TopBarHeight,
+	}
+end
+
 function LayoutVariants:_applyClassicWindow()
 	local w = self._Window
 	if not w or not w.Main then
 		return
 	end
+	self:_snapshotClassic()
 
-	-- Old theme defaults from CyberUI - Kopie (3)
-	local oldSize = Vector2.new(820, 540)
-	local oldTop = 82
-	local oldSidebar = 216
+	local top = CLASSIC.TopBarHeight
+	local side = CLASSIC.SidebarWidth
+	local size = CLASSIC.WindowSize
 
-	if w.Main then
-		self:_remember(w.Main, "Size", w.Main.Size)
-		w.Main.Size = UDim2.fromOffset(oldSize.X, oldSize.Y)
-	end
+	w.Main.Size = UDim2.fromOffset(size.X, size.Y)
+	w._SidebarWidth = side
+	w._TopBarHeight = top
 
 	if w.TopBar then
-		self:_remember(w.TopBar, "Size", w.TopBar.Size)
-		w.TopBar.Size = UDim2.new(1, 0, 0, oldTop)
+		w.TopBar.Size = UDim2.new(1, 0, 0, top)
 	end
-
+	if w._ContentArea then
+		w._ContentArea.Position = UDim2.new(0, 0, 0, top)
+		w._ContentArea.Size = UDim2.new(1, 0, 1, -top)
+	end
 	if w.Sidebar then
-		self:_remember(w.Sidebar, "Size", w.Sidebar.Size)
-		w.Sidebar.Size = UDim2.new(0, oldSidebar, 1, -(oldTop + (w._FooterHeight or 36)))
-		if w.Sidebar.Position then
-			self:_remember(w.Sidebar, "Position", w.Sidebar.Position)
-			w.Sidebar.Position = UDim2.fromOffset(0, oldTop)
-		end
+		w.Sidebar.Size = UDim2.new(0, side, 1, 0)
 	end
-
 	if w.Pages then
-		self:_remember(w.Pages, "Size", w.Pages.Size)
-		self:_remember(w.Pages, "Position", w.Pages.Position)
-		w.Pages.Position = UDim2.fromOffset(oldSidebar, oldTop)
-		w.Pages.Size = UDim2.new(1, -oldSidebar, 1, -(oldTop + (w._FooterHeight or 36)))
+		w.Pages.Position = UDim2.new(0, side, 0, 0)
+		w.Pages.Size = UDim2.new(1, -side, 1, 0)
 	end
 
 	self._ClassicApplied = true
 end
 
 function LayoutVariants:_restoreClassicWindow()
-	if not self._ClassicApplied then
+	local w = self._Window
+	local snap = self._ClassicSnapshot
+	if not self._ClassicApplied or not snap or not w then
+		self._ClassicApplied = false
 		return
 	end
-	for inst, props in pairs(self._Original) do
-		if inst and inst.Parent then
-			for prop, value in pairs(props) do
-				pcall(function()
-					(inst :: any)[prop] = value
-				end)
-			end
+
+	if w.Main and snap.MainSize then
+		w.Main.Size = snap.MainSize
+	end
+	if w.TopBar and snap.TopBarSize then
+		w.TopBar.Size = snap.TopBarSize
+	end
+	if w._ContentArea then
+		if snap.ContentSize then
+			w._ContentArea.Size = snap.ContentSize
+		end
+		if snap.ContentPos then
+			w._ContentArea.Position = snap.ContentPos
 		end
 	end
-	self._Original = {}
+	if w.Sidebar and snap.SidebarSize then
+		w.Sidebar.Size = snap.SidebarSize
+	end
+	if w.Pages then
+		if snap.PagesSize then
+			w.Pages.Size = snap.PagesSize
+		end
+		if snap.PagesPos then
+			w.Pages.Position = snap.PagesPos
+		end
+	end
+	if snap.SidebarWidth then
+		w._SidebarWidth = snap.SidebarWidth
+	end
+	if snap.TopBarHeight then
+		w._TopBarHeight = snap.TopBarHeight
+	end
+
 	self._ClassicApplied = false
 end
 
-function LayoutVariants:_remember(inst: Instance, prop: string, value: any)
-	if not self._Original[inst] then
-		self._Original[inst] = {}
+----------------------------------------------------------------------
+-- Pages reparent (Minecraft content) — must restore Parent/Size/Position
+----------------------------------------------------------------------
+function LayoutVariants:_ensurePagesHome()
+	local w = self._Window
+	if self._PagesHome or not w or not w.Pages then
+		return
 	end
-	if self._Original[inst][prop] == nil then
-		self._Original[inst][prop] = value
+	self._PagesHome = {
+		Parent = w.Pages.Parent,
+		Size = w.Pages.Size,
+		Position = w.Pages.Position,
+	}
+end
+
+function LayoutVariants:_movePagesToHost()
+	local w = self._Window
+	if not w or not w.Pages or not self._PageHost then
+		return
 	end
+	self:_ensurePagesHome()
+	if w.Pages.Parent ~= self._PageHost then
+		w.Pages.Parent = self._PageHost
+	end
+	w.Pages.Size = UDim2.fromScale(1, 1)
+	w.Pages.Position = UDim2.fromScale(0, 0)
+	w.Pages.Visible = true
+end
+
+function LayoutVariants:_restorePagesToWindow()
+	local w = self._Window
+	local home = self._PagesHome
+	if not w or not w.Pages or not home then
+		return
+	end
+	if home.Parent and w.Pages.Parent ~= home.Parent then
+		w.Pages.Parent = home.Parent
+	end
+	if home.Size then
+		w.Pages.Size = home.Size
+	end
+	if home.Position then
+		w.Pages.Position = home.Position
+	end
+	w.Pages.Visible = true
 end
 
 ----------------------------------------------------------------------
@@ -154,7 +309,6 @@ function LayoutVariants:_buildMinecraftShell()
 	})
 	self._Root = root
 
-	-- Soft vignette so cards pop over the game world
 	local dim = Helpers.CreateFrame({
 		Name = "Dim",
 		Size = UDim2.fromScale(1, 1),
@@ -164,61 +318,65 @@ function LayoutVariants:_buildMinecraftShell()
 	})
 	dim.ZIndex = 0
 
-	-- Home area (cards)
-	local home = Helpers.CreateFrame({
-		Name = "Home",
-		Size = UDim2.new(1, -48, 1, -120),
-		Position = UDim2.fromOffset(24, 24),
-		BackgroundTransparency = 1,
-		Parent = root,
-	})
-	home.ZIndex = 2
-	self._Home = home
+	-- HOME (scrollable so many cards never clip)
+	local homeScroll = Instance.new("ScrollingFrame")
+	homeScroll.Name = "HomeScroll"
+	homeScroll.Size = UDim2.new(1, -48, 1, -120)
+	homeScroll.Position = UDim2.fromOffset(24, 24)
+	homeScroll.BackgroundTransparency = 1
+	homeScroll.BorderSizePixel = 0
+	homeScroll.ScrollBarThickness = 4
+	homeScroll.ScrollBarImageColor3 = Color3.fromRGB(100, 110, 130)
+	homeScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+	homeScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	homeScroll.ScrollingDirection = Enum.ScrollingDirection.Y
+	homeScroll.ZIndex = 2
+	homeScroll.Parent = root
+	self._Home = homeScroll
 
-	local homeTitle = Helpers.CreateLabel({
+	local homeInner = Helpers.CreateFrame({
+		Name = "Inner",
+		Size = UDim2.new(1, -8, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		Parent = homeScroll,
+	})
+	Helpers.Padding(homeInner, Rect.new(0, 0, 8, 16))
+	local homeLayout = Instance.new("UIListLayout")
+	homeLayout.FillDirection = Enum.FillDirection.Vertical
+	homeLayout.Padding = UDim.new(0, 12)
+	homeLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	homeLayout.Parent = homeInner
+
+	Helpers.CreateLabel({
 		Name = "HomeTitle",
-		Size = UDim2.new(0, 280, 0, 28),
-		Position = UDim2.fromOffset(8, 4),
+		Size = UDim2.new(1, 0, 0, 28),
 		Text = "Home",
 		Font = Theme.FontBold,
 		TextSize = 26,
 		TextColor3 = Color3.fromRGB(245, 245, 250),
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Parent = home,
+		LayoutOrder = 0,
+		Parent = homeInner,
 	})
-	local homeSub = Helpers.CreateLabel({
+	Helpers.CreateLabel({
 		Name = "HomeSub",
-		Size = UDim2.new(0, 320, 0, 18),
-		Position = UDim2.fromOffset(8, 34),
+		Size = UDim2.new(1, 0, 0, 18),
 		Text = "What's left?",
 		Font = Theme.Font,
 		TextSize = 13,
 		TextColor3 = Color3.fromRGB(160, 165, 180),
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Parent = home,
+		LayoutOrder = 1,
+		Parent = homeInner,
 	})
 
-	-- Card grid
-	local grid = Helpers.CreateFrame({
-		Name = "CardGrid",
-		Size = UDim2.new(1, -16, 1, -70),
-		Position = UDim2.fromOffset(8, 64),
-		BackgroundTransparency = 1,
-		Parent = home,
-	})
-	local list = Instance.new("UIListLayout")
-	list.FillDirection = Enum.FillDirection.Vertical
-	list.Padding = UDim.new(0, 12)
-	list.SortOrder = Enum.SortOrder.LayoutOrder
-	list.Parent = grid
-
-	-- Row 1: Server + Friends
 	local row1 = Helpers.CreateFrame({
 		Name = "Row1",
 		Size = UDim2.new(1, 0, 0, 168),
 		BackgroundTransparency = 1,
-		LayoutOrder = 1,
-		Parent = grid,
+		LayoutOrder = 2,
+		Parent = homeInner,
 	})
 	local row1Layout = Instance.new("UIListLayout")
 	row1Layout.FillDirection = Enum.FillDirection.Horizontal
@@ -228,28 +386,26 @@ function LayoutVariants:_buildMinecraftShell()
 	self:_buildServerCard(row1)
 	self:_buildFriendsCard(row1)
 
-	-- Row 2: profile / executor / discord style cards
 	local row2 = Helpers.CreateFrame({
 		Name = "Row2",
 		Size = UDim2.new(1, 0, 0, 56),
 		BackgroundTransparency = 1,
-		LayoutOrder = 2,
-		Parent = grid,
+		LayoutOrder = 3,
+		Parent = homeInner,
 	})
 	local row2Layout = Instance.new("UIListLayout")
 	row2Layout.FillDirection = Enum.FillDirection.Horizontal
 	row2Layout.Padding = UDim.new(0, 12)
 	row2Layout.Parent = row2
-
 	self:_buildProfileStrip(row2)
 
-	-- Content host (when a tab is open instead of home)
+	-- CONTENT HOST (tabs) — left tab rail (scrollable) + page area
 	local contentHost = Helpers.CreateFrame({
 		Name = "ContentHost",
 		Size = UDim2.new(1, -48, 1, -120),
 		Position = UDim2.fromOffset(24, 24),
 		BackgroundColor3 = Color3.fromRGB(12, 14, 20),
-		BackgroundTransparency = 0.12,
+		BackgroundTransparency = 0.08,
 		Visible = false,
 		Parent = root,
 	})
@@ -258,25 +414,51 @@ function LayoutVariants:_buildMinecraftShell()
 	contentHost.ZIndex = 2
 	self._ContentHost = contentHost
 
+	local tabScroll = Instance.new("ScrollingFrame")
+	tabScroll.Name = "TabScroll"
+	tabScroll.Size = UDim2.new(0, 180, 1, -16)
+	tabScroll.Position = UDim2.fromOffset(8, 8)
+	tabScroll.BackgroundColor3 = Color3.fromRGB(16, 18, 26)
+	tabScroll.BackgroundTransparency = 0.15
+	tabScroll.BorderSizePixel = 0
+	tabScroll.ScrollBarThickness = 3
+	tabScroll.ScrollBarImageColor3 = Color3.fromRGB(100, 110, 130)
+	tabScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+	tabScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	tabScroll.ScrollingDirection = Enum.ScrollingDirection.Y
+	tabScroll.Parent = contentHost
+	Helpers.Corner(tabScroll, 12)
+	self._TabScroll = tabScroll
+
+	local tabList = Helpers.CreateFrame({
+		Name = "TabList",
+		Size = UDim2.new(1, -8, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		Parent = tabScroll,
+	})
+	Helpers.Padding(tabList, 6)
+	local tabLayout = Instance.new("UIListLayout")
+	tabLayout.FillDirection = Enum.FillDirection.Vertical
+	tabLayout.Padding = UDim.new(0, 4)
+	tabLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	tabLayout.Parent = tabList
+	self._TabList = tabList
+
 	local pageHost = Helpers.CreateFrame({
 		Name = "PageHost",
-		Size = UDim2.new(1, -24, 1, -24),
-		Position = UDim2.fromOffset(12, 12),
+		Size = UDim2.new(1, -204, 1, -16),
+		Position = UDim2.fromOffset(196, 8),
 		BackgroundTransparency = 1,
+		ClipsDescendants = true,
 		Parent = contentHost,
 	})
 	self._PageHost = pageHost
 
-	-- Bottom dock (Sirius style)
 	self:_buildDock(root)
 end
 
-function LayoutVariants:_card(parent: Instance, props: {
-	Name: string,
-	Size: UDim2,
-	BackgroundColor3: Color3?,
-	LayoutOrder: number?,
-}): Frame
+function LayoutVariants:_card(parent: Instance, props: any): Frame
 	local card = Helpers.CreateFrame({
 		Name = props.Name,
 		Size = props.Size,
@@ -294,18 +476,15 @@ function LayoutVariants:_buildServerCard(parent: Instance)
 	local card = self:_card(parent, {
 		Name = "ServerCard",
 		Size = UDim2.new(0.5, -6, 1, 0),
-		BackgroundColor3 = Color3.fromRGB(18, 48, 38), -- green tint like screenshot
+		BackgroundColor3 = Color3.fromRGB(18, 48, 38),
 		LayoutOrder = 1,
 	})
-	-- gradient-ish top accent
-	local accent = Helpers.CreateFrame({
+	Helpers.CreateFrame({
 		Name = "Accent",
 		Size = UDim2.new(1, 0, 0, 3),
 		BackgroundColor3 = Color3.fromRGB(60, 200, 140),
 		Parent = card,
 	})
-	Helpers.Corner(accent, 2)
-
 	Helpers.CreateLabel({
 		Name = "Title",
 		Size = UDim2.new(1, -24, 0, 20),
@@ -362,7 +541,7 @@ function LayoutVariants:_buildServerCard(parent: Instance)
 			TextXAlignment = Enum.TextXAlignment.Left,
 			Parent = box,
 		})
-		local v = Helpers.CreateLabel({
+		return Helpers.CreateLabel({
 			Name = "V",
 			Size = UDim2.new(1, -12, 0, 16),
 			Position = UDim2.fromOffset(8, 18),
@@ -373,14 +552,12 @@ function LayoutVariants:_buildServerCard(parent: Instance)
 			TextXAlignment = Enum.TextXAlignment.Left,
 			Parent = box,
 		})
-		return v
 	end
 
 	self._StatPlayers = stat("Players", "Players", 1)
 	self._StatMax = stat("Max", "Maximum Players", 2)
 	self._StatLatency = stat("Latency", "Latency", 3)
 	self._StatRegion = stat("Region", "Server Region", 4)
-
 	self:_startStats()
 end
 
@@ -391,7 +568,6 @@ function LayoutVariants:_buildFriendsCard(parent: Instance)
 		BackgroundColor3 = Color3.fromRGB(14, 16, 22),
 		LayoutOrder = 2,
 	})
-
 	Helpers.CreateLabel({
 		Name = "Title",
 		Size = UDim2.new(1, -24, 0, 20),
@@ -427,7 +603,7 @@ function LayoutVariants:_buildFriendsCard(parent: Instance)
 	grid.CellPadding = UDim2.fromOffset(8, 6)
 	grid.Parent = stats
 
-	local function fstat(name: string, label: string, order: number, accent: Color3?): TextLabel
+	local function fstat(name: string, label: string, order: number, accent: Color3): TextLabel
 		local box = Helpers.CreateFrame({
 			Name = name,
 			BackgroundColor3 = Color3.fromRGB(22, 24, 32),
@@ -436,16 +612,14 @@ function LayoutVariants:_buildFriendsCard(parent: Instance)
 			Parent = stats,
 		})
 		Helpers.Corner(box, 8)
-		if accent then
-			local bar = Helpers.CreateFrame({
-				Name = "Bar",
-				Size = UDim2.new(0, 3, 1, -10),
-				Position = UDim2.fromOffset(6, 5),
-				BackgroundColor3 = accent,
-				Parent = box,
-			})
-			Helpers.Corner(bar, 2)
-		end
+		local bar = Helpers.CreateFrame({
+			Name = "Bar",
+			Size = UDim2.new(0, 3, 1, -10),
+			Position = UDim2.fromOffset(6, 5),
+			BackgroundColor3 = accent,
+			Parent = box,
+		})
+		Helpers.Corner(bar, 2)
 		Helpers.CreateLabel({
 			Name = "L",
 			Size = UDim2.new(1, -16, 0, 14),
@@ -480,8 +654,10 @@ function LayoutVariants:_buildProfileStrip(parent: Instance)
 	local lp = Players.LocalPlayer
 	local displayName = lp and (lp.DisplayName or lp.Name) or "Player"
 	local userId = lp and lp.UserId or 0
+	local execName = self._ExecutorName
+	local execSub = self._ExecutorSub
 
-	local function strip(name: string, title: string, sub: string, color: Color3, order: number)
+	local function strip(name: string, title: string, sub: string, color: Color3, order: number, image: string?)
 		local card = self:_card(parent, {
 			Name = name,
 			Size = UDim2.new(0.33, -8, 1, 0),
@@ -497,6 +673,7 @@ function LayoutVariants:_buildProfileStrip(parent: Instance)
 			TextSize = 13,
 			TextColor3 = Color3.fromRGB(245, 245, 250),
 			TextXAlignment = Enum.TextXAlignment.Left,
+			TextTruncate = Enum.TextTruncate.AtEnd,
 			Parent = card,
 		})
 		Helpers.CreateLabel({
@@ -508,6 +685,7 @@ function LayoutVariants:_buildProfileStrip(parent: Instance)
 			TextSize = 11,
 			TextColor3 = Color3.fromRGB(170, 175, 190),
 			TextXAlignment = Enum.TextXAlignment.Left,
+			TextTruncate = Enum.TextTruncate.AtEnd,
 			Parent = card,
 		})
 		local avatar = Instance.new("ImageLabel")
@@ -516,18 +694,31 @@ function LayoutVariants:_buildProfileStrip(parent: Instance)
 		avatar.Position = UDim2.fromOffset(10, 12)
 		avatar.BackgroundColor3 = Color3.fromRGB(30, 32, 40)
 		avatar.BackgroundTransparency = 0.2
-		avatar.Image = string.format(
-			"https://www.roblox.com/headshot-thumbnail/image?userId=%d&width=48&height=48&format=png",
-			userId
-		)
+		avatar.Image = image
+			or string.format(
+				"https://www.roblox.com/headshot-thumbnail/image?userId=%d&width=48&height=48&format=png",
+				userId
+			)
 		avatar.Parent = card
 		Helpers.Corner(avatar, 8)
 		return card
 	end
 
 	strip("DisplayCard", displayName, "DisplayName", Color3.fromRGB(18, 20, 28), 1)
-	strip("ExecutorCard", "Synapse X", "Your very own, always supported client", Color3.fromRGB(48, 18, 22), 2)
-	strip("DiscordCard", "Discord", "Tap to join our Discord server for updates and more", Color3.fromRGB(16, 18, 28), 3)
+	self._ExecutorCard = strip(
+		"ExecutorCard",
+		execName,
+		execSub,
+		Color3.fromRGB(48, 18, 22),
+		2
+	)
+	strip(
+		"DiscordCard",
+		"Discord",
+		"Tap to join our Discord server for updates and more",
+		Color3.fromRGB(16, 18, 28),
+		3
+	)
 end
 
 function LayoutVariants:_buildDock(root: Frame)
@@ -544,12 +735,11 @@ function LayoutVariants:_buildDock(root: Frame)
 	dock.ZIndex = 5
 	self._Dock = dock
 
-	-- clock on the left of dock
 	local clock = Helpers.CreateLabel({
 		Name = "Clock",
 		Size = UDim2.fromOffset(48, 52),
 		Position = UDim2.fromOffset(10, 0),
-		Text = "00:00",
+		Text = os.date("%H:%M"),
 		Font = Theme.FontBold,
 		TextSize = 12,
 		TextColor3 = Color3.fromRGB(210, 215, 230),
@@ -571,8 +761,15 @@ function LayoutVariants:_buildDock(root: Frame)
 	il.Padding = UDim.new(0, 6)
 	il.Parent = icons
 
+	local defs = {
+		{ id = "home", emoji = "⌂" },
+		{ id = "people", emoji = "👤" },
+		{ id = "tabs", emoji = "☰" },
+		{ id = "music", emoji = "♪" },
+		{ id = "settings", emoji = "⚙" },
+	}
 	self._DockButtons = {}
-	for i, def in ipairs(DOCK_ICONS) do
+	for i, def in ipairs(defs) do
 		local btn = Helpers.CreateButton({
 			Name = def.id,
 			Size = UDim2.fromOffset(40, 40),
@@ -587,13 +784,11 @@ function LayoutVariants:_buildDock(root: Frame)
 		Helpers.Corner(btn, 12)
 		btn.LayoutOrder = i
 		self._DockButtons[def.id] = btn
-
 		btn.MouseButton1Click:Connect(function()
 			self:_selectDock(def.id)
 		end)
 	end
 
-	-- settings gear on the far right of screen (like screenshot)
 	local gear = Helpers.CreateButton({
 		Name = "Gear",
 		Size = UDim2.fromOffset(40, 40),
@@ -613,8 +808,54 @@ function LayoutVariants:_buildDock(root: Frame)
 		self:_selectDock("settings")
 	end)
 
-	self:_startClock()
-	self:_selectDock("home")
+	task.spawn(function()
+		while self._AltGui and self._AltGui.Parent do
+			if self._ClockLabel then
+				self._ClockLabel.Text = os.date("%H:%M")
+			end
+			task.wait(1)
+		end
+	end)
+end
+
+function LayoutVariants:SyncTabs()
+	if not self._TabList then
+		return
+	end
+	for _, child in ipairs(self._TabList:GetChildren()) do
+		if child:IsA("TextButton") then
+			child:Destroy()
+		end
+	end
+
+	local w = self._Window
+	if not w or not w._Tabs then
+		return
+	end
+
+	for i, tab in ipairs(w._Tabs) do
+		local label = clean(tab.Name or ("Tab " .. i))
+		local btn = Helpers.CreateButton({
+			Name = "Tab_" .. i,
+			Size = UDim2.new(1, 0, 0, 36),
+			Text = "  " .. label,
+			Font = Theme.Font,
+			TextSize = 13,
+			TextColor3 = Color3.fromRGB(210, 215, 230),
+			TextXAlignment = Enum.TextXAlignment.Left,
+			BackgroundColor3 = Color3.fromRGB(28, 30, 40),
+			BackgroundTransparency = 0.25,
+			LayoutOrder = i,
+			Parent = self._TabList,
+		})
+		Helpers.Corner(btn, 8)
+		btn.MouseButton1Click:Connect(function()
+			if w._selectTab then
+				w:_selectTab(tab)
+			end
+			self:_selectDock("tabs")
+		end)
+	end
 end
 
 function LayoutVariants:_selectDock(id: string)
@@ -636,25 +877,30 @@ function LayoutVariants:_selectDock(id: string)
 		if self._ContentHost then
 			self._ContentHost.Visible = false
 		end
+		-- keep pages parented to host only while content is shown; restore when home
 		self:_restorePagesToWindow()
-	elseif id == "tabs" or id == "settings" or id == "people" or id == "music" then
+	else
 		if self._Home then
 			self._Home.Visible = false
 		end
 		if self._ContentHost then
 			self._ContentHost.Visible = true
 		end
+		self:SyncTabs()
 		self:_movePagesToHost()
-		-- try to open a sensible tab
+
 		local w = self._Window
-		if w and w._Tabs then
-			local targetName = if id == "settings" then "Settings" elseif id == "people" then "Player" else nil
-			if targetName then
+		if w and w._Tabs and w._selectTab then
+			local target: string? = nil
+			if id == "settings" then
+				target = "options"
+			elseif id == "people" then
+				target = "player"
+			end
+			if target then
 				for _, tab in ipairs(w._Tabs) do
-					if tab and tab.Name and string.find(string.lower(clean(tab.Name)), string.lower(targetName)) then
-						if w._selectTab then
-							w:_selectTab(tab)
-						end
+					if tab and tab.Name and string.find(string.lower(clean(tab.Name)), target) then
+						w:_selectTab(tab)
 						break
 					end
 				end
@@ -663,107 +909,60 @@ function LayoutVariants:_selectDock(id: string)
 	end
 end
 
-function LayoutVariants:_startClock()
-	if self._ClockConn then
-		self._ClockConn:Disconnect()
-	end
-	local function tick()
-		if self._ClockLabel then
-			self._ClockLabel.Text = os.date("%H:%M")
-		end
-	end
-	tick()
-	self._ClockConn = RunService.Heartbeat:Connect(function()
-		-- update once per second-ish
-		if tick then
-			tick()
-		end
-	end)
-	self._Maid:Give(self._ClockConn)
-end
-
 function LayoutVariants:_startStats()
-	if self._StatsConn then
-		self._StatsConn:Disconnect()
-	end
-	local function refresh()
-		local lp = Players.LocalPlayer
-		local players = #Players:GetPlayers()
-		local maxPlayers = Players.MaxPlayers
-		if self._StatPlayers then
-			self._StatPlayers.Text = tostring(players)
-		end
-		if self._StatMax then
-			self._StatMax.Text = tostring(maxPlayers)
-		end
-		if self._StatLatency then
-			local ping = 0
-			pcall(function()
-				ping = math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
-			end)
-			self._StatLatency.Text = string.format("%d ms", ping)
-		end
-		if self._StatRegion then
-			self._StatRegion.Text = "—"
-		end
-		-- friends (best-effort; may be 0 in many environments)
-		if self._FriendInServer then
-			local inServer = 0
-			pcall(function()
-				for _, p in ipairs(Players:GetPlayers()) do
-					if p ~= lp and p:IsFriendsWith(lp.UserId) then
-						inServer += 1
-					end
-				end
-			end)
-			self._FriendInServer.Text = tostring(inServer)
-		end
-	end
-	refresh()
-	self._StatsConn = RunService.Heartbeat:Connect(function() end)
 	task.spawn(function()
 		while self._AltGui and self._AltGui.Parent do
-			refresh()
+			local lp = Players.LocalPlayer
+			local count = #Players:GetPlayers()
+			local maxP = Players.MaxPlayers
+			if self._StatPlayers then
+				self._StatPlayers.Text = tostring(count)
+			end
+			if self._StatMax then
+				self._StatMax.Text = tostring(maxP)
+			end
+			if self._StatLatency then
+				local ping = 0
+				pcall(function()
+					ping = math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
+				end)
+				self._StatLatency.Text = string.format("%d ms", ping)
+			end
+			if self._StatRegion then
+				self._StatRegion.Text = "—"
+			end
+			if self._FriendInServer and lp then
+				local inServer = 0
+				pcall(function()
+					for _, p in ipairs(Players:GetPlayers()) do
+						if p ~= lp and p:IsFriendsWith(lp.UserId) then
+							inServer += 1
+						end
+					end
+				end)
+				self._FriendInServer.Text = tostring(inServer)
+			end
 			task.wait(2)
 		end
 	end)
 end
 
-function LayoutVariants:_movePagesToHost()
-	local w = self._Window
-	if not w or not w.Pages or not self._PageHost then
-		return
-	end
-	if w.Pages.Parent ~= self._PageHost then
-		w.Pages.Parent = self._PageHost
-		w.Pages.Size = UDim2.fromScale(1, 1)
-		w.Pages.Position = UDim2.fromScale(0, 0)
-		w.Pages.Visible = true
-	end
-end
-
-function LayoutVariants:_restorePagesToWindow()
-	local w = self._Window
-	if not w or not w.Pages or not w.Main then
-		return
-	end
-	if w.Pages.Parent == self._PageHost then
-		w.Pages.Parent = w.Main
-		-- sizes restored when leaving Minecraft via SetMode
-	end
-end
-
 ----------------------------------------------------------------------
 -- Public API
 ----------------------------------------------------------------------
-function LayoutVariants:SyncTabs()
-	-- Minecraft dock doesn't list every tab; Classic uses main window tabs.
-end
-
 function LayoutVariants:SetMode(mode: string)
 	mode = ({ Vaxorin = "Vaxorin", Classic = "Classic", Minecraft = "Minecraft" })[mode] or "Vaxorin"
+	local prev = self._Mode
 	self._Mode = mode
 	local w = self._Window
+
+	-- Always leave Minecraft cleanly first
+	if prev == "Minecraft" and mode ~= "Minecraft" then
+		self:_restorePagesToWindow()
+		if self._AltGui then
+			self._AltGui.Enabled = false
+		end
+	end
 
 	if mode == "Vaxorin" then
 		if self._AltGui then
@@ -787,7 +986,6 @@ function LayoutVariants:SetMode(mode: string)
 	end
 
 	if mode == "Classic" then
-		-- Classic = old CyberUI window (no alt shell)
 		if self._AltGui then
 			self._AltGui.Enabled = false
 		end
@@ -808,7 +1006,7 @@ function LayoutVariants:SetMode(mode: string)
 		return
 	end
 
-	-- Minecraft = Sirius shell
+	-- Minecraft
 	self:_restoreClassicWindow()
 	w._Minimized = false
 	if w.Main then
@@ -817,6 +1015,7 @@ function LayoutVariants:SetMode(mode: string)
 	if self._AltGui then
 		self._AltGui.Enabled = w._Visible ~= false
 	end
+	self:SyncTabs()
 	self:_selectDock(self._ActiveDock or "home")
 end
 
@@ -825,7 +1024,7 @@ function LayoutVariants:SetVisible(visible: boolean)
 		if self._AltGui then
 			self._AltGui.Enabled = visible
 		end
-	elseif self._Mode == "Classic" or self._Mode == "Vaxorin" then
+	else
 		local w = self._Window
 		if w and w.Main then
 			w.Main.Visible = visible and w._StartupComplete
@@ -837,14 +1036,6 @@ function LayoutVariants:RefreshTheme()
 end
 
 function LayoutVariants:Destroy()
-	if self._ClockConn then
-		self._ClockConn:Disconnect()
-		self._ClockConn = nil
-	end
-	if self._StatsConn then
-		self._StatsConn:Disconnect()
-		self._StatsConn = nil
-	end
 	self:_restorePagesToWindow()
 	self:_restoreClassicWindow()
 	if self._Maid then

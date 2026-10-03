@@ -1734,7 +1734,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	self._ContentArea = contentArea
 	self._TopBarHeight = topBarHeight
 	self._SidebarWidth = Theme.SidebarWidth
-	self._LayoutMode = data.Layout or "Expanded"
+	self._LayoutMode = data.Layout or "Vaxorin"
 	self._Visible = true
 	self._Minimized = false
 	self._StartupComplete = false
@@ -2650,7 +2650,9 @@ function Window:SetVisible(visible: boolean)
 
 	if visible then
 		if self.Main then
-			self.Main.Visible = self._StartupComplete and self._LayoutMode == "Vaxorin"
+			-- Main shell is used by Vaxorin and Classic; Minecraft uses its own ScreenGui.
+			local useMain = self._LayoutMode ~= "Minecraft"
+			self.Main.Visible = self._StartupComplete and useMain
 		end
 
 		if self._FloatingButton and self._FloatingButton.Visible then
