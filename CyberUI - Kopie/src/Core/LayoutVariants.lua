@@ -177,14 +177,33 @@ function LayoutVariants:_setClassicChrome(hidden: boolean)
 		w._NavLabel.Text = if hidden then "NAVIGATION" else (self._ClassicSnapshot and self._ClassicSnapshot.NavText) or "WORKSPACE"
 	end
 
+	-- Collapse the V5 page header gap above sections (Columns start at Y=88 by default).
 	if w._Tabs then
 		for _, tab in ipairs(w._Tabs) do
+			if tab._PageHeader then
+				tab._PageHeader.Visible = not hidden
+				if hidden then
+					tab._PageHeader.Size = UDim2.new(1, 0, 0, 0)
+				else
+					tab._PageHeader.Size = UDim2.new(1, -(18 + 22), 0, 62)
+				end
+			end
 			if tab._PageEyebrow then
 				tab._PageEyebrow.Visible = not hidden
 			end
-			-- Old UI had simpler page tops — hide the whole V5 page header block in Classic
-			if tab._PageHeader then
-				tab._PageHeader.Visible = not hidden
+			if tab._PageTitle then
+				tab._PageTitle.Visible = not hidden
+			end
+			if tab._PageLine then
+				tab._PageLine.Visible = not hidden
+			end
+			if tab._Columns then
+				if hidden then
+					-- pull sections up — remove empty header gap
+					tab._Columns.Position = UDim2.fromOffset(18, 12)
+				else
+					tab._Columns.Position = UDim2.fromOffset(18, 88)
+				end
 			end
 		end
 	end
@@ -270,6 +289,32 @@ function LayoutVariants:_restoreClassicWindow()
 	self._ClassicApplied = false
 end
 
+
+function LayoutVariants:_setContentHeaderCollapsed(collapsed: boolean)
+	local w = self._Window
+	if not w or not w._Tabs then
+		return
+	end
+	for _, tab in ipairs(w._Tabs) do
+		if tab._PageHeader then
+			tab._PageHeader.Visible = not collapsed
+			tab._PageHeader.Size = if collapsed then UDim2.new(1, 0, 0, 0) else UDim2.new(1, -(18 + 22), 0, 62)
+		end
+		if tab._PageEyebrow then
+			tab._PageEyebrow.Visible = not collapsed
+		end
+		if tab._PageTitle then
+			tab._PageTitle.Visible = not collapsed
+		end
+		if tab._PageLine then
+			tab._PageLine.Visible = not collapsed
+		end
+		if tab._Columns then
+			tab._Columns.Position = if collapsed then UDim2.fromOffset(18, 12) else UDim2.fromOffset(18, 88)
+		end
+	end
+end
+
 ----------------------------------------------------------------------
 -- Pages reparent
 ----------------------------------------------------------------------
@@ -297,6 +342,7 @@ function LayoutVariants:_movePagesToHost()
 	w.Pages.Size = UDim2.fromScale(1, 1)
 	w.Pages.Position = UDim2.fromScale(0, 0)
 	w.Pages.Visible = true
+	self:_setContentHeaderCollapsed(true)
 end
 
 function LayoutVariants:_restorePagesToWindow()
@@ -315,6 +361,10 @@ function LayoutVariants:_restorePagesToWindow()
 		w.Pages.Position = home.Position
 	end
 	w.Pages.Visible = true
+	-- restore section top gap unless Classic chrome is active
+	if not self._ChromeHidden then
+		self:_setContentHeaderCollapsed(false)
+	end
 end
 
 ----------------------------------------------------------------------
@@ -727,68 +777,46 @@ function LayoutVariants:_buildProfileStrip(parent: Instance)
 end
 
 function LayoutVariants:_buildDock(root: Frame)
-	-- Centered dock: [clock] ........ [home + tabs centered] ........ [close]
 	local dock = Helpers.CreateFrame({
 		Name = "Dock",
-		Size = UDim2.fromOffset(580, 56),
-		Position = UDim2.new(0.5, -290, 1, -76),
+		Size = UDim2.fromOffset(620, 58),
+		Position = UDim2.new(0.5, 0, 1, -78),
+		AnchorPoint = Vector2.new(0.5, 0),
 		BackgroundColor3 = Color3.fromRGB(14, 16, 22),
 		BackgroundTransparency = 0.06,
 		Parent = root,
 	})
-	Helpers.Corner(dock, 20)
+	Helpers.Corner(dock, 22)
 	Helpers.Stroke(dock, Color3.fromRGB(48, 52, 64), 1)
 	dock.ZIndex = 5
 	self._Dock = dock
 
+	-- Full dock uses one horizontal layout: clock | home | tabs... | close
+	-- with center alignment so nothing sits too far left.
+	local pad = Instance.new("UIPadding")
+	pad.PaddingLeft = UDim.new(0, 14)
+	pad.PaddingRight = UDim.new(0, 14)
+	pad.Parent = dock
+
+	local layout = Instance.new("UIListLayout")
+	layout.FillDirection = Enum.FillDirection.Horizontal
+	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	layout.VerticalAlignment = Enum.VerticalAlignment.Center
+	layout.Padding = UDim.new(0, 8)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Parent = dock
+
 	local clock = Helpers.CreateLabel({
 		Name = "Clock",
-		Size = UDim2.fromOffset(48, 56),
-		Position = UDim2.fromOffset(14, 0),
+		Size = UDim2.fromOffset(46, 40),
 		Text = os.date("%H:%M"),
 		Font = Theme.FontBold,
 		TextSize = 13,
 		TextColor3 = Color3.fromRGB(210, 215, 230),
+		LayoutOrder = 1,
 		Parent = dock,
 	})
 	self._ClockLabel = clock
-
-	local dockClose = Helpers.CreateButton({
-		Name = "DockClose",
-		Size = UDim2.fromOffset(40, 40),
-		Position = UDim2.new(1, -50, 0.5, -20),
-		Text = "×",
-		Font = Theme.FontBold,
-		TextSize = 20,
-		TextColor3 = Color3.fromRGB(230, 230, 240),
-		BackgroundColor3 = Color3.fromRGB(40, 28, 32),
-		BackgroundTransparency = 0.25,
-		Parent = dock,
-	})
-	Helpers.Corner(dockClose, 12)
-	dockClose.MouseButton1Click:Connect(function()
-		local w = self._Window
-		if w and w.SetVisible then
-			w:SetVisible(false)
-		end
-	end)
-
-	-- Center cluster (home + tabs) — truly centered in the dock
-	local center = Helpers.CreateFrame({
-		Name = "CenterCluster",
-		Size = UDim2.new(1, -120, 0, 44),
-		Position = UDim2.new(0.5, 0, 0.5, 0),
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundTransparency = 1,
-		Parent = dock,
-	})
-
-	local centerLayout = Instance.new("UIListLayout")
-	centerLayout.FillDirection = Enum.FillDirection.Horizontal
-	centerLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-	centerLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-	centerLayout.Padding = UDim.new(0, 8)
-	centerLayout.Parent = center
 
 	local homeBtn = Helpers.CreateButton({
 		Name = "Home",
@@ -799,8 +827,8 @@ function LayoutVariants:_buildDock(root: Frame)
 		TextColor3 = Color3.fromRGB(255, 255, 255),
 		BackgroundColor3 = Color3.fromRGB(40, 44, 58),
 		BackgroundTransparency = 0.2,
-		LayoutOrder = 0,
-		Parent = center,
+		LayoutOrder = 2,
+		Parent = dock,
 	})
 	Helpers.Corner(homeBtn, 12)
 	self._HomeBtn = homeBtn
@@ -810,7 +838,7 @@ function LayoutVariants:_buildDock(root: Frame)
 
 	local tabScroll = Instance.new("ScrollingFrame")
 	tabScroll.Name = "DockTabs"
-	tabScroll.Size = UDim2.new(0, 360, 0, 40)
+	tabScroll.Size = UDim2.fromOffset(400, 42)
 	tabScroll.BackgroundTransparency = 1
 	tabScroll.BorderSizePixel = 0
 	tabScroll.ScrollBarThickness = 0
@@ -818,8 +846,8 @@ function LayoutVariants:_buildDock(root: Frame)
 	tabScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
 	tabScroll.AutomaticCanvasSize = Enum.AutomaticSize.X
 	tabScroll.ClipsDescendants = true
-	tabScroll.LayoutOrder = 1
-	tabScroll.Parent = center
+	tabScroll.LayoutOrder = 3
+	tabScroll.Parent = dock
 
 	local tabRow = Helpers.CreateFrame({
 		Name = "Row",
@@ -835,6 +863,37 @@ function LayoutVariants:_buildDock(root: Frame)
 	rowLayout.Padding = UDim.new(0, 6)
 	rowLayout.Parent = tabRow
 	self._DockTabRow = tabRow
+
+	-- keep canvas content centered when fewer tabs than width
+	rowLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+		local width = rowLayout.AbsoluteContentSize.X
+		tabScroll.CanvasSize = UDim2.fromOffset(math.max(width, tabScroll.AbsoluteSize.X), 0)
+		if width < tabScroll.AbsoluteSize.X then
+			tabRow.Position = UDim2.fromOffset(math.floor((tabScroll.AbsoluteSize.X - width) / 2), 0)
+		else
+			tabRow.Position = UDim2.fromOffset(0, 0)
+		end
+	end)
+
+	local dockClose = Helpers.CreateButton({
+		Name = "DockClose",
+		Size = UDim2.fromOffset(40, 40),
+		Text = "×",
+		Font = Theme.FontBold,
+		TextSize = 20,
+		TextColor3 = Color3.fromRGB(230, 230, 240),
+		BackgroundColor3 = Color3.fromRGB(40, 28, 32),
+		BackgroundTransparency = 0.25,
+		LayoutOrder = 4,
+		Parent = dock,
+	})
+	Helpers.Corner(dockClose, 12)
+	dockClose.MouseButton1Click:Connect(function()
+		local w = self._Window
+		if w and w.SetVisible then
+			w:SetVisible(false)
+		end
+	end)
 
 	task.spawn(function()
 		while self._AltGui and self._AltGui.Parent do
@@ -1068,8 +1127,8 @@ function LayoutVariants:_ensureOrbit()
 	-- Floating stage (content)
 	local stage = Helpers.CreateFrame({
 		Name = "Stage",
-		Size = UDim2.new(1, -130, 1, -48),
-		Position = UDim2.fromOffset(110, 24),
+		Size = UDim2.new(1, -140, 1, -48),
+		Position = UDim2.fromOffset(120, 24),
 		BackgroundColor3 = Color3.fromRGB(12, 14, 22),
 		BackgroundTransparency = 0.06,
 		Parent = root,
@@ -1155,6 +1214,7 @@ function LayoutVariants:_mountOrbitPages()
 	w.Pages.Size = UDim2.fromScale(1, 1)
 	w.Pages.Position = UDim2.fromScale(0, 0)
 	w.Pages.Visible = true
+	self:_setContentHeaderCollapsed(true)
 end
 
 function LayoutVariants:_syncOrbitTabs()
