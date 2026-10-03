@@ -299,12 +299,12 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	elseif typeof(windowSize) == "number" then
 		windowSize = Vector2.new(windowSize, windowSize)
 	elseif typeof(windowSize) ~= "Vector2" then
-		windowSize = Vector2.new(820, 540)
+		windowSize = Vector2.new(900, 590)
 	end
 
 	local showSearch = data.ShowSearch ~= false
 	local showWindowControls = data.ShowWindowControls ~= false
-	local topBarHeight = Theme.TopBarHeight or 82
+	local topBarHeight = Theme.TopBarHeight or 78
 	local infoBarHeight = 0 -- Vaxorin keeps the content area clean; optional info bar remains available internally
 
 	-- Resize limits
@@ -316,6 +316,8 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	-- size can otherwise consume the entire screen.
 	local camera = workspace.CurrentCamera
 	local viewport = camera and camera.ViewportSize or Vector2.new(1280, 720)
+	local compactLayout = viewport.X < (Theme.CompactBreakpoint or 760)
+	local sidebarWidth = compactLayout and 194 or (Theme.SidebarWidth or 228)
 	local effectiveMinSize = Vector2.new(
 		math.min(minWindowSize.X, viewport.X * 0.76),
 		math.min(minWindowSize.Y, viewport.Y * 0.76)
@@ -456,7 +458,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	shadow.BackgroundTransparency = 1
 	shadow.Image = SHADOW_IMAGE
 	shadow.ImageColor3 = Color3.new(0, 0, 0)
-	shadow.ImageTransparency = 0.45
+	shadow.ImageTransparency = library.Theme.ShadowTransparency or 0.38
 	shadow.ScaleType = Enum.ScaleType.Slice
 	shadow.SliceCenter = SHADOW_SLICE_CENTER
 	shadow.ZIndex = 0
@@ -483,7 +485,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	ambientGlow.BorderSizePixel = 0
 	ambientGlow.Image = SHADOW_IMAGE
 	ambientGlow.ImageColor3 = library.Theme.Accent
-	ambientGlow.ImageTransparency = 0.86
+	ambientGlow.ImageTransparency = library.Theme.GlowTransparency or 0.88
 	ambientGlow.ScaleType = Enum.ScaleType.Slice
 	ambientGlow.SliceCenter = SHADOW_SLICE_CENTER
 	ambientGlow.ZIndex = 0
@@ -838,9 +840,9 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		minimizeButton.Size = UDim2.fromOffset(42, 42)
 		minimizeButton.BackgroundColor3 = library.Theme.Background
 		minimizeButton.BackgroundTransparency = 0.05
-		minimizeButton.Text = "—"
+		minimizeButton.Text = "−"
 		minimizeButton.Font = Theme.FontBold
-		minimizeButton.TextSize = 18
+		minimizeButton.TextSize = 20
 		minimizeButton.TextColor3 = library.Theme.TextMuted
 		minimizeButton.AutoButtonColor = false
 		minimizeButton.ZIndex = 35
@@ -854,8 +856,8 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		closeButton.BackgroundColor3 = library.Theme.Background
 		closeButton.BackgroundTransparency = 0.05
 		closeButton.Text = "×"
-		closeButton.Font = Theme.Font
-		closeButton.TextSize = 24
+		closeButton.Font = Theme.FontBold
+		closeButton.TextSize = 21
 		closeButton.TextColor3 = library.Theme.TextMuted
 		closeButton.AutoButtonColor = false
 		closeButton.ZIndex = 35
@@ -1111,11 +1113,20 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		end
 		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 			local delta = input.Position - dragStart
+			local targetX = windowStart.X.Offset + delta.X
+			local targetY = windowStart.Y.Offset + delta.Y
+			local size = main.AbsoluteSize
+			local view = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or viewport
+			local margin = 18
+			local minX = margin - size.X + 72
+			local maxX = view.X - margin - 72
+			local minY = margin
+			local maxY = view.Y - margin - 42
 			main.Position = UDim2.new(
 				windowStart.X.Scale,
-				windowStart.X.Offset + delta.X,
+				math.clamp(targetX, minX, math.max(minX, maxX)),
 				windowStart.Y.Scale,
-				windowStart.Y.Offset + delta.Y
+				math.clamp(targetY, minY, math.max(minY, maxY))
 			)
 		end
 	end))
@@ -1266,7 +1277,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	-- Sidebar
 	local sidebar = Helpers.CreateFrame({
 		Name = "Sidebar",
-		Size = UDim2.new(0, Theme.SidebarWidth, 1, 0),
+		Size = UDim2.new(0, sidebarWidth, 1, 0),
 		Position = UDim2.fromOffset(0, 0),
 		BackgroundColor3 = library.Theme.Secondary,
 		BackgroundTransparency = 0.01,
@@ -1419,8 +1430,8 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	-- ============================================
 	local pages = Instance.new("Frame")
 	pages.Name = "Pages"
-	pages.Position = UDim2.new(0, Theme.SidebarWidth, 0, 0)
-	pages.Size = UDim2.new(1, -Theme.SidebarWidth, 1, 0)
+	pages.Position = UDim2.new(0, sidebarWidth, 0, 0)
+	pages.Size = UDim2.new(1, -sidebarWidth, 1, 0)
 	pages.BackgroundTransparency = 1
 	pages.BorderSizePixel = 0
 	pages.ClipsDescendants = true
@@ -1557,6 +1568,22 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 
 					previouslyMatched[child] = matches
 				end
+			end
+		end))
+	end
+
+	if searchBox then
+		self._Maid:GiveTask(UserInputService.InputBegan:Connect(function(input, processed)
+			if processed then
+				return
+			end
+			if input.KeyCode == Enum.KeyCode.Slash and not searchBox:IsFocused() then
+				searchBox:CaptureFocus()
+				return
+			end
+			if input.KeyCode == Enum.KeyCode.Escape and searchBox:IsFocused() then
+				searchBox.Text = ""
+				searchBox:ReleaseFocus()
 			end
 		end))
 	end
@@ -1726,6 +1753,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	self._TopAmbient = topAmbient
 	self._ProductMeta = productMeta
 	self.Sidebar = sidebar
+	self.SidebarWidth = sidebarWidth
 	self.TabList = tabList
 	self.Pages = pages
 	self.TitleLabel = title

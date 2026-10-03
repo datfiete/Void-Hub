@@ -164,7 +164,7 @@ function Dropdown.new(section: any, data: DropdownOptions): DropdownHandle
 			local button = Helpers.CreateButton({
 				Name = option,
 				Size = UDim2.new(1, 0, 0, 32),
-				Text = `  {option}`,
+				Text = if isSelected then `  ✓  {option}` else `    {option}`,
 				BackgroundColor3 = if isSelected then (library.Theme.SurfaceHover or library.Theme.Secondary) else (library.Theme.ElementBackground or library.Theme.Background),
 				Parent = list,
 			})
@@ -172,15 +172,16 @@ function Dropdown.new(section: any, data: DropdownOptions): DropdownHandle
 			optionMaid:Give(button)
 
 			optionMaid:GiveTask(button.MouseEnter:Connect(function()
-				if not isSelected then
-					Tween.Play(button, { BackgroundColor3 = library.Theme.ElementHover or library.Theme.Secondary })
-				end
+				Tween.Play(button, {
+					BackgroundColor3 = library.Theme.SurfaceHover or library.Theme.Secondary,
+				}, { Time = 0.10 })
 			end))
 
 			optionMaid:GiveTask(button.MouseLeave:Connect(function()
-				if not isSelected then
-					Tween.Play(button, { BackgroundColor3 = library.Theme.ElementBackground or library.Theme.Background })
-				end
+				local rest = if isSelected
+					then (library.Theme.SurfaceHover or library.Theme.Secondary)
+					else (library.Theme.ElementBackground or library.Theme.Background)
+				Tween.Play(button, { BackgroundColor3 = rest }, { Time = 0.12 })
 			end))
 
 			optionMaid:GiveTask(button.MouseButton1Click:Connect(function()

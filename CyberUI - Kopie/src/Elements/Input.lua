@@ -3,6 +3,7 @@
 local Theme = require(script.Parent.Parent.Core.Theme)
 local Maid = require(script.Parent.Parent.Utils.Maid)
 local Helpers = require(script.Parent.Parent.Utils.Helpers)
+local Tween = require(script.Parent.Parent.Utils.Tween)
 
 local Input = {}
 Input.__index = Input
@@ -63,11 +64,12 @@ function Input.new(section: any, data: InputOptions): InputHandle
 		Parent = row,
 	})
 	Helpers.Corner(textBox, Theme.CornerRadiusSmall)
-	Helpers.Stroke(textBox, library.Theme.Border, 1)
+	local inputStroke = Helpers.Stroke(textBox, library.Theme.Border, 1)
 	Helpers.Padding(textBox, 8)
 
 	self.Instance = row
 	self.TextBox = textBox
+	self._InputStroke = inputStroke
 
 	function self:_commit(value: string, fireCallback: boolean?)
 		self._Value = value
@@ -81,7 +83,17 @@ function Input.new(section: any, data: InputOptions): InputHandle
 	end
 
 	self._Maid:Give(self._Changed)
+	self._Maid:GiveTask(textBox.Focused:Connect(function()
+		Tween.Play(inputStroke, {
+			Color = library.Theme.Accent,
+			Transparency = 0.15,
+		}, { Time = 0.12 })
+	end))
 	self._Maid:GiveTask(textBox.FocusLost:Connect(function(enterPressed: boolean)
+		Tween.Play(inputStroke, {
+			Color = library.Theme.Border,
+			Transparency = 0,
+		}, { Time = 0.14 })
 		self:_commit(textBox.Text, enterPressed)
 	end))
 
@@ -101,6 +113,9 @@ function Input:RefreshTheme()
 	local stroke = self.TextBox:FindFirstChildOfClass("UIStroke")
 	if stroke then
 		stroke.Color = theme.Border
+	end
+	if self._InputStroke then
+		self._InputStroke.Color = if self.TextBox:IsFocused() then theme.Accent else theme.Border
 	end
 end
 

@@ -38,8 +38,8 @@ function Button.new(section: any, data: ButtonOptions): ButtonHandle
 	})
 	Helpers.Corner(row, Theme.CornerRadiusSmall)
 	local rowStroke = Helpers.Stroke(row, library.Theme.Border, 1)
-	local rowGlow = Helpers.Stroke(row, library.Theme.Accent, 2)
-	rowGlow.Transparency = 0.95
+	local rowGlow = Helpers.Stroke(row, library.Theme.Accent, 1)
+	rowGlow.Transparency = 1
 	rowStroke.Transparency = 0.18
 
 	self.RowGlow = rowGlow
@@ -47,11 +47,25 @@ function Button.new(section: any, data: ButtonOptions): ButtonHandle
 	self.Instance = row
 
 	self._Maid:GiveTask(row.MouseEnter:Connect(function()
-		Tween.Play(row, { BackgroundColor3 = library.Theme.ElementHover or library.Theme.Secondary })
+		Tween.Play(row, {
+			BackgroundColor3 = library.Theme.ElementHover or library.Theme.Secondary,
+		}, { Time = 0.12 })
+		Tween.Play(rowGlow, { Transparency = 0.72 }, { Time = 0.12 })
 	end))
 
 	self._Maid:GiveTask(row.MouseLeave:Connect(function()
-		Tween.Play(row, { BackgroundColor3 = library.Theme.ElementBackground or library.Theme.Background })
+		Tween.Play(row, {
+			BackgroundColor3 = library.Theme.ElementBackground or library.Theme.Background,
+		}, { Time = 0.14 })
+		Tween.Play(rowGlow, { Transparency = 1 }, { Time = 0.14 })
+	end))
+
+	self._Maid:GiveTask(row.MouseButton1Down:Connect(function()
+		Tween.Play(row, { BackgroundColor3 = library.Theme.SurfaceHover or library.Theme.Secondary }, { Time = 0.07 })
+	end))
+
+	self._Maid:GiveTask(row.MouseButton1Up:Connect(function()
+		Tween.Play(row, { BackgroundColor3 = library.Theme.ElementHover or library.Theme.Secondary }, { Time = 0.09 })
 	end))
 
 	self._Maid:GiveTask(row.MouseButton1Click:Connect(function()
@@ -70,6 +84,9 @@ function Button:RefreshTheme()
 	local stroke = self.Instance:FindFirstChildOfClass("UIStroke")
 	if stroke then
 		stroke.Color = theme.Border
+	end
+	if self.RowGlow then
+		self.RowGlow.Color = theme.Accent
 	end
 end
 
