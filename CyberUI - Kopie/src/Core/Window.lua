@@ -14,7 +14,7 @@ local SoundService = game:GetService("SoundService")
 local Stats = game:GetService("Stats")
 
 local GUI_NAME = "Vaxorin"
-local VERSION = "3.0"
+local VERSION = "3.2"
 local Vaxorin_Logo = "rbxassetid://135320038058277"
 local LEGACY_LOGO = "rbxassetid://128228297210141"
 
@@ -299,25 +299,23 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	elseif typeof(windowSize) == "number" then
 		windowSize = Vector2.new(windowSize, windowSize)
 	elseif typeof(windowSize) ~= "Vector2" then
-		windowSize = Vector2.new(900, 590)
+		windowSize = Vector2.new(820, 540)
 	end
 
 	local showSearch = data.ShowSearch ~= false
 	local showWindowControls = data.ShowWindowControls ~= false
-	local topBarHeight = Theme.TopBarHeight or 78
+	local topBarHeight = Theme.TopBarHeight or 72
 	local infoBarHeight = 0 -- Vaxorin keeps the content area clean; optional info bar remains available internally
 
 	-- Resize limits
-	local minWindowSize = Vector2.new(560, 380)
-	local maxWindowSize = Vector2.new(1040, 680)
+	local minWindowSize = Vector2.new(640, 430)
+	local maxWindowSize = Vector2.new(1180, 760)
 
 	-- Keep the default window comfortably inside the current viewport. This is
 	-- especially important on small emulator resolutions where a fixed desktop
 	-- size can otherwise consume the entire screen.
 	local camera = workspace.CurrentCamera
 	local viewport = camera and camera.ViewportSize or Vector2.new(1280, 720)
-	local compactLayout = viewport.X < (Theme.CompactBreakpoint or 760)
-	local sidebarWidth = compactLayout and 194 or (Theme.SidebarWidth or 228)
 	local effectiveMinSize = Vector2.new(
 		math.min(minWindowSize.X, viewport.X * 0.76),
 		math.min(minWindowSize.Y, viewport.Y * 0.76)
@@ -458,7 +456,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	shadow.BackgroundTransparency = 1
 	shadow.Image = SHADOW_IMAGE
 	shadow.ImageColor3 = Color3.new(0, 0, 0)
-	shadow.ImageTransparency = library.Theme.ShadowTransparency or 0.38
+	shadow.ImageTransparency = 0.45
 	shadow.ScaleType = Enum.ScaleType.Slice
 	shadow.SliceCenter = SHADOW_SLICE_CENTER
 	shadow.ZIndex = 0
@@ -485,7 +483,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	ambientGlow.BorderSizePixel = 0
 	ambientGlow.Image = SHADOW_IMAGE
 	ambientGlow.ImageColor3 = library.Theme.Accent
-	ambientGlow.ImageTransparency = library.Theme.GlowTransparency or 0.88
+	ambientGlow.ImageTransparency = 0.86
 	ambientGlow.ScaleType = Enum.ScaleType.Slice
 	ambientGlow.SliceCenter = SHADOW_SLICE_CENTER
 	ambientGlow.ZIndex = 0
@@ -614,8 +612,8 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	-- black block without turning it into a neon banner.
 	local topAccentRail = Instance.new("Frame")
 	topAccentRail.Name = "AccentRail"
-	topAccentRail.Size = UDim2.new(0, 150, 0, 2)
-	topAccentRail.Position = UDim2.new(0, 18, 1, -3)
+	topAccentRail.Size = UDim2.new(0, 220, 0, 2)
+	topAccentRail.Position = UDim2.new(0, 22, 1, -3)
 	topAccentRail.BackgroundColor3 = library.Theme.Accent
 	topAccentRail.BackgroundTransparency = 0.14
 	topAccentRail.BorderSizePixel = 0
@@ -649,8 +647,8 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 
 	local brand = Helpers.CreateFrame({
 		Name = "Brand",
-		Size = UDim2.new(0, 370, 1, 0),
-		Position = UDim2.fromOffset(18, 0),
+		Size = UDim2.new(0, 390, 1, 0),
+		Position = UDim2.fromOffset(22, 0),
 		BackgroundTransparency = 1,
 		Parent = topBar,
 	})
@@ -733,7 +731,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Size = UDim2.new(1, 0, 0, 34),
 		Text = windowName,
 		Font = Theme.FontBold,
-		TextSize = 27,
+		TextSize = 24,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = library.Theme.Text,
 		TextTruncate = Enum.TextTruncate.AtEnd,
@@ -745,7 +743,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Name = "ProductMeta",
 		Size = UDim2.new(1, 0, 0, 13),
 		Position = UDim2.fromOffset(1, 57),
-		Text = "VAXORIN  /  UNIVERSAL UI",
+		Text = "VAXORIN  /  COMMAND CENTER  /  3.2",
 		Font = Theme.FontBold,
 		TextSize = 9,
 		TextColor3 = library.Theme.TextMuted,
@@ -758,7 +756,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 
 	local controlWidth = showWindowControls and 112 or 0
 	local headerControlGap = showWindowControls and 20 or 14
-	local brandWidth = 372
+	local brandWidth = 394
 
 	-- Reserve a real rectangle for badges instead of letting an auto-sized
 	-- container compete with the window controls. The badges are right-aligned
@@ -840,9 +838,9 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		minimizeButton.Size = UDim2.fromOffset(42, 42)
 		minimizeButton.BackgroundColor3 = library.Theme.Background
 		minimizeButton.BackgroundTransparency = 0.05
-		minimizeButton.Text = "−"
+		minimizeButton.Text = "—"
 		minimizeButton.Font = Theme.FontBold
-		minimizeButton.TextSize = 20
+		minimizeButton.TextSize = 18
 		minimizeButton.TextColor3 = library.Theme.TextMuted
 		minimizeButton.AutoButtonColor = false
 		minimizeButton.ZIndex = 35
@@ -856,8 +854,8 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		closeButton.BackgroundColor3 = library.Theme.Background
 		closeButton.BackgroundTransparency = 0.05
 		closeButton.Text = "×"
-		closeButton.Font = Theme.FontBold
-		closeButton.TextSize = 21
+		closeButton.Font = Theme.Font
+		closeButton.TextSize = 24
 		closeButton.TextColor3 = library.Theme.TextMuted
 		closeButton.AutoButtonColor = false
 		closeButton.ZIndex = 35
@@ -1113,20 +1111,11 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		end
 		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 			local delta = input.Position - dragStart
-			local targetX = windowStart.X.Offset + delta.X
-			local targetY = windowStart.Y.Offset + delta.Y
-			local size = main.AbsoluteSize
-			local view = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or viewport
-			local margin = 18
-			local minX = margin - size.X + 72
-			local maxX = view.X - margin - 72
-			local minY = margin
-			local maxY = view.Y - margin - 42
 			main.Position = UDim2.new(
 				windowStart.X.Scale,
-				math.clamp(targetX, minX, math.max(minX, maxX)),
+				windowStart.X.Offset + delta.X,
 				windowStart.Y.Scale,
-				math.clamp(targetY, minY, math.max(minY, maxY))
+				windowStart.Y.Offset + delta.Y
 			)
 		end
 	end))
@@ -1234,7 +1223,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	local statusRibbon = Helpers.CreateFrame({
 		Name = "StatusRibbon",
 		Size = UDim2.fromOffset(190, 28),
-		Position = UDim2.new(0.64, 0, 0, 7),
+		Position = UDim2.new(1, -130, 0, 7),
 		AnchorPoint = Vector2.new(0.5, 0),
 		BackgroundColor3 = library.Theme.Surface,
 		BackgroundTransparency = 0.08,
@@ -1277,10 +1266,10 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	-- Sidebar
 	local sidebar = Helpers.CreateFrame({
 		Name = "Sidebar",
-		Size = UDim2.new(0, sidebarWidth, 1, 0),
+		Size = UDim2.new(0, Theme.SidebarWidth, 1, 0),
 		Position = UDim2.fromOffset(0, 0),
 		BackgroundColor3 = library.Theme.Secondary,
-		BackgroundTransparency = 0.01,
+		BackgroundTransparency = 0,
 		Parent = contentArea,
 	})
 	local sidebarCorner = Helpers.Corner(sidebar, Theme.CornerRadius)
@@ -1292,7 +1281,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Name = "NavigationLabel",
 		Size = UDim2.new(1, 0, 0, 16),
 		Position = UDim2.new(0, 0, 0, if showSearch then 50 else 8),
-		Text = "NAVIGATION",
+		Text = "WORKSPACE",
 		Font = Theme.FontBold,
 		TextSize = 10,
 		TextColor3 = library.Theme.TextMuted,
@@ -1307,7 +1296,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	if showSearch then
 		local searchHolder = Helpers.CreateFrame({
 			Name = "SearchHolder",
-			Size = UDim2.new(1, 0, 0, 44),
+			Size = UDim2.new(1, 0, 0, 40),
 			Position = UDim2.fromOffset(0, 0),
 			BackgroundColor3 = library.Theme.Background,
 			BackgroundTransparency = 0.02,
@@ -1333,7 +1322,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		searchBox.TextXAlignment = Enum.TextXAlignment.Left
 		searchBox.ClearTextOnFocus = false
 		searchBox.Parent = searchHolder
-		searchTop = 68
+		searchTop = 62
 	else
 		searchTop = 28
 	end
@@ -1359,7 +1348,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	self._SearchResults = searchResults
 	self._SearchResultsStroke = searchResultsStroke
 
-	local footerHeight = 78
+	local footerHeight = 68
 	local tabList = Instance.new("ScrollingFrame")
 	tabList.Name = "TabList"
 	tabList.Size = UDim2.new(1, 0, 1, -(searchTop + footerHeight + 12))
@@ -1430,8 +1419,8 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	-- ============================================
 	local pages = Instance.new("Frame")
 	pages.Name = "Pages"
-	pages.Position = UDim2.new(0, sidebarWidth, 0, 0)
-	pages.Size = UDim2.new(1, -sidebarWidth, 1, 0)
+	pages.Position = UDim2.new(0, Theme.SidebarWidth, 0, 0)
+	pages.Size = UDim2.new(1, -Theme.SidebarWidth, 1, 0)
 	pages.BackgroundTransparency = 1
 	pages.BorderSizePixel = 0
 	pages.ClipsDescendants = true
@@ -1568,22 +1557,6 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 
 					previouslyMatched[child] = matches
 				end
-			end
-		end))
-	end
-
-	if searchBox then
-		self._Maid:GiveTask(UserInputService.InputBegan:Connect(function(input, processed)
-			if processed then
-				return
-			end
-			if input.KeyCode == Enum.KeyCode.Slash and not searchBox:IsFocused() then
-				searchBox:CaptureFocus()
-				return
-			end
-			if input.KeyCode == Enum.KeyCode.Escape and searchBox:IsFocused() then
-				searchBox.Text = ""
-				searchBox:ReleaseFocus()
 			end
 		end))
 	end
@@ -1753,7 +1726,6 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	self._TopAmbient = topAmbient
 	self._ProductMeta = productMeta
 	self.Sidebar = sidebar
-	self.SidebarWidth = sidebarWidth
 	self.TabList = tabList
 	self.Pages = pages
 	self.TitleLabel = title

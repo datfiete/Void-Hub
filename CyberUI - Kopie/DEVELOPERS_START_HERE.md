@@ -17,7 +17,3 @@ local Vaxorin = loadstring(game:HttpGet(
 ```
 
 Developers should normally use the public API and should not need to edit the framework internals under `src/`.
-
-
-## Latest UI refresh
-See `docs/CHANGELOG_3_1.md` for the 3.1 premium visual/interaction refresh. The public API remains compatible.

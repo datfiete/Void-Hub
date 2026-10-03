@@ -118,10 +118,10 @@ function Tab.new(window: any, name: string): TabHandle
     -- Compact navigation item: a quiet surface with a short accent rail when active.
     local button = Helpers.CreateButton({
         Name = name,
-        Size = UDim2.new(1, 0, 0, 44),
+        Size = UDim2.new(1, 0, 0, 46),
         Text = "",
-        BackgroundColor3 = theme.Surface,
-        BackgroundTransparency = 1,
+        BackgroundColor3 = theme.ElementBackground,
+        BackgroundTransparency = 0.18,
         AutoButtonColor = false,
         Parent = window.TabList,
     })
@@ -175,7 +175,7 @@ function Tab.new(window: any, name: string): TabHandle
 
     local indicator = Instance.new("Frame")
     indicator.Name = "ActiveIndicator"
-    indicator.Size = UDim2.new(0, 2, 0, 22)
+    indicator.Size = UDim2.new(0, 3, 0, 28)
     indicator.Position = UDim2.new(0, 0, 0.5, 0)
     indicator.AnchorPoint = Vector2.new(0, 0.5)
     indicator.BackgroundColor3 = theme.Accent
@@ -187,8 +187,8 @@ function Tab.new(window: any, name: string): TabHandle
 
     local icon = Instance.new("ImageLabel")
     icon.Name = "Icon"
-    icon.Size = UDim2.fromOffset(22, 22)
-    icon.Position = UDim2.new(0, 12, 0.5, 0)
+    icon.Size = UDim2.fromOffset(20, 20)
+    icon.Position = UDim2.new(0, 14, 0.5, 0)
     icon.AnchorPoint = Vector2.new(0, 0.5)
     icon.BackgroundTransparency = 1
     icon.BorderSizePixel = 0
@@ -201,12 +201,12 @@ function Tab.new(window: any, name: string): TabHandle
 
     local label = Instance.new("TextLabel")
     label.Name = "Label"
-    label.Size = UDim2.new(1, -50, 1, 0)
-    label.Position = UDim2.fromOffset(47, 0)
+    label.Size = UDim2.new(1, -54, 1, 0)
+    label.Position = UDim2.fromOffset(46, 0)
     label.BackgroundTransparency = 1
     label.Text = cleanDisplayName(name)
     label.Font = Theme.Font
-    label.TextSize = 12
+    label.TextSize = 13
     label.TextColor3 = theme.TextMuted
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.TextTruncate = Enum.TextTruncate.AtEnd
@@ -250,14 +250,57 @@ function Tab.new(window: any, name: string): TabHandle
 
     local pagePadding = Helpers.Padding(page, 0)
 
-    local pageTopInset = 44
+    local pageTopInset = 88
     local pageSideInset = 18
     local pageRightReserve = 22
+
+    local pageHeader = Helpers.CreateFrame({
+        Name = "PageHeader",
+        Size = UDim2.new(1, -(pageSideInset + pageRightReserve), 0, 62),
+        Position = UDim2.fromOffset(pageSideInset, 14),
+        BackgroundTransparency = 1,
+        Parent = page,
+    })
+
+    local pageEyebrow = Helpers.CreateLabel({
+        Name = "Eyebrow",
+        Size = UDim2.new(1, 0, 0, 16),
+        Position = UDim2.fromOffset(0, 0),
+        Text = "CONTROL MODULE",
+        Font = Theme.FontBold,
+        TextSize = 9,
+        TextColor3 = theme.Accent,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = pageHeader,
+    })
+
+    local pageTitle = Helpers.CreateLabel({
+        Name = "PageTitle",
+        Size = UDim2.new(1, 0, 0, 34),
+        Position = UDim2.fromOffset(0, 14),
+        Text = cleanDisplayName(name),
+        Font = Theme.FontBold,
+        TextSize = 24,
+        TextColor3 = theme.Text,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextTruncate = Enum.TextTruncate.AtEnd,
+        Parent = pageHeader,
+    })
+
+    local pageLine = Helpers.CreateFrame({
+        Name = "HeaderLine",
+        Size = UDim2.new(0, 74, 0, 2),
+        Position = UDim2.new(0, 0, 1, -1),
+        BackgroundColor3 = theme.Accent,
+        BorderSizePixel = 0,
+        Parent = pageHeader,
+    })
+    Helpers.Corner(pageLine, 2)
 
     local columns = Helpers.CreateFrame({
         Name = "Columns",
         Size = UDim2.new(1, -(pageSideInset + pageRightReserve), 0, 0),
-        Position = UDim2.fromOffset(pageSideInset, pageTopInset),
+        Position = UDim2.fromOffset(pageSideInset, 88),
         AutomaticSize = Enum.AutomaticSize.Y,
         BackgroundTransparency = 1,
         Parent = page,
@@ -331,6 +374,10 @@ function Tab.new(window: any, name: string): TabHandle
     self._IndicatorGlow = indicatorGlow
     self._ActiveGlow = activeGlow
     self._ActiveGlowImage = activeGlowImage
+    self._PageHeader = pageHeader
+    self._PageTitle = pageTitle
+    self._PageEyebrow = pageEyebrow
+    self._PageLine = pageLine
     self._Columns = columns
     self._LeftColumn = leftColumn
     self._RightColumn = rightColumn
@@ -383,7 +430,11 @@ end
 
 function Tab:RefreshTheme()
     self:SetActive(self == self.Window._ActiveTab)
-    self.Page.ScrollBarImageColor3 = self.Window.Library.Theme.Accent
+    local theme = self.Window.Library.Theme
+    self.Page.ScrollBarImageColor3 = theme.Accent
+    if self._PageTitle then self._PageTitle.TextColor3 = theme.Text end
+    if self._PageEyebrow then self._PageEyebrow.TextColor3 = theme.Accent end
+    if self._PageLine then self._PageLine.BackgroundColor3 = theme.Accent end
 end
 
 function Tab:Show()
