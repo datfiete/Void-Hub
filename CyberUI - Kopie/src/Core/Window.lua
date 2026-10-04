@@ -1972,7 +1972,7 @@ function Window:_selectTab(tab: any)
 end
 
 function Window:SetLayout(mode: string)
-	local normalized = ({ Vaxorin = "Vaxorin", Classic = "Classic", Minecraft = "Minecraft", Orbit = "Orbit", Aether = "Aether", Nova = "Nova", Vortex = "Vortex", Prism = "Prism", Eclipse = "Eclipse", Compact = "Orbit", Expanded = "Vaxorin" })[mode] or "Vaxorin"
+	local normalized = ({ Vaxorin = "Vaxorin", Classic = "Classic", Minecraft = "Minecraft", Orbit = "Orbit", Aether = "Aether", Nova = "Nova", Vortex = "Vortex", Prism = "Prism", Eclipse = "Eclipse", Zenith = "Zenith", Compact = "Orbit", Expanded = "Vaxorin" })[mode] or "Vaxorin"
 	self._LayoutMode = normalized
 	if self._LayoutVariants then
 		self._LayoutVariants:SetMode(normalized)
@@ -2032,7 +2032,7 @@ function Window:_createOptionsTab()
 
 	visualSection:CreateDropdown({
 		Name = "Layout",
-		Options = { "Vaxorin", "Classic", "Minecraft", "Orbit", "Aether", "Nova", "Vortex", "Prism", "Eclipse" },
+		Options = { "Vaxorin", "Classic", "Minecraft", "Orbit", "Aether", "Nova", "Vortex", "Prism", "Eclipse", "Zenith" },
 		CurrentOption = self._LayoutMode,
 		Flag = "Vaxorin.Visual.Layout",
 		Callback = function(value)
@@ -2136,7 +2136,7 @@ function Window:_createOptionsTab()
 	featuresSection:CreateCard({ Title = "New component system", Content = "Cards, badges, progress, status, notices, stats, dividers and icon actions are now first-class elements." })
 	featuresSection:CreateStatus({ Title = "Interface", Content = "All systems operational" })
 	featuresSection:CreateProgress({ Title = "UI engine", CurrentValue = 1 })
-	featuresSection:CreateNotice({ Title = "Interface variants", Content = "Switch the entire shell: Vaxorin, Classic, Minecraft, Orbit, Aether, Nova, Vortex, Prism, Eclipse." })
+	featuresSection:CreateNotice({ Title = "Interface variants", Content = "Switch the entire shell: Vaxorin, Classic, Minecraft, Orbit, Aether, Nova, Vortex, Prism, Eclipse, Zenith." })
 	featuresSection:CreateStat({ Label = "Element modules", Value = "20+", Delta = "NEW" })
 	featuresSection:CreateDivider({})
 	featuresSection:CreateIconButton({ Text = "Preview Classic", Callback = function() self:SetLayout("Classic") end })
@@ -2147,6 +2147,7 @@ function Window:_createOptionsTab()
 	featuresSection:CreateIconButton({ Text = "Preview Vortex", Callback = function() self:SetLayout("Vortex") end })
 	featuresSection:CreateIconButton({ Text = "Preview Prism", Callback = function() self:SetLayout("Prism") end })
 	featuresSection:CreateIconButton({ Text = "Preview Eclipse", Callback = function() self:SetLayout("Eclipse") end })
+	featuresSection:CreateIconButton({ Text = "Preview Zenith", Callback = function() self:SetLayout("Zenith") end })
 
 	local generalSection = optionsTab:CreateSection("🧩 General")
 	generalSection:CreateParagraph({

@@ -163,6 +163,15 @@ function LayoutVariants.new(window: any, initial: string): any
 		_ClassicSnapshot = nil,
 		_ClassicApplied = false,
 		_ChromeHidden = false,
+		_ZenithGui = nil,
+		_ZenithRoot = nil,
+		_ZenithSidebar = nil,
+		_ZenithStage = nil,
+		_ZenithPageHost = nil,
+		_ZenithTabList = nil,
+		_ZenithTabButtons = {},
+		_ZenithActiveLabel = nil,
+
 	}, LayoutVariants)
 
 	if window.Pages then
@@ -3368,6 +3377,8 @@ function LayoutVariants:SetMode(mode: string)
 		Prism = "Prism",
 		Eclipse = "Eclipse",
 		Compact = "Orbit",
+		Zenith = "Zenith",
+
 	})[mode] or "Vaxorin"
 	local prev = self._Mode
 	self._Mode = mode
@@ -3583,6 +3594,29 @@ function LayoutVariants:SetMode(mode: string)
 		self:_syncEclipseTabs()
 		return
 	end
+
+	-- Zenith — unique minimalist floating sidebar layout
+	if mode == "Zenith" then
+		self:_setEclipseVisible(false)
+		self:_setAetherVisible(false)
+		self:_setNovaVisible(false)
+		self:_setVortexVisible(false)
+		self:_setPrismVisible(false)
+		self:_setOrbitVisible(false)
+		self:_restoreClassicWindow()
+		if self._AltGui then
+			self._AltGui.Enabled = false
+		end
+		w._Minimized = false
+		if w.Main then
+			w.Main.Visible = false
+		end
+		self:_ensureZenith()
+		self:_setZenithVisible(w._Visible ~= false)
+		self:_syncZenithTabs()
+		return
+	end
+
 end
 
 function LayoutVariants:SetVisible(visible: boolean)
@@ -3602,6 +3636,8 @@ function LayoutVariants:SetVisible(visible: boolean)
 		self:_setPrismVisible(visible)
 	elseif self._Mode == "Eclipse" then
 		self:_setEclipseVisible(visible)
+	elseif self._Mode == "Zenith" then
+		self:_setZenithVisible(visible)
 	else
 		local w = self._Window
 		if w and w.Main then
@@ -3639,6 +3675,277 @@ function LayoutVariants:Destroy()
 	end
 	if self._EclipseGui and self._EclipseGui.Parent then
 		self._EclipseGui:Destroy()
+	end
+	if self._ZenithGui and self._ZenithGui.Parent then
+		self._ZenithGui:Destroy()
+	end
+
+end
+
+
+----------------------------------------------------------------------
+-- Zenith layout (unique): minimalist floating sidebar with smooth navigation
+----------------------------------------------------------------------
+
+function LayoutVariants:_ensureZenith()
+	if self._ZenithGui then
+		self:_syncZenithTabs()
+		return
+	end
+	
+	local w = self._Window
+	local parent = w._TopGuiParent or (w.Gui and w.Gui.Parent)
+	if not parent then
+		return
+	end
+
+	local gui = Instance.new("ScreenGui")
+	gui.Name = "VaxorinZenithShell"
+	gui.ResetOnSpawn = false
+	gui.IgnoreGuiInset = true
+	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	gui.DisplayOrder = 2147483643
+	gui.Enabled = false
+	gui.Parent = parent
+	self._ZenithGui = gui
+
+	local root = Helpers.CreateFrame({
+		Name = "Root",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Parent = gui,
+	})
+	self._ZenithRoot = root
+
+	-- Subtle background dim
+	local dim = Helpers.CreateFrame({
+		Name = "Dim",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Color3.fromRGB(2, 4, 8),
+		BackgroundTransparency = 0.4,
+		Parent = root,
+	})
+	dim.ZIndex = 0
+
+	-- Left sidebar (floating)
+	local sidebar = Helpers.CreateFrame({
+		Name = "Sidebar",
+		Size = UDim2.fromOffset(94, 480),
+		Position = UDim2.new(0, 28, 0.5, 0),
+		AnchorPoint = Vector2.new(0, 0.5),
+		BackgroundColor3 = Color3.fromRGB(8, 10, 18),
+		BackgroundTransparency = 0.05,
+		Parent = root,
+	})
+	Helpers.Corner(sidebar, 20)
+	local sidebarStroke = Helpers.Stroke(sidebar, Color3.fromRGB(0, 200, 255), 1)
+	sidebarStroke.Transparency = 0.6
+	self._ZenithSidebar = sidebar
+
+	-- Sidebar scroll area
+	local sidebarScroll = Instance.new("ScrollingFrame")
+	sidebarScroll.Name = "SidebarScroll"
+	sidebarScroll.Size = UDim2.new(1, -8, 1, -64)
+	sidebarScroll.Position = UDim2.fromOffset(4, 4)
+	sidebarScroll.BackgroundTransparency = 1
+	sidebarScroll.BorderSizePixel = 0
+	sidebarScroll.ScrollBarThickness = 0
+	sidebarScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+	sidebarScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	sidebarScroll.ScrollingDirection = Enum.ScrollingDirection.Y
+	sidebarScroll.Parent = sidebar
+
+	local tabList = Helpers.CreateFrame({
+		Name = "TabList",
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		Parent = sidebarScroll,
+	})
+	local tl = Instance.new("UIListLayout")
+	tl.FillDirection = Enum.FillDirection.Vertical
+	tl.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	tl.Padding = UDim.new(0, 8)
+	tl.Parent = tabList
+	self._ZenithTabList = tabList
+	self._ZenithTabButtons = {}
+
+	-- Bottom brand label in sidebar
+	local brand = Helpers.CreateLabel({
+		Name = "Brand",
+		Size = UDim2.new(1, 0, 0, 20),
+		Position = UDim2.new(0, 0, 1, -16),
+		Text = "ZENITH",
+		Font = Theme.FontBold,
+		TextSize = 9,
+		TextColor3 = Color3.fromRGB(0, 200, 255),
+		TextXAlignment = Enum.TextXAlignment.Center,
+		Parent = sidebar,
+	})
+
+	-- Main content stage
+	local stage = Helpers.CreateFrame({
+		Name = "Stage",
+		Size = UDim2.new(1, -180, 1, -48),
+		Position = UDim2.fromOffset(148, 24),
+		BackgroundColor3 = Color3.fromRGB(10, 12, 20),
+		BackgroundTransparency = 0.08,
+		Parent = root,
+	})
+	Helpers.Corner(stage, 18)
+	local stageStroke = Helpers.Stroke(stage, Color3.fromRGB(0, 180, 220), 1)
+	stageStroke.Transparency = 0.5
+	self._ZenithStage = stage
+
+	local stageHost = Helpers.CreateFrame({
+		Name = "Host",
+		Size = UDim2.new(1, -20, 1, -20),
+		Position = UDim2.fromOffset(10, 10),
+		BackgroundTransparency = 1,
+		ClipsDescendants = true,
+		Parent = stage,
+	})
+	self._ZenithPageHost = stageHost
+
+	-- Close button (top right)
+	local closeBtn = Helpers.CreateButton({
+		Name = "Close",
+		Size = UDim2.fromOffset(40, 40),
+		Position = UDim2.new(1, -56, 0, 16),
+		Text = "×",
+		Font = Theme.FontBold,
+		TextSize = 22,
+		TextColor3 = Color3.fromRGB(200, 220, 255),
+		BackgroundColor3 = Color3.fromRGB(12, 20, 32),
+		BackgroundTransparency = 0.2,
+		Parent = root,
+	})
+	Helpers.Corner(closeBtn, 12)
+	Helpers.Stroke(closeBtn, Color3.fromRGB(0, 180, 255), 1)
+	closeBtn.ZIndex = 10
+	closeBtn.MouseButton1Click:Connect(function()
+		if w.SetVisible then
+			w:SetVisible(false)
+		end
+	end)
+
+	self:_syncZenithTabs()
+end
+
+function LayoutVariants:_setZenithVisible(visible: boolean)
+	if self._ZenithGui then
+		self._ZenithGui.Enabled = visible
+	end
+	if visible then
+		self:_mountZenithPages()
+		self:_syncZenithTabs()
+	else
+		if self._ZenithPageHost and self._Window and self._Window.Pages then
+			if self._Window.Pages.Parent == self._ZenithPageHost then
+				self:_restorePagesToWindow()
+			end
+		end
+	end
+end
+
+function LayoutVariants:_mountZenithPages()
+	local w = self._Window
+	if not w or not w.Pages or not self._ZenithPageHost then
+		return
+	end
+	self:_ensurePagesHome()
+	if w.Pages.Parent ~= self._ZenithPageHost then
+		w.Pages.Parent = self._ZenithPageHost
+	end
+	w.Pages.Size = UDim2.fromScale(1, 1)
+	w.Pages.Position = UDim2.fromScale(0, 0)
+	w.Pages.Visible = true
+	self:_setContentHeaderCollapsed(true)
+end
+
+function LayoutVariants:_syncZenithTabs()
+	if not self._ZenithTabList then
+		return
+	end
+	
+	-- Clear old buttons
+	for _, child in ipairs(self._ZenithTabList:GetChildren()) do
+		if child:IsA("TextButton") then
+			child:Destroy()
+		end
+	end
+	self._ZenithTabButtons = {}
+
+	local w = self._Window
+	if not w or not w._Tabs then
+		return
+	end
+
+	-- Create buttons for each tab
+	for i, tab in ipairs(w._Tabs) do
+		local label = tabDisplayName(tab)
+		local letter = string.upper(string.sub(label, 1, 1))
+		
+		local btn = Helpers.CreateButton({
+			Name = "TabBtn_" .. i,
+			Size = UDim2.fromOffset(56, 56),
+			Text = letter,
+			Font = Theme.FontBold,
+			TextSize = 18,
+			TextColor3 = Color3.fromRGB(100, 200, 255),
+			BackgroundColor3 = Color3.fromRGB(8, 16, 28),
+			BackgroundTransparency = 0.3,
+			LayoutOrder = i,
+			Parent = self._ZenithTabList,
+		})
+		Helpers.Corner(btn, 14)
+		local stroke = Helpers.Stroke(btn, Color3.fromRGB(0, 150, 220), 1)
+		stroke.Transparency = 0.7
+		
+		self._ZenithTabButtons[label] = { btn = btn, stroke = stroke, tab = tab }
+
+		btn.MouseButton1Click:Connect(function()
+			if w._selectTab then
+				w:_selectTab(tab)
+			end
+			self:_highlightZenith(label)
+			self:_mountZenithPages()
+		end)
+	end
+
+	-- Select active or first tab
+	local activeLabel = nil
+	if w._ActiveTab then
+		activeLabel = tabDisplayName(w._ActiveTab)
+	elseif w._Tabs[1] then
+		activeLabel = tabDisplayName(w._Tabs[1])
+		if w._selectTab then
+			w:_selectTab(w._Tabs[1])
+		end
+	end
+	
+	if activeLabel then
+		self:_highlightZenith(activeLabel)
+		self:_mountZenithPages()
+	end
+end
+
+function LayoutVariants:_highlightZenith(label: string)
+	for name, data in pairs(self._ZenithTabButtons or {}) do
+		local on = name == label
+		if on then
+			-- Active state: bright cyan glow
+			data.btn.BackgroundColor3 = Color3.fromRGB(0, 150, 220)
+			data.btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+			data.btn.BackgroundTransparency = 0.1
+			data.stroke.Transparency = 0.2
+		else
+			-- Inactive state: dim cyan
+			data.btn.BackgroundColor3 = Color3.fromRGB(8, 16, 28)
+			data.btn.TextColor3 = Color3.fromRGB(100, 160, 200)
+			data.btn.BackgroundTransparency = 0.3
+			data.stroke.Transparency = 0.7
+		end
 	end
 end
 
