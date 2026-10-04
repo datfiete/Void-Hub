@@ -103,7 +103,7 @@ local function tabDisplayName(tab: any): string
 end
 
 
-local function placeCloseButton(parent: Instance, w: any, opts: any?): TextButton
+local function placeCloseButton(parent: Instance, w: any, opts: any): TextButton
 	opts = opts or {}
 	local btn = Instance.new("TextButton")
 	btn.Name = opts.Name or "Close"
@@ -937,8 +937,8 @@ function LayoutVariants:_buildDock(root: Frame)
 	tabScroll.AutomaticCanvasSize = Enum.AutomaticSize.X
 	tabScroll.ClipsDescendants = true
 	tabScroll.LayoutOrder = 3
-	tabScroll.ZIndex = 50,
-		Parent = dock
+	tabScroll.ZIndex = 50
+	tabScroll.Parent = dock
 
 	local tabRow = Helpers.CreateFrame({
 		Name = "Row",
@@ -953,8 +953,7 @@ function LayoutVariants:_buildDock(root: Frame)
 	rowLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 	rowLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 	rowLayout.Padding = UDim.new(0, 6)
-	rowLayout.ZIndex = 50,
-		Parent = tabRow
+	rowLayout.Parent = tabRow
 	self._DockTabRow = tabRow
 
 	-- keep canvas content centered when fewer tabs than width
