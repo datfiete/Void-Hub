@@ -546,28 +546,28 @@ local islands = {
     {Name = "Pirate Starter",     Min = 0,   Max = 10,  Pos = Vector3.new(1137, 13, 1594), Quest = {"StartQuest","BanditQuest1",1}, EnemyPatterns = {"Bandit"}, isBoss = false},
     {Name = "Marine Starter",     Min = 0,   Max = 10,  Pos = Vector3.new(-2723, 32, 2090), Quest = {"StartQuest","MarineQuest1",1}, EnemyPatterns = {"Trainee"}, isBoss = false},
     {Name = "Jungle (Normal)",    Min = 10,  Max = 15,  Pos = Vector3.new(-1593, 28, 137), Quest = {"StartQuest","JungleQuest",1}, EnemyPatterns = {"Monkey"}, isBoss = false},
-    {Name = "Jungle (Stage 2)",   Min = 15,  Max = 25,  Pos = Vector3.new(-1313, 18, -548), Quest = {"StartQuest","JungleQuest",2}, EnemyPatterns = {"Gorilla"}, isBoss = false},
+    {Name = "Jungle (Stage 2)",   Min = 15,  Max = 30,  Pos = Vector3.new(-1313, 18, -548), Quest = {"StartQuest","JungleQuest",2}, EnemyPatterns = {"Gorilla"}, isBoss = false},
     {Name = "Pirate Village",     Min = 30,  Max = 40,  Pos = Vector3.new(-1141, 22, 3976), Quest = {"StartQuest","BuggyQuest1",1}, EnemyPatterns = {"Pirate"}, isBoss = false},
-    {Name = "Pirate Village Stage 2", Min = 40, Max = 55, Pos = Vector3.new(-1204, 28, 4370), Quest = {"StartQuest","BuggyQuest1",2}, EnemyPatterns = {"Brute"}, isBoss = false},
+    {Name = "Pirate Village Stage 2", Min = 40, Max = 60, Pos = Vector3.new(-1204, 28, 4370), Quest = {"StartQuest","BuggyQuest1",2}, EnemyPatterns = {"Brute"}, isBoss = false},
     {Name = "Desert 1",           Min = 60,  Max = 70,  Pos = Vector3.new(924, 8, 4514), Quest = {"StartQuest","DesertQuest",1}, EnemyPatterns = {"Desert Bandit"}, isBoss = false},
     {Name = "Desert 2",           Min = 70,  Max = 90,  Pos = Vector3.new(1573, 14, 4159), Quest = {"StartQuest","DesertQuest",2}, EnemyPatterns = {"Desert Officer"}, isBoss = false},
     {Name = "Snow 1",             Min = 90,  Max = 100, Pos = Vector3.new(1416, 78, -1435), Quest = {"StartQuest","SnowQuest",1}, EnemyPatterns = {"Snow Bandit"}, isBoss = false},
-    {Name = "Snow 2",             Min = 100, Max = 110, Pos = Vector3.new(1198, 98, -1603), Quest = {"StartQuest","SnowQuest",2}, EnemyPatterns = {"Snowman"}, isBoss = false},
+    {Name = "Snow 2",             Min = 100, Max = 120, Pos = Vector3.new(1198, 98, -1603), Quest = {"StartQuest","SnowQuest",2}, EnemyPatterns = {"Snowman"}, isBoss = false},
     {Name = "Marine Fortress",    Min = 120, Max = 150, Pos = Vector3.new(-4809, 13, 4302), Quest = {"StartQuest","MarineQuest2",1}, EnemyPatterns = {"Chief Petty Officer"}, isBoss = false},
     {Name = "Sky 1",              Min = 150, Max = 175, Pos = Vector3.new(-5092, 281, -1019), Quest = {"StartQuest","SkyQuest",1}, EnemyPatterns = {"Sky Bandit"}, isBoss = false},
     {Name = "Sky 2",              Min = 175, Max = 190, Pos = Vector3.new(-5293, 505, -351), Quest = {"StartQuest","SkyQuest",2}, EnemyPatterns = {"Dark Master"}, isBoss = false},
     {Name = "Prison 1",           Min = 190, Max = 210, Pos = Vector3.new(5270, 9, 470), Quest = {"StartQuest","PrisonerQuest",1}, EnemyPatterns = {"Prisoner"}, isBoss = false},
-    {Name = "Prison 2",           Min = 210, Max = 230, Pos = Vector3.new(5330, 20, 750), Quest = {"StartQuest","PrisonerQuest",2}, EnemyPatterns = {"Ruthless Prisoner","Dangerous Prisoner"}, isBoss = false},
+    {Name = "Prison 2",           Min = 210, Max = 250, Pos = Vector3.new(5330, 20, 750), Quest = {"StartQuest","PrisonerQuest",2}, EnemyPatterns = {"Ruthless Prisoner","Dangerous Prisoner"}, isBoss = false},
     {Name = "Colosseum 1",        Min = 250, Max = 300, Pos = Vector3.new(-1745, 10, -2705), Quest = {"StartQuest","ColosseumQuest",1}, EnemyPatterns = {"Toga Warrior"}, isBoss = false},
     --{Name = "Colosseum 2",        Min = 275, Max = 300, Pos = Vector3.new(-1175, 12, -3214), Quest = {"StartQuest","ColosseumQuest",2}, EnemyPatterns = {"Gladiator"}, isBoss = false},
     {Name = "Magma 1",            Min = 300, Max = 325, Pos = Vector3.new(-5468, 17, 8450), Quest = {"StartQuest","MagmaQuest",1}, EnemyPatterns = {"Military Soldier"}, isBoss = false},
-    {Name = "Magma 2",            Min = 325, Max = 350, Pos = Vector3.new(-5842, 77, 8773), Quest = {"StartQuest","MagmaQuest",2}, EnemyPatterns = {"Military Spy"}, isBoss = false},
+    {Name = "Magma 2",            Min = 325, Max = 375, Pos = Vector3.new(-5842, 77, 8773), Quest = {"StartQuest","MagmaQuest",2}, EnemyPatterns = {"Military Spy"}, isBoss = false},
     {Name = "Fishman 1",          Min = 375, Max = 400, Pos = Vector3.new(60793, 24, 1362), Quest = {"StartQuest","FishmanQuest",1}, EnemyPatterns = {"Fishman Warrior"}, isBoss = false},
-    {Name = "Fishman 2",          Min = 400, Max = 425, Pos = Vector3.new(61928, 25, 1331), Quest = {"StartQuest","FishmanQuest",2}, EnemyPatterns = {"Fishman Commando"}, isBoss = false},
+    {Name = "Fishman 2",          Min = 400, Max = 450, Pos = Vector3.new(61928, 25, 1331), Quest = {"StartQuest","FishmanQuest",2}, EnemyPatterns = {"Fishman Commando"}, isBoss = false},
     {Name = "Sky Upper 1",        Min = 450, Max = 475, Pos = Vector3.new(-4241, 1089, -404), Quest = {"StartQuest","SkyExp1Quest",1}, EnemyPatterns = {"God's Guard"}, isBoss = false},
-    {Name = "Sky Upper 2",        Min = 475, Max = 500, Pos = Vector3.new(-5959, 5469, 1831), Quest = {"StartQuest","SkyExp1Quest",2}, EnemyPatterns = {"Shanda"}, isBoss = false},
+    {Name = "Sky Upper 2",        Min = 475, Max = 525, Pos = Vector3.new(-5959, 5469, 1831), Quest = {"StartQuest","SkyExp1Quest",2}, EnemyPatterns = {"Shanda"}, isBoss = false},
     {Name = "Sky Upper 3",        Min = 525, Max = 550, Pos = Vector3.new(-6798, 5552, 1214), Quest = {"StartQuest","SkyExp2Quest",1}, EnemyPatterns = {"Royal Squad"}, isBoss = false},
-    {Name = "Sky Upper 4",        Min = 550, Max = 575, Pos = Vector3.new(-7064, 5541, 939), Quest = {"StartQuest","SkyExp2Quest",2}, EnemyPatterns = {"Royal Soldier"}, isBoss = false},
+    {Name = "Sky Upper 4",        Min = 550, Max = 625, Pos = Vector3.new(-7064, 5541, 939), Quest = {"StartQuest","SkyExp2Quest",2}, EnemyPatterns = {"Royal Soldier"}, isBoss = false},
     {Name = "Fountain 1",         Min = 625, Max = 650, Pos = Vector3.new(5572, 78, 4010), Quest = {"StartQuest","FountainQuest",1}, EnemyPatterns = {"Galley Pirate"}, isBoss = false},
     {Name = "Fountain 2",         Min = 650, Max = 700, Pos = Vector3.new(5634, 78, 4789), Quest = {"StartQuest","FountainQuest",2}, EnemyPatterns = {"Galley Captain"}, isBoss = false},
 
@@ -1438,26 +1438,50 @@ BF.getAvailableStatPoints = function()
 end
 
 BF.getIslandForLevel = function(level)
-    local candidates = {}
+    local bossCandidates, normalCandidates = {}, {}
     for _, island in ipairs(islands) do
-        if level >= island.Min and level <= island.Max then
-            if island.Pos and island.Pos.Magnitude > 0.1 then
-                table.insert(candidates, island)
+        if island.Pos and island.Pos.Magnitude > 0.1 then
+            if level >= island.Min and level <= island.Max then
+                if island.isBoss then
+                    table.insert(bossCandidates, island)
+                else
+                    table.insert(normalCandidates, island)
+                end
             end
         end
     end
-    if #candidates == 0 then return islands[#islands] end
 
-    local bossCandidates, normalCandidates = {}, {}
-    for _, island in ipairs(candidates) do
-        if island.isBoss then
-            table.insert(bossCandidates, island)
-        else
-            table.insert(normalCandidates, island)
-        end
+    local function bestNormal(list)
+        if not list or #list == 0 then return nil end
+        table.sort(list, function(a, b)
+            if a.Max ~= b.Max then return a.Max > b.Max end
+            return a.Min > b.Min
+        end)
+        return list[1]
     end
 
-    -- Boss Priority: only use boss island if that boss is actually alive
+    local function nearestNormalByLevel()
+        local best, bestScore = nil, math.huge
+        for _, island in ipairs(islands) do
+            if not island.isBoss and island.Pos and island.Pos.Magnitude > 0.1 then
+                local score
+                if level < island.Min then
+                    score = island.Min - level + 1000
+                elseif level > island.Max then
+                    score = level - island.Max
+                else
+                    score = 0
+                end
+                if score < bestScore then
+                    bestScore = score
+                    best = island
+                end
+            end
+        end
+        return best
+    end
+
+    -- Boss priority only if that boss is alive right now
     if config.bossPriority and #bossCandidates > 0 then
         for _, island in ipairs(bossCandidates) do
             local alive = false
@@ -1468,23 +1492,15 @@ BF.getIslandForLevel = function(level)
                 return island
             end
         end
-        -- boss not spawned -> farm normals for this level
-        if #normalCandidates > 0 then
-            table.sort(normalCandidates, function(a, b)
-                if a.Max ~= b.Max then return a.Max > b.Max end
-                return a.Min > b.Min
-            end)
-            return normalCandidates[1]
-        end
+        local n = bestNormal(normalCandidates) or nearestNormalByLevel()
+        if n then return n end
         return bossCandidates[1]
     end
 
-    local selectedList = #normalCandidates > 0 and normalCandidates or bossCandidates
-    table.sort(selectedList, function(a, b)
-        if a.Max ~= b.Max then return a.Max > b.Max end
-        return a.Min > b.Min
-    end)
-    return selectedList[1]
+    local n = bestNormal(normalCandidates) or nearestNormalByLevel()
+    if n then return n end
+    if #bossCandidates > 0 then return bossCandidates[1] end
+    return islands[#islands]
 end
 
 -- TrackedQuestFrame = has quest; gone = no quest / completed
@@ -1569,20 +1585,36 @@ BF.resolveFarmIsland = function(level)
         return island
     end
     local p = string.lower(fromQuest[1])
+    -- Prefer island that matches quest AND is still in level range
+    local matchedInRange, matchedAny = nil, nil
     for _, isl in ipairs(islands) do
+        local hit = false
         for _, ep in ipairs(isl.EnemyPatterns or {}) do
             local epl = string.lower(ep)
             if string.find(epl, p, 1, true) or string.find(p, epl, 1, true) then
-                return isl
+                hit = true
+                break
             end
         end
-        for _, ep in ipairs(isl.BossPatterns or {}) do
-            local epl = string.lower(ep)
-            if string.find(epl, p, 1, true) or string.find(p, epl, 1, true) then
-                return isl
+        if not hit then
+            for _, ep in ipairs(isl.BossPatterns or {}) do
+                local epl = string.lower(ep)
+                if string.find(epl, p, 1, true) or string.find(p, epl, 1, true) then
+                    hit = true
+                    break
+                end
+            end
+        end
+        if hit then
+            matchedAny = matchedAny or isl
+            if level >= isl.Min and level <= isl.Max then
+                matchedInRange = isl
+                break
             end
         end
     end
+    if matchedInRange then return matchedInRange end
+    -- Quest is for an island outside current level band -> follow level island instead
     return island
 end
 
@@ -1621,21 +1653,38 @@ end
 -- BOSS DETECTION
 -- =============================================
 BF.findBossInWorkspace = function(island)
-    if not island.isBoss then return nil end
+    if not island or not island.isBoss then return nil end
+    local patterns = island.BossPatterns or {}
+    if #patterns == 0 then return nil end
     local container = Workspace:FindFirstChild("Enemies")
     if not container then return nil end
+    local best, bestDist = nil, math.huge
+    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
     for _, enemy in ipairs(container:GetChildren()) do
         if enemy:IsA("Model") then
             local humanoid = enemy:FindFirstChildOfClass("Humanoid")
-            if humanoid and humanoid.Health > 0 then
-                if enemy:GetAttribute("isBoss") == true then return enemy end
-                for _, pattern in ipairs(island.BossPatterns) do
-                    if enemy.Name:lower():find(pattern:lower()) then return enemy end
+            local root = enemy:FindFirstChild("HumanoidRootPart")
+            if humanoid and humanoid.Health > 0 and root then
+                local lower = string.lower(enemy.Name)
+                local matched = false
+                for _, pattern in ipairs(patterns) do
+                    local p = string.lower(tostring(pattern))
+                    if p ~= "" and string.find(lower, p, 1, true) then
+                        matched = true
+                        break
+                    end
+                end
+                if matched then
+                    local d = hrp and (root.Position - hrp.Position).Magnitude or 0
+                    if d < bestDist then
+                        bestDist = d
+                        best = enemy
+                    end
                 end
             end
         end
     end
-    return nil
+    return best
 end
 
 BF.bossExists = function(island)
@@ -1664,41 +1713,45 @@ end
 -- =============================================
 BF.enemyMatchesPatterns = function(enemy, patternInfo)
     if not enemy or not enemy:IsA("Model") then return false end
+    if not patternInfo then return false end
     local humanoid = enemy:FindFirstChildOfClass("Humanoid")
     local root = enemy:FindFirstChild("HumanoidRootPart")
     local head = enemy:FindFirstChild("Head")
     if not humanoid or humanoid.Health <= 0 or not root or not head then return false end
 
     local lower = string.lower(enemy.Name)
+    local patterns = patternInfo.patterns or {}
     local wantBoss = patternInfo.includeBossAttr == true
 
-        if wantBoss then
-        if enemy:GetAttribute("isBoss") == true or string.find(lower, "%[boss%]") then
-            return true
-        end
-        for _, pattern in ipairs(patternInfo.patterns or {}) do
-            local p = string.lower(pattern)
-            if string.sub(lower, 1, #p) == p then
-                return true
-            end
+    local function nameMatchesPattern(p)
+        p = string.lower(tostring(p or ""))
+        if p == "" then return false end
+        if string.find(lower, p, 1, true) then return true end
+        return false
+    end
+
+    if wantBoss then
+        for _, pattern in ipairs(patterns) do
+            if nameMatchesPattern(pattern) then return true end
         end
         return false
     end
 
-        if enemy:GetAttribute("isBoss") == true then return false end
     if string.find(lower, "%[boss%]") then return false end
+    if enemy:GetAttribute("isBoss") == true then return false end
 
-    for _, pattern in ipairs(patternInfo.patterns or {}) do
-        local p = string.lower(pattern)
-                if string.sub(lower, 1, #p) == p then
+    for _, pattern in ipairs(patterns) do
+        local p = string.lower(tostring(pattern or ""))
+        if p ~= "" and string.sub(lower, 1, #p) == p then
             local nextc = string.sub(lower, #p + 1, #p + 1)
             if nextc == "" or nextc == " " or nextc == "[" then
                 local rest = string.sub(lower, #p + 1)
-                                if string.find(rest, "^%s+king") or string.find(rest, "^%s+lord")
-                    or string.find(rest, "^%s+admiral") or string.find(rest, "^%s+boss") then
-                                        if not string.find(p, "king") and not string.find(p, "lord")
-                        and not string.find(p, "admiral") and not string.find(p, "boss") then
-                                            else
+                local isNamedBoss = string.find(rest, "^%s+king") or string.find(rest, "^%s+lord")
+                    or string.find(rest, "^%s+admiral") or string.find(rest, "^%s+general")
+                    or string.find(rest, "^%s+boss")
+                if isNamedBoss then
+                    if string.find(p, "king", 1, true) or string.find(p, "lord", 1, true)
+                        or string.find(p, "admiral", 1, true) or string.find(p, "general", 1, true) then
                         return true
                     end
                 else
@@ -3499,14 +3552,19 @@ BF.startFarm = function()
             local level = BF.getPlayerLevel()
             local island = BF.resolveFarmIsland(level)
             local hrp = character:FindFirstChild("HumanoidRootPart")
-
-                        -- This is deliberately scoped to the user's existing "Season 2, 1"
-            -- entry and does not alter other level ranges.
-            if island and island.Name == "Season 2, 1" then
-                island.EnemyPatterns = {"Raider"}
-                island.isBoss = false
-            end
             if not hrp then task.wait(0.5) continue end
+
+            -- Detect island switch (level-up / boss gone / quest done)
+            if island and island.Name and island.Name ~= BF.lastIslandName then
+                BF.lastIslandName = island.Name
+                lockedEnemy = nil
+                heightLocked = false
+                isBossTarget = false
+                underwaterEntryDone = false
+                underwaterEntryStarted = false
+                state = "ISLAND"
+                BF.notifyUser("Island", island.Name .. " (Lv " .. tostring(level) .. ")", 3)
+            end
 
                         if not _lastStatAt then _lastStatAt = 0 end
             if config.statEnabled and (os.clock() - _lastStatAt) > 2.5 then
@@ -3654,20 +3712,30 @@ BF.startFarm = function()
                                 
                 local bossEnemy = nil
                 if island.isBoss then bossEnemy = BF.findBossInWorkspace(island) end
-                -- no AbandonQuest mid-run
 
                 if bossEnemy and bossEnemy.Parent and bossEnemy:FindFirstChildOfClass("Humanoid")
                     and bossEnemy:FindFirstChildOfClass("Humanoid").Health > 0 then
                     lockedEnemy = bossEnemy
                     isBossTarget = true
+                    -- try boss quest once
+                    if island.BossQuest and not BF.hasActiveQuest() then
+                        pcall(function()
+                            BF.acceptQuestWrapper(island.BossQuest, { allowStack = false })
+                        end)
+                    end
                 else
                     isBossTarget = false
-                    local patternInfo = BF.resolveFarmPatterns(island, currentQuestType)
+                    -- Boss not up / not a boss island: farm normals
+                    local patternInfo = BF.resolveFarmPatterns(island, "normal")
+                    if not patternInfo or not patternInfo.patterns or #(patternInfo.patterns or {}) == 0 then
+                        patternInfo = { patterns = island.EnemyPatterns or {}, includeBossAttr = false }
+                    end
                     local allTargets = BF.getMatchingEnemies(island, patternInfo)
                     if #allTargets == 0 then
                         lockedEnemy = nil
-                        state = "PATROL"
-                        task.wait(0.15)
+                        state = "ISLAND"
+                        BF.lastIslandName = "" -- force re-resolve / re-fly
+                        task.wait(0.25)
                         continue
                     end
 
@@ -3781,12 +3849,18 @@ BF.startFarm = function()
                     isBossTarget = true
                     state = "COMBAT"
                 else
-                    local patternInfo = BF.resolveFarmPatterns(island, currentQuestType)
+                    local patternInfo = BF.resolveFarmPatterns(island, "normal")
+                    if not patternInfo or not patternInfo.patterns then
+                        patternInfo = { patterns = island.EnemyPatterns or {}, includeBossAttr = false }
+                    end
                     local enemies = BF.getMatchingEnemies(island, patternInfo)
                     if #enemies > 0 then
                         state = "COMBAT"
                     else
-                        task.wait(0.2)
+                        -- no mobs: re-pick island next loop
+                        BF.lastIslandName = ""
+                        state = "ISLAND"
+                        task.wait(0.35)
                     end
                 end
                 continue
