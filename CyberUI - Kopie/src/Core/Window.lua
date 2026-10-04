@@ -1894,7 +1894,13 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		self:SetVisible(self._Visible)
 	end))
 
-	self:SetLayout(data.Layout or "Vaxorin")
+	local restoredLayout = data.Layout or "Vaxorin"
+	if self.Library then
+		local fromFlag = self.Library:_getSavedFlag("Vaxorin.Visual.Layout", nil, true)
+		local fromSession = self.Library.GetSession and self.Library:GetSession("Layout", nil)
+		restoredLayout = fromFlag or fromSession or restoredLayout
+	end
+	self:SetLayout(restoredLayout)
 	return self :: any
 end
 
@@ -1990,7 +1996,14 @@ function Window:CreateTab(name: string)
 		self:_createOptionsTab()
 	end
 
+	local savedTab = nil
+	if self.Library and self.Library.GetSession then
+		savedTab = self.Library:GetSession("LastTab", nil)
+	end
+
 	if not self._ActiveTab then
+		self:_selectTab(tab)
+	elseif savedTab and name == savedTab then
 		self:_selectTab(tab)
 	end
 
@@ -2037,6 +2050,110 @@ function Window:_createOptionsTab()
 		Flag = "Vaxorin.Visual.Layout",
 		Callback = function(value)
 			self:SetLayout(value)
+		end,
+	})
+
+	-- Profiles (requires ConfigurationSaving.Enabled = true)
+	local profileSection = optionsTab:CreateSection("Profiles")
+	profileSection:CreateParagraph({
+		Title = "Config profiles",
+		Content = "Save and load full setting snapshots. Needs ConfigurationSaving enabled in CreateWindow.",
+	})
+
+	local profileNames = {}
+	if self.Library and self.Library.GetProfiles then
+		profileNames = self.Library:GetProfiles()
+	end
+	if #profileNames == 0 then
+		profileNames = { "(none yet)" }
+	end
+
+	local activeProfile = "(none yet)"
+	if self.Library and self.Library.GetSession then
+		activeProfile = self.Library:GetSession("ActiveProfile", nil) or profileNames[1]
+	end
+
+	local profileDropdown
+	profileDropdown = profileSection:CreateDropdown({
+		Name = "Profile",
+		Options = profileNames,
+		CurrentOption = activeProfile,
+		Flag = "Vaxorin.Session.ActiveProfile",
+		Save = false,
+		Callback = function(value)
+			if value and value ~= "(none yet)" and self.Library and self.Library.LoadProfile then
+				local ok = self.Library:LoadProfile(value)
+				if self.Library.Notify then
+					self.Library:Notify({
+						Title = if ok then "Profile loaded" else "Load failed",
+						Content = tostring(value),
+						Duration = 2,
+					})
+				end
+			end
+		end,
+	})
+
+	profileSection:CreateInput({
+		Name = "New profile name",
+		PlaceholderText = "e.g. Farm, PvP",
+		CurrentValue = "",
+		Flag = "Vaxorin.Session.ProfileDraft",
+		Save = false,
+		Callback = function() end,
+	})
+
+	profileSection:CreateButton({
+		Name = "Save current as profile",
+		Callback = function()
+			if not self.Library or not self.Library.SaveProfile then
+				return
+			end
+			local draft = self.Library.Flags["Vaxorin.Session.ProfileDraft"]
+			local name = if type(draft) == "string" and draft ~= "" then draft else nil
+			if not name and self.Library.GetSession then
+				name = self.Library:GetSession("ActiveProfile", nil)
+			end
+			if not name or name == "" or name == "(none yet)" then
+				name = "Profile " .. tostring(os.time() % 10000)
+			end
+			local ok = self.Library:SaveProfile(name)
+			if self.Library.Notify then
+				self.Library:Notify({
+					Title = if ok then "Profile saved" else "Save failed",
+					Content = tostring(name),
+					Duration = 2,
+				})
+			end
+			if ok and profileDropdown and profileDropdown.Set then
+				local names = self.Library:GetProfiles()
+				if profileDropdown.RefreshOptions then
+					profileDropdown:RefreshOptions(names)
+				end
+				profileDropdown:Set(name)
+			end
+		end,
+	})
+
+	profileSection:CreateButton({
+		Name = "Delete selected profile",
+		Callback = function()
+			if not self.Library or not self.Library.DeleteProfile then
+				return
+			end
+			local name = self.Library:GetSession("ActiveProfile", nil)
+				or self.Library.Flags["Vaxorin.Session.ActiveProfile"]
+			if not name or name == "(none yet)" then
+				return
+			end
+			local ok = self.Library:DeleteProfile(name)
+			if self.Library.Notify then
+				self.Library:Notify({
+					Title = if ok then "Profile deleted" else "Delete failed",
+					Content = tostring(name),
+					Duration = 2,
+				})
+			end
 		end,
 	})
 

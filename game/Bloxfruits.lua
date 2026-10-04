@@ -73,7 +73,7 @@ local success, err = pcall(function()
             end
         end)
         window = Vaxorin:CreateWindow({
-            Title = "Blox Fruits Auto Farm",
+            Title = "Blox Fruits",
             Subtitle = "by Fietewoozle",
             Logo = "rbxassetid://135320038058277",
             Badges = {{Text = "Vaxorin | v1.0"}, {Text = "Executor : " .. Executor}},
@@ -84,7 +84,11 @@ local success, err = pcall(function()
             ToggleKey = Enum.KeyCode.RightControl,
             TopMost = true,
             HideCoreUI = true,
-            ConfigurationSaving = { Enabled = false, AutoSave = false },
+            ConfigurationSaving = {
+                    Enabled = true,
+                    FolderName = "Vaxorin",
+                    FileName = "Blox Fruits",
+                },
         })
         useVaxorin = true
     end

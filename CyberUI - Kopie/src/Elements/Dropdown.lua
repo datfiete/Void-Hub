@@ -237,6 +237,7 @@ function Dropdown.new(section: any, data: DropdownOptions): DropdownHandle
 
 	if data.Flag then
 		library:_setFlag(data.Flag, self._Value, data.Save)
+		if library._bindFlagControl then library:_bindFlagControl(data.Flag, self) end
 	end
 
 	self:_updateSelectedLabel()
