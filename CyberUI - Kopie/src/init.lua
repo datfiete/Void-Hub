@@ -191,7 +191,7 @@ function Library:LoadProfile(name: string): boolean
 		local control = self._FlagControls and self._FlagControls[flag]
 		if control and control.Set then
 			pcall(function()
-				control:Set(value)
+				control:Set(value, true)
 			end)
 		end
 	end

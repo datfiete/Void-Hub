@@ -34,7 +34,12 @@ function Toggle.new(section: any, data: ToggleOptions): ToggleHandle
 	}, Toggle)
 
 	local library = section.Tab.Window.Library
-	self._Value = library:_getSavedFlag(data.Flag, self._Value, data.Save)
+	local defaultValue = self._Value
+	local savedRaw = nil
+	if data.Flag and library:_shouldSaveFlag(data.Flag, data.Save) and library.Config then
+		savedRaw = library.Config:Get(`Flags.{data.Flag}`)
+	end
+	self._Value = library:_getSavedFlag(data.Flag, defaultValue, data.Save)
 
 	local row = Helpers.CreateFrame({
 		Name = "Toggle",
@@ -138,6 +143,13 @@ function Toggle.new(section: any, data: ToggleOptions): ToggleHandle
 
 	self:_applyVisual(self._Value, false)
 
+	-- Config restored the value but did not run the feature callback — fire once on load.
+	if data.Callback and data.FireOnLoad ~= false and savedRaw ~= nil then
+		task.defer(function()
+			data.Callback(self._Value)
+		end)
+	end
+
 	return self :: any
 end
 
@@ -158,8 +170,8 @@ function Toggle:RefreshTheme()
 	self.Knob.BackgroundColor3 = theme.Text
 end
 
-function Toggle:Set(value: boolean)
-	self:_commit(value, false)
+function Toggle:Set(value: boolean, fireCallback: boolean?)
+	self:_commit(value, fireCallback == true)
 end
 
 function Toggle:Get(): boolean

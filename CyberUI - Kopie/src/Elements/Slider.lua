@@ -35,6 +35,10 @@ function Slider.new(section: any, data: SliderOptions): SliderHandle
 	local rounding = data.Rounding or 1
 	local initial = data.CurrentValue or data.Default or min
 	local library = section.Tab.Window.Library
+	local savedRaw = nil
+	if data.Flag and library:_shouldSaveFlag(data.Flag, data.Save) and library.Config then
+		savedRaw = library.Config:Get(`Flags.{data.Flag}`)
+	end
 	initial = library:_getSavedFlag(data.Flag, initial, data.Save)
 
 	local self = setmetatable({
@@ -199,6 +203,12 @@ function Slider.new(section: any, data: SliderOptions): SliderHandle
 
 	self:_applyVisual(false)
 
+	if data.Callback and data.FireOnLoad ~= false and savedRaw ~= nil then
+		task.defer(function()
+			data.Callback(self._Value)
+		end)
+	end
+
 	return self :: any
 end
 
@@ -214,8 +224,8 @@ function Slider:RefreshTheme()
 	self:_applyVisual(false)
 end
 
-function Slider:Set(value: number)
-	self:_commit(value, false)
+function Slider:Set(value: number, fireCallback: boolean?)
+	self:_commit(value, fireCallback == true)
 end
 
 function Slider:Get(): number

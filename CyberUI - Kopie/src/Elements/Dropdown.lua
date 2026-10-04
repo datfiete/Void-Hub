@@ -30,6 +30,10 @@ function Dropdown.new(section: any, data: DropdownOptions): DropdownHandle
 	local multiple = data.MultipleOptions == true
 	local initial = data.CurrentOption or data.Default or options[1] or ""
 	local library = section.Tab.Window.Library
+	local savedRaw = nil
+	if data.Flag and library:_shouldSaveFlag(data.Flag, data.Save) and library.Config then
+		savedRaw = library.Config:Get(`Flags.{data.Flag}`)
+	end
 	initial = library:_getSavedFlag(data.Flag, initial, data.Save)
 
 	local initialValue
@@ -243,6 +247,12 @@ function Dropdown.new(section: any, data: DropdownOptions): DropdownHandle
 	self:_updateSelectedLabel()
 	self:_buildOptions()
 
+	if data.Callback and data.FireOnLoad ~= false and savedRaw ~= nil then
+		task.defer(function()
+			data.Callback(self._Value)
+		end)
+	end
+
 	return self :: any
 end
 
@@ -256,7 +266,7 @@ function Dropdown:RefreshTheme()
 	self:_buildOptions()
 end
 
-function Dropdown:Set(value: string | { string })
+function Dropdown:Set(value: string | { string }, fireCallback: boolean?)
 	if self._Multiple then
 		if type(value) == "table" then
 			self._Value = value
@@ -268,7 +278,7 @@ function Dropdown:Set(value: string | { string })
 		return
 	end
 
-	self:_commit(value, false)
+	self:_commit(value, fireCallback == true)
 end
 
 function Dropdown:Get(): string | { string }
