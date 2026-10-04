@@ -1431,7 +1431,7 @@ function LayoutVariants:_ensureAether()
 
 	local top = Helpers.CreateFrame({
 		Name = "CommandHeader",
-		Size = UDim2.new(1, -48, 0, 62),
+		Size = UDim2.new(1, -240, 0, 62),
 		Position = UDim2.fromOffset(24, 18),
 		BackgroundColor3 = Color3.fromRGB(14, 18, 28),
 		BackgroundTransparency = 0.02,
@@ -1479,20 +1479,22 @@ function LayoutVariants:_ensureAether()
 
 	Helpers.CreateLabel({
 		Name = "Status",
-		Size = UDim2.fromOffset(120, 20),
-		Position = UDim2.new(1, -178, 0.5, -10),
+		Size = UDim2.fromOffset(100, 20),
+		Position = UDim2.new(1, -80, 0.5, -10),
+		AnchorPoint = Vector2.new(1, 0),
 		Text = "● ONLINE",
 		Font = Theme.FontBold,
 		TextSize = 10,
 		TextColor3 = Color3.fromRGB(120, 220, 170),
-		TextXAlignment = Enum.TextXAlignment.Center,
+		TextXAlignment = Enum.TextXAlignment.Right,
 		Parent = top,
 	})
 
 	local clock = Helpers.CreateLabel({
 		Name = "Clock",
 		Size = UDim2.fromOffset(54, 20),
-		Position = UDim2.new(1, -68, 0.5, -10),
+		Position = UDim2.new(1, -16, 0.5, -10),
+		AnchorPoint = Vector2.new(1, 0),
 		Text = os.date("%H:%M"),
 		Font = Theme.FontBold,
 		TextSize = 11,
@@ -1602,7 +1604,7 @@ function LayoutVariants:_ensureAether()
 	local side = Helpers.CreateFrame({
 		Name = "StatusPane",
 		Size = UDim2.new(0, 190, 1, -118),
-		Position = UDim2.new(1, -20, 0, 20),
+		Position = UDim2.new(1, -24, 0, 94),
 		AnchorPoint = Vector2.new(1, 0),
 		BackgroundColor3 = Color3.fromRGB(16, 17, 26),
 		BackgroundTransparency = 0.02,
@@ -2306,20 +2308,44 @@ function LayoutVariants:_ensureVortex()
 	})
 	self._VortexActiveLabel.ZIndex = 3
 
-	-- Clock
+	-- Close button (top-right) — first so clock can sit left of it
+	local closeBtn = Helpers.CreateButton({
+		Name = "Close",
+		Size = UDim2.fromOffset(40, 40),
+		Position = UDim2.new(1, -20, 0, 20),
+		AnchorPoint = Vector2.new(1, 0),
+		Text = "×",
+		Font = Theme.FontBold,
+		TextSize = 22,
+		TextColor3 = Color3.fromRGB(235, 220, 255),
+		TextXAlignment = Enum.TextXAlignment.Center,
+		BackgroundColor3 = Color3.fromRGB(30, 20, 46),
+		BackgroundTransparency = 0.05,
+		Parent = root,
+	})
+	Helpers.Corner(closeBtn, 20)
+	Helpers.Stroke(closeBtn, Color3.fromRGB(130, 85, 220), 1)
+	closeBtn.ZIndex = 20
+	closeBtn.MouseButton1Click:Connect(function()
+		if w.SetVisible then
+			w:SetVisible(false)
+		end
+	end)
+
+	-- Clock sits left of the X (never underneath)
 	local clock = Helpers.CreateLabel({
 		Name = "Clock",
-		Size = UDim2.fromOffset(60, 20),
-		Position = UDim2.new(1, -20, 0, 20),
+		Size = UDim2.fromOffset(56, 20),
+		Position = UDim2.new(1, -70, 0, 30),
 		AnchorPoint = Vector2.new(1, 0),
 		Text = os.date("%H:%M"),
 		Font = Theme.FontBold,
-		TextSize = 11,
+		TextSize = 12,
 		TextColor3 = Color3.fromRGB(190, 175, 225),
 		TextXAlignment = Enum.TextXAlignment.Center,
 		Parent = root,
 	})
-	clock.ZIndex = 3
+	clock.ZIndex = 20
 	task.spawn(function()
 		while self._VortexGui and self._VortexGui.Parent do
 			clock.Text = os.date("%H:%M")
@@ -2327,41 +2353,19 @@ function LayoutVariants:_ensureVortex()
 		end
 	end)
 
-	-- Close button (top-right)
-	local closeBtn = Helpers.CreateButton({
-		Name = "Close",
-		Size = UDim2.fromOffset(38, 38),
-		Position = UDim2.new(1, -58, 0, 24),
-		Text = "×",
-		Font = Theme.FontBold,
-		TextSize = 20,
-		TextColor3 = Color3.fromRGB(235, 220, 255),
-		BackgroundColor3 = Color3.fromRGB(30, 20, 46),
-		BackgroundTransparency = 0.05,
-		Parent = root,
-	})
-	Helpers.Corner(closeBtn, 19)
-	Helpers.Stroke(closeBtn, Color3.fromRGB(130, 85, 220), 1)
-	closeBtn.ZIndex = 5
-	closeBtn.MouseButton1Click:Connect(function()
-		if w.SetVisible then
-			w:SetVisible(false)
-		end
-	end)
-
 	-- Radial hub (bottom-left anchor)
-	local hubX, hubY = 120, 120
+	local hubX, hubY = 130, 130
 	self._VortexHubPos = Vector2.new(hubX, hubY)
 
 	-- decorative outer ring
 	local ring = Instance.new("Frame")
 	ring.Name = "Ring"
-	ring.Size = UDim2.fromOffset(190, 190)
-	ring.Position = UDim2.new(0, hubX - 95, 1, -(hubY + 95))
+	ring.Size = UDim2.fromOffset(220, 220)
+	ring.Position = UDim2.new(0, hubX - 110, 1, -(hubY + 110))
 	ring.BackgroundTransparency = 1
 	ring.ZIndex = 4
 	ring.Parent = root
-	Helpers.Corner(ring, 95)
+	Helpers.Corner(ring, 110)
 	local ringStroke = Helpers.Stroke(ring, Color3.fromRGB(120, 70, 200), 1)
 	ringStroke.Transparency = 0.68
 
@@ -2467,13 +2471,17 @@ function LayoutVariants:_syncVortexTabs()
 		return
 	end
 
-	local R = 110
-	local tabSize = 48
+	-- Scale radius / tab size so many tabs never overlap on the arc
+	local tabSize = if n >= 10 then 32 elseif n >= 7 then 38 else 46
+	local minGap = tabSize + 14 -- pixel gap along the arc
+	local angleStart, angleEnd = 105, 8 -- wider fan (nearly up → almost right)
+	local span = math.rad(angleStart - angleEnd)
+	-- R so that arc length >= n * minGap
+	local R = math.max(125, (n * minGap) / math.max(span, 0.2))
+	R = math.min(R, 210)
+
 	local hubX = self._VortexHubPos.X
 	local hubY = self._VortexHubPos.Y
-
-	-- angles spread from 85° (nearly straight up) down to 15° (right)
-	local angleStart, angleEnd = 85, 15
 
 	for i, tab in ipairs(w._Tabs) do
 		local label = tabDisplayName(tab)
@@ -2491,7 +2499,7 @@ function LayoutVariants:_syncVortexTabs()
 			Position = UDim2.new(0, cx - tabSize / 2, 1, -(cyFromBottom + tabSize / 2)),
 			Text = letter,
 			Font = Theme.FontBold,
-			TextSize = 17,
+			TextSize = if tabSize < 36 then 13 else 16,
 			TextColor3 = Color3.fromRGB(222, 205, 255),
 			TextXAlignment = Enum.TextXAlignment.Center,
 			BackgroundColor3 = Color3.fromRGB(22, 16, 36),
