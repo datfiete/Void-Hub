@@ -2354,7 +2354,7 @@ function LayoutVariants:_ensureVortex()
 	end)
 
 	-- Radial hub (bottom-left anchor)
-	local hubX, hubY = 130, 130
+	local hubX, hubY = 118, 118
 	self._VortexHubPos = Vector2.new(hubX, hubY)
 
 	-- decorative outer ring
@@ -2395,6 +2395,7 @@ function LayoutVariants:_ensureVortex()
 	hubStroke.Transparency = 0.15
 	hub.ZIndex = 6
 	self._VortexHub = hub
+	Helpers.Glow(hub, Color3.fromRGB(160, 90, 255), 18, 0.75)
 
 	local homeBtn = Helpers.CreateButton({
 		Name = "HomeBtn",
@@ -2404,6 +2405,7 @@ function LayoutVariants:_ensureVortex()
 		Font = Theme.FontBold,
 		TextSize = 28,
 		TextColor3 = Color3.fromRGB(242, 224, 255),
+		TextXAlignment = Enum.TextXAlignment.Center,
 		Parent = hub,
 	})
 	homeBtn.ZIndex = 7
@@ -2471,17 +2473,33 @@ function LayoutVariants:_syncVortexTabs()
 		return
 	end
 
-	-- Scale radius / tab size so many tabs never overlap on the arc
-	local tabSize = if n >= 10 then 32 elseif n >= 7 then 38 else 46
-	local minGap = tabSize + 14 -- pixel gap along the arc
-	local angleStart, angleEnd = 105, 8 -- wider fan (nearly up → almost right)
+	-- Compact fan: stay close to hub, shrink tabs before pushing radius out
+	local tabSize = if n >= 12 then 28 elseif n >= 9 then 32 elseif n >= 6 then 38 else 44
+	local angleStart, angleEnd = 100, 5
 	local span = math.rad(angleStart - angleEnd)
-	-- R so that arc length >= n * minGap
-	local R = math.max(125, (n * minGap) / math.max(span, 0.2))
-	R = math.min(R, 210)
+	-- Ideal chord spacing ~ tabSize + 6; solve R, clamp tight
+	local idealGap = tabSize + 8
+	local R = (n <= 1) and 100 or (idealGap * (n - 1)) / math.max(span, 0.25)
+	R = math.clamp(R, 88, 135)
 
 	local hubX = self._VortexHubPos.X
 	local hubY = self._VortexHubPos.Y
+
+	-- soft ring under tabs matching current R
+	if self._VortexTabRing and self._VortexTabRing.Parent then
+		self._VortexTabRing:Destroy()
+	end
+	local tabRing = Instance.new("Frame")
+	tabRing.Name = "TabRing"
+	tabRing.BackgroundTransparency = 1
+	tabRing.Size = UDim2.fromOffset(R * 2, R * 2)
+	tabRing.Position = UDim2.new(0, hubX - R, 1, -(hubY + R))
+	tabRing.ZIndex = 3
+	tabRing.Parent = self._VortexRoot
+	Helpers.Corner(tabRing, R)
+	local tabRingStroke = Helpers.Stroke(tabRing, Color3.fromRGB(150, 90, 255), 1)
+	tabRingStroke.Transparency = 0.55
+	self._VortexTabRing = tabRing
 
 	for i, tab in ipairs(w._Tabs) do
 		local label = tabDisplayName(tab)
@@ -2499,30 +2517,33 @@ function LayoutVariants:_syncVortexTabs()
 			Position = UDim2.new(0, cx - tabSize / 2, 1, -(cyFromBottom + tabSize / 2)),
 			Text = letter,
 			Font = Theme.FontBold,
-			TextSize = if tabSize < 36 then 13 else 16,
-			TextColor3 = Color3.fromRGB(222, 205, 255),
+			TextSize = if tabSize < 34 then 12 else 15,
+			TextColor3 = Color3.fromRGB(230, 215, 255),
 			TextXAlignment = Enum.TextXAlignment.Center,
-			BackgroundColor3 = Color3.fromRGB(22, 16, 36),
-			BackgroundTransparency = 0.08,
+			BackgroundColor3 = Color3.fromRGB(24, 16, 42),
+			BackgroundTransparency = 0.05,
 			Parent = self._VortexRoot,
 		})
 		Helpers.Corner(btn, tabSize / 2)
-		local stroke = Helpers.Stroke(btn, Color3.fromRGB(140, 80, 240), 1)
-		stroke.Transparency = 0.5
-		btn.ZIndex = 6
+		local stroke = Helpers.Stroke(btn, Color3.fromRGB(160, 100, 255), 1.2)
+		stroke.Transparency = 0.4
+		btn.ZIndex = 7
+		-- soft glow under each tab
+		local glow = Helpers.Glow(btn, Color3.fromRGB(140, 80, 255), 10, 0.82)
+		glow.ZIndex = 6
 
-		-- tiny radial tick line toward hub
+		-- radial tick toward hub
 		local tick = Helpers.CreateFrame({
 			Name = "Tick",
-			Size = UDim2.fromOffset(3, 10),
+			Size = UDim2.fromOffset(2, 12),
 			Position = UDim2.new(
 				0,
-				cx + math.cos(angle + math.pi) * (tabSize / 2 + 6) - 1.5,
+				cx + math.cos(angle + math.pi) * (tabSize / 2 + 4) - 1,
 				1,
-				-(cyFromBottom + math.sin(angle + math.pi) * (tabSize / 2 + 6))
+				-(cyFromBottom + math.sin(angle + math.pi) * (tabSize / 2 + 4))
 			),
-			BackgroundColor3 = Color3.fromRGB(150, 90, 250),
-			BackgroundTransparency = 0.4,
+			BackgroundColor3 = Color3.fromRGB(170, 110, 255),
+			BackgroundTransparency = 0.35,
 			Parent = self._VortexRoot,
 		})
 		Helpers.Corner(tick, 1)
@@ -2532,6 +2553,7 @@ function LayoutVariants:_syncVortexTabs()
 			btn = btn,
 			stroke = stroke,
 			tick = tick,
+			glow = glow,
 			tab = tab,
 		}
 
@@ -2570,14 +2592,18 @@ end
 function LayoutVariants:_highlightVortex(label: string)
 	for name, data in pairs(self._VortexTabs or {}) do
 		local on = name == label
-		data.btn.BackgroundColor3 = if on then Color3.fromRGB(115, 60, 220) else Color3.fromRGB(22, 16, 36)
-		data.btn.BackgroundTransparency = if on then 0 else 0.08
-		data.btn.TextColor3 = if on then Color3.fromRGB(255, 255, 255) else Color3.fromRGB(222, 205, 255)
-		data.stroke.Transparency = if on then 0.02 else 0.5
-		data.stroke.Color = if on then Color3.fromRGB(230, 160, 255) else Color3.fromRGB(140, 80, 240)
+		data.btn.BackgroundColor3 = if on then Color3.fromRGB(130, 70, 235) else Color3.fromRGB(24, 16, 42)
+		data.btn.BackgroundTransparency = if on then 0 else 0.05
+		data.btn.TextColor3 = if on then Color3.fromRGB(255, 255, 255) else Color3.fromRGB(230, 215, 255)
+		data.stroke.Transparency = if on then 0 else 0.4
+		data.stroke.Color = if on then Color3.fromRGB(240, 180, 255) else Color3.fromRGB(160, 100, 255)
 		if data.tick then
-			data.tick.BackgroundColor3 = if on then Color3.fromRGB(230, 160, 255) else Color3.fromRGB(150, 90, 250)
-			data.tick.BackgroundTransparency = if on then 0.05 else 0.4
+			data.tick.BackgroundColor3 = if on then Color3.fromRGB(240, 180, 255) else Color3.fromRGB(170, 110, 255)
+			data.tick.BackgroundTransparency = if on then 0 else 0.35
+		end
+		if data.glow then
+			data.glow.ImageTransparency = if on then 0.55 else 0.82
+			data.glow.ImageColor3 = if on then Color3.fromRGB(200, 130, 255) else Color3.fromRGB(140, 80, 255)
 		end
 	end
 end
