@@ -459,7 +459,8 @@ function LayoutVariants:_buildMinecraftShell()
 	local closeBtn = Helpers.CreateButton({
 		Name = "Close",
 		Size = UDim2.fromOffset(40, 40),
-		Position = UDim2.new(1, -56, 0, 16),
+		Position = UDim2.new(1, -16, 0, 16),
+		AnchorPoint = Vector2.new(1, 0),
 		Text = "×",
 		Font = Theme.FontBold,
 		TextSize = 22,
@@ -1204,7 +1205,8 @@ function LayoutVariants:_ensureOrbit()
 	local closeBtn = Helpers.CreateButton({
 		Name = "Close",
 		Size = UDim2.fromOffset(40, 40),
-		Position = UDim2.new(1, -56, 0, 16),
+		Position = UDim2.new(1, -16, 0, 16),
+		AnchorPoint = Vector2.new(1, 0),
 		Text = "×",
 		Font = Theme.FontBold,
 		TextSize = 22,
@@ -1556,7 +1558,8 @@ function LayoutVariants:_ensureAether()
 	local side = Helpers.CreateFrame({
 		Name = "StatusPane",
 		Size = UDim2.new(0, 190, 1, -118),
-		Position = UDim2.new(1, -214, 0, 94),
+		Position = UDim2.new(1, -16, 0, 94),
+		AnchorPoint = Vector2.new(1, 0),
 		BackgroundColor3 = Color3.fromRGB(16, 17, 26),
 		BackgroundTransparency = 0.02,
 		Parent = root,
@@ -2002,7 +2005,8 @@ function LayoutVariants:_ensureNova()
 	local closeBtn = Helpers.CreateButton({
 		Name = "Close",
 		Size = UDim2.fromOffset(40, 40),
-		Position = UDim2.new(1, -52, 0, 14),
+		Position = UDim2.new(1, -16, 0, 14),
+		AnchorPoint = Vector2.new(1, 0),
 		Text = "×",
 		Font = Theme.FontBold,
 		TextSize = 20,
@@ -2261,7 +2265,8 @@ function LayoutVariants:_ensureVortex()
 	local clock = Helpers.CreateLabel({
 		Name = "Clock",
 		Size = UDim2.fromOffset(60, 20),
-		Position = UDim2.new(1, -110, 0, 34),
+		Position = UDim2.new(1, -16, 0, 34),
+		AnchorPoint = Vector2.new(1, 0),
 		Text = os.date("%H:%M"),
 		Font = Theme.FontBold,
 		TextSize = 11,
@@ -2684,7 +2689,8 @@ function LayoutVariants:_ensurePrism()
 	local rail = Helpers.CreateFrame({
 		Name = "SpineRail",
 		Size = UDim2.new(0, 280, 1, -120),
-		Position = UDim2.new(1, -310, 0, 90),
+		Position = UDim2.new(1, -16, 0, 90),
+		AnchorPoint = Vector2.new(1, 0),
 		BackgroundTransparency = 1,
 		Parent = root,
 	})
@@ -3044,7 +3050,8 @@ function LayoutVariants:_ensureEclipse()
         local clock = Helpers.CreateLabel({
                 Name = "Clock",
                 Size = UDim2.fromOffset(72, 20),
-                Position = UDim2.new(1, -126, 0, 14),
+                Position = UDim2.new(1, -16, 0, 14),
+		AnchorPoint = Vector2.new(1, 0),
                 Text = os.date("%H:%M"),
                 Font = Theme.FontBold,
                 TextSize = 12,
@@ -3365,6 +3372,21 @@ function LayoutVariants:_highlightEclipse(label: string)
 end
 
 
+
+function LayoutVariants:_hideAllAltShells()
+	-- Disable every alternate shell so none "stick" on top of Vaxorin/Classic.
+	if self._AltGui then
+		self._AltGui.Enabled = false
+	end
+	pcall(function() self:_setOrbitVisible(false) end)
+	pcall(function() self:_setAetherVisible(false) end)
+	pcall(function() self:_setNovaVisible(false) end)
+	pcall(function() self:_setVortexVisible(false) end)
+	pcall(function() self:_setPrismVisible(false) end)
+	pcall(function() self:_setEclipseVisible(false) end)
+	pcall(function() self:_setZenithVisible(false) end)
+end
+
 function LayoutVariants:SetMode(mode: string)
 	mode = ({
 		Vaxorin = "Vaxorin",
@@ -3376,39 +3398,23 @@ function LayoutVariants:SetMode(mode: string)
 		Vortex = "Vortex",
 		Prism = "Prism",
 		Eclipse = "Eclipse",
-		Compact = "Orbit",
 		Zenith = "Zenith",
-
+		Compact = "Orbit",
 	})[mode] or "Vaxorin"
+
 	local prev = self._Mode
 	self._Mode = mode
 	local w = self._Window
 
-	if (prev == "Minecraft" or prev == "Orbit" or prev == "Aether" or prev == "Nova" or prev == "Vortex" or prev == "Prism" or prev == "Eclipse")
-		and mode ~= "Minecraft" and mode ~= "Orbit" and mode ~= "Aether" and mode ~= "Nova" and mode ~= "Vortex" and mode ~= "Prism" and mode ~= "Eclipse" then
+	-- Always fully hide every alternate shell before applying the new mode.
+	-- This is what fixes Zenith (and others) sticking on screen.
+	if prev ~= mode then
 		self:_restorePagesToWindow()
-		if self._AltGui then
-			self._AltGui.Enabled = false
-		end
-		self:_setOrbitVisible(false)
-		self:_setAetherVisible(false)
-		self:_setNovaVisible(false)
-		self:_setVortexVisible(false)
-		self:_setPrismVisible(false)
-		self:_setEclipseVisible(false)
 	end
+	self:_hideAllAltShells()
+	self:_restoreClassicWindow()
 
-	if mode == "Vaxorin" then
-		self:_setEclipseVisible(false)
-		self:_setAetherVisible(false)
-		self:_setNovaVisible(false)
-		self:_setVortexVisible(false)
-		self:_setPrismVisible(false)
-		if self._AltGui then
-			self._AltGui.Enabled = false
-		end
-		self:_restorePagesToWindow()
-		self:_restoreClassicWindow()
+	local function showMainShell()
 		if w.Main then
 			w.Main.Visible = w._StartupComplete and w._Visible
 		end
@@ -3421,48 +3427,32 @@ function LayoutVariants:SetMode(mode: string)
 		if w.Pages then
 			w.Pages.Visible = true
 		end
-		return
 	end
 
-	if mode == "Classic" then
-		self:_setEclipseVisible(false)
-		self:_setAetherVisible(false)
-		self:_setNovaVisible(false)
-		self:_setVortexVisible(false)
-		self:_setPrismVisible(false)
-		if self._AltGui then
-			self._AltGui.Enabled = false
-		end
-		self:_restorePagesToWindow()
-		self:_applyClassicWindow()
-		if w.Main then
-			w.Main.Visible = w._StartupComplete and w._Visible
-		end
-		if w.TopBar then
-			w.TopBar.Visible = true
-		end
-		if w.Sidebar then
-			w.Sidebar.Visible = true
-		end
-		if w.Pages then
-			w.Pages.Visible = true
-		end
-		return
-	end
-
-	-- Minecraft
-	if mode == "Minecraft" then
-		self:_setEclipseVisible(false)
-		self:_setAetherVisible(false)
-		self:_setNovaVisible(false)
-		self:_setVortexVisible(false)
-		self:_setPrismVisible(false)
-		self:_restoreClassicWindow()
-		self:_setOrbitVisible(false)
+	local function hideMainShell()
 		w._Minimized = false
 		if w.Main then
 			w.Main.Visible = false
 		end
+	end
+
+	if mode == "Vaxorin" then
+		self:_restorePagesToWindow()
+		showMainShell()
+		return
+	end
+
+	if mode == "Classic" then
+		self:_restorePagesToWindow()
+		self:_applyClassicWindow()
+		showMainShell()
+		return
+	end
+
+	-- All remaining modes use an alternate ScreenGui
+	hideMainShell()
+
+	if mode == "Minecraft" then
 		if self._AltGui then
 			self._AltGui.Enabled = w._Visible ~= false
 		end
@@ -3471,152 +3461,54 @@ function LayoutVariants:SetMode(mode: string)
 		return
 	end
 
-	-- Orbit — unique vertical neon rail layout
 	if mode == "Orbit" then
-		self:_setEclipseVisible(false)
-		self:_setAetherVisible(false)
-		self:_setNovaVisible(false)
-		self:_setVortexVisible(false)
-		self:_setPrismVisible(false)
-		self:_restoreClassicWindow()
-		if self._AltGui then
-			self._AltGui.Enabled = false
-		end
-		w._Minimized = false
-		if w.Main then
-			w.Main.Visible = false
-		end
 		self:_ensureOrbit()
 		self:_setOrbitVisible(w._Visible ~= false)
 		self:SyncTabs()
 		return
 	end
 
-	-- Aether — unique asymmetric command-deck layout.
 	if mode == "Aether" then
-		self:_setEclipseVisible(false)
-		self:_setNovaVisible(false)
-		self:_setVortexVisible(false)
-		self:_setPrismVisible(false)
-		self:_restoreClassicWindow()
-		if self._AltGui then
-			self._AltGui.Enabled = false
-		end
-		w._Minimized = false
-		if w.Main then
-			w.Main.Visible = false
-		end
 		self:_ensureAether()
 		self:_setAetherVisible(w._Visible ~= false)
 		self:_syncAetherTabs()
 		return
 	end
 
-	-- Nova — unique floating-capsule layout with horizontal pill nav + crystal stage
 	if mode == "Nova" then
-		self:_setEclipseVisible(false)
-		self:_setAetherVisible(false)
-		self:_setVortexVisible(false)
-		self:_setPrismVisible(false)
-		self:_restoreClassicWindow()
-		if self._AltGui then
-			self._AltGui.Enabled = false
-		end
-		self:_setOrbitVisible(false)
-		w._Minimized = false
-		if w.Main then
-			w.Main.Visible = false
-		end
 		self:_ensureNova()
 		self:_setNovaVisible(w._Visible ~= false)
 		self:_syncNovaTabs()
 		return
 	end
 
-	-- Vortex — unique radial compass layout with fan-arranged tabs around a hub
 	if mode == "Vortex" then
-		self:_setEclipseVisible(false)
-		self:_setAetherVisible(false)
-		self:_setNovaVisible(false)
-		self:_setOrbitVisible(false)
-		self:_setPrismVisible(false)
-		self:_restoreClassicWindow()
-		if self._AltGui then
-			self._AltGui.Enabled = false
-		end
-		w._Minimized = false
-		if w.Main then
-			w.Main.Visible = false
-		end
 		self:_ensureVortex()
 		self:_setVortexVisible(w._Visible ~= false)
 		self:_syncVortexTabs()
 		return
 	end
-	-- Prism -- unique book-spine spectrum rail (content left, spines right).
+
 	if mode == "Prism" then
-		self:_setEclipseVisible(false)
-		self:_setAetherVisible(false)
-		self:_setNovaVisible(false)
-		self:_setVortexVisible(false)
-		self:_setOrbitVisible(false)
-		self:_restoreClassicWindow()
-		if self._AltGui then
-			self._AltGui.Enabled = false
-		end
-		w._Minimized = false
-		if w.Main then
-			w.Main.Visible = false
-		end
 		self:_ensurePrism()
 		self:_setPrismVisible(w._Visible ~= false)
 		self:_syncPrismTabs()
 		return
 	end
 
-	-- Eclipse -- unique eclipse monolith: timeline command rail + corona stage + top capsule
 	if mode == "Eclipse" then
-		self:_setAetherVisible(false)
-		self:_setNovaVisible(false)
-		self:_setVortexVisible(false)
-		self:_setPrismVisible(false)
-		self:_setOrbitVisible(false)
-		self:_restoreClassicWindow()
-		if self._AltGui then
-			self._AltGui.Enabled = false
-		end
-		w._Minimized = false
-		if w.Main then
-			w.Main.Visible = false
-		end
 		self:_ensureEclipse()
 		self:_setEclipseVisible(w._Visible ~= false)
 		self:_syncEclipseTabs()
 		return
 	end
 
-	-- Zenith — unique minimalist floating sidebar layout
 	if mode == "Zenith" then
-		self:_setEclipseVisible(false)
-		self:_setAetherVisible(false)
-		self:_setNovaVisible(false)
-		self:_setVortexVisible(false)
-		self:_setPrismVisible(false)
-		self:_setOrbitVisible(false)
-		self:_restoreClassicWindow()
-		if self._AltGui then
-			self._AltGui.Enabled = false
-		end
-		w._Minimized = false
-		if w.Main then
-			w.Main.Visible = false
-		end
 		self:_ensureZenith()
 		self:_setZenithVisible(w._Visible ~= false)
 		self:_syncZenithTabs()
 		return
 	end
-
 end
 
 function LayoutVariants:SetVisible(visible: boolean)
@@ -3811,7 +3703,8 @@ function LayoutVariants:_ensureZenith()
 	local closeBtn = Helpers.CreateButton({
 		Name = "Close",
 		Size = UDim2.fromOffset(40, 40),
-		Position = UDim2.new(1, -56, 0, 16),
+		Position = UDim2.new(1, -16, 0, 16),
+		AnchorPoint = Vector2.new(1, 0),
 		Text = "×",
 		Font = Theme.FontBold,
 		TextSize = 22,
@@ -3834,7 +3727,7 @@ end
 
 function LayoutVariants:_setZenithVisible(visible: boolean)
 	if self._ZenithGui then
-		self._ZenithGui.Enabled = visible
+		self._ZenithGui.Enabled = visible == true
 	end
 	if visible then
 		self:_mountZenithPages()
