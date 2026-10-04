@@ -1972,7 +1972,7 @@ function Window:_selectTab(tab: any)
 end
 
 function Window:SetLayout(mode: string)
-	local normalized = ({ Vaxorin = "Vaxorin", Classic = "Classic", Minecraft = "Minecraft", Orbit = "Orbit", Compact = "Orbit", Expanded = "Vaxorin" })[mode] or "Vaxorin"
+	local normalized = ({ Vaxorin = "Vaxorin", Classic = "Classic", Minecraft = "Minecraft", Orbit = "Orbit", Aether = "Aether", Nova = "Nova", Vortex = "Vortex", Prism = "Prism", Eclipse = "Eclipse", Compact = "Orbit", Expanded = "Vaxorin" })[mode] or "Vaxorin"
 	self._LayoutMode = normalized
 	if self._LayoutVariants then
 		self._LayoutVariants:SetMode(normalized)
@@ -2032,7 +2032,7 @@ function Window:_createOptionsTab()
 
 	visualSection:CreateDropdown({
 		Name = "Layout",
-		Options = { "Vaxorin", "Classic", "Minecraft", "Orbit" },
+		Options = { "Vaxorin", "Classic", "Minecraft", "Orbit", "Aether", "Nova", "Vortex", "Prism", "Eclipse" },
 		CurrentOption = self._LayoutMode,
 		Flag = "Vaxorin.Visual.Layout",
 		Callback = function(value)
@@ -2136,12 +2136,17 @@ function Window:_createOptionsTab()
 	featuresSection:CreateCard({ Title = "New component system", Content = "Cards, badges, progress, status, notices, stats, dividers and icon actions are now first-class elements." })
 	featuresSection:CreateStatus({ Title = "Interface", Content = "All systems operational" })
 	featuresSection:CreateProgress({ Title = "UI engine", CurrentValue = 1 })
-	featuresSection:CreateNotice({ Title = "Interface variants", Content = "Switch the entire shell between Vaxorin, the classic Minecraft-style category menu, and the inventory-inspired Minecraft skin." })
+	featuresSection:CreateNotice({ Title = "Interface variants", Content = "Switch the entire shell: Vaxorin, Classic, Minecraft, Orbit, Aether, Nova, Vortex, Prism, Eclipse." })
 	featuresSection:CreateStat({ Label = "Element modules", Value = "20+", Delta = "NEW" })
 	featuresSection:CreateDivider({})
-	featuresSection:CreateIconButton({ Text = "Preview Classic Interface", Callback = function() self:SetLayout("Classic") end })
-	featuresSection:CreateIconButton({ Text = "Preview Minecraft Interface", Callback = function() self:SetLayout("Minecraft") end })
-	featuresSection:CreateIconButton({ Text = "Preview Orbit Interface", Callback = function() self:SetLayout("Orbit") end })
+	featuresSection:CreateIconButton({ Text = "Preview Classic", Callback = function() self:SetLayout("Classic") end })
+	featuresSection:CreateIconButton({ Text = "Preview Minecraft", Callback = function() self:SetLayout("Minecraft") end })
+	featuresSection:CreateIconButton({ Text = "Preview Orbit", Callback = function() self:SetLayout("Orbit") end })
+	featuresSection:CreateIconButton({ Text = "Preview Aether", Callback = function() self:SetLayout("Aether") end })
+	featuresSection:CreateIconButton({ Text = "Preview Nova", Callback = function() self:SetLayout("Nova") end })
+	featuresSection:CreateIconButton({ Text = "Preview Vortex", Callback = function() self:SetLayout("Vortex") end })
+	featuresSection:CreateIconButton({ Text = "Preview Prism", Callback = function() self:SetLayout("Prism") end })
+	featuresSection:CreateIconButton({ Text = "Preview Eclipse", Callback = function() self:SetLayout("Eclipse") end })
 
 	local generalSection = optionsTab:CreateSection("🧩 General")
 	generalSection:CreateParagraph({
@@ -2653,7 +2658,7 @@ function Window:SetVisible(visible: boolean)
 	if visible then
 		if self.Main then
 			-- Main shell is used by Vaxorin and Classic; Minecraft uses its own ScreenGui.
-			local useMain = self._LayoutMode ~= "Minecraft" and self._LayoutMode ~= "Orbit"
+			local useMain = self._LayoutMode == "Vaxorin" or self._LayoutMode == "Classic"
 			self.Main.Visible = self._StartupComplete and useMain
 		end
 
