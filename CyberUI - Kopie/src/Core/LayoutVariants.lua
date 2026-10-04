@@ -102,6 +102,38 @@ local function tabDisplayName(tab: any): string
 	return "Tab"
 end
 
+
+local function placeCloseButton(parent: Instance, w: any, opts: any?): TextButton
+	opts = opts or {}
+	local btn = Instance.new("TextButton")
+	btn.Name = opts.Name or "Close"
+	btn.Size = opts.Size or UDim2.fromOffset(42, 42)
+	btn.AnchorPoint = Vector2.new(1, 0)
+	btn.Position = opts.Position or UDim2.new(1, -20, 0, 20)
+	btn.BackgroundColor3 = opts.BackgroundColor3 or Color3.fromRGB(22, 24, 34)
+	btn.BackgroundTransparency = opts.BackgroundTransparency or 0.08
+	btn.BorderSizePixel = 0
+	btn.AutoButtonColor = false
+	btn.Text = "×"
+	btn.Font = Theme.FontBold
+	btn.TextSize = opts.TextSize or 22
+	btn.TextColor3 = opts.TextColor3 or Color3.fromRGB(235, 235, 245)
+	btn.TextXAlignment = Enum.TextXAlignment.Center
+	btn.TextYAlignment = Enum.TextYAlignment.Center
+	btn.ZIndex = opts.ZIndex or 50
+	btn.Parent = parent
+	Helpers.Corner(btn, opts.Corner or 12)
+	if opts.StrokeColor then
+		Helpers.Stroke(btn, opts.StrokeColor, 1)
+	end
+	btn.MouseButton1Click:Connect(function()
+		if w and w.SetVisible then
+			w:SetVisible(false)
+		end
+	end)
+	return btn
+end
+
 function LayoutVariants.new(window: any, initial: string): any
 	local self = setmetatable({
 		_Window = window,
@@ -459,14 +491,16 @@ function LayoutVariants:_buildMinecraftShell()
 	local closeBtn = Helpers.CreateButton({
 		Name = "Close",
 		Size = UDim2.fromOffset(40, 40),
-		Position = UDim2.new(1, -16, 0, 16),
+		Position = UDim2.new(1, -20, 0, 20),
 		AnchorPoint = Vector2.new(1, 0),
 		Text = "×",
+		TextXAlignment = Enum.TextXAlignment.Center,
 		Font = Theme.FontBold,
 		TextSize = 22,
 		TextColor3 = Color3.fromRGB(230, 230, 240),
 		BackgroundColor3 = Color3.fromRGB(22, 24, 32),
 		BackgroundTransparency = 0.1,
+		ZIndex = 50,
 		Parent = root,
 	})
 	Helpers.Corner(closeBtn, 12)
@@ -483,8 +517,9 @@ function LayoutVariants:_buildMinecraftShell()
 	-- HOME
 	local homeScroll = Instance.new("ScrollingFrame")
 	homeScroll.Name = "HomeScroll"
-	homeScroll.Size = UDim2.new(1, -48, 1, -110)
-	homeScroll.Position = UDim2.fromOffset(24, 20)
+	homeScroll.Size = UDim2.new(1, -80, 1, -120)
+	homeScroll.Position = UDim2.new(0.5, 0, 0, 24)
+	homeScroll.AnchorPoint = Vector2.new(0.5, 0)
 	homeScroll.BackgroundTransparency = 1
 	homeScroll.BorderSizePixel = 0
 	homeScroll.ScrollBarThickness = 4
@@ -563,8 +598,9 @@ function LayoutVariants:_buildMinecraftShell()
 	-- Content (above dock)
 	local contentHost = Helpers.CreateFrame({
 		Name = "ContentHost",
-		Size = UDim2.new(1, -48, 1, -110),
-		Position = UDim2.fromOffset(24, 20),
+		Size = UDim2.new(1, -80, 1, -120),
+		Position = UDim2.new(0.5, 0, 0, 24),
+		AnchorPoint = Vector2.new(0.5, 0),
 		BackgroundColor3 = Color3.fromRGB(12, 14, 20),
 		BackgroundTransparency = 0.08,
 		Visible = false,
@@ -832,8 +868,8 @@ end
 function LayoutVariants:_buildDock(root: Frame)
 	local dock = Helpers.CreateFrame({
 		Name = "Dock",
-		Size = UDim2.fromOffset(620, 58),
-		Position = UDim2.new(0.5, 0, 1, -78),
+		Size = UDim2.fromOffset(680, 58),
+		Position = UDim2.new(0.5, 0, 1, -80),
 		AnchorPoint = Vector2.new(0.5, 0),
 		BackgroundColor3 = Color3.fromRGB(14, 16, 22),
 		BackgroundTransparency = 0.06,
@@ -881,6 +917,7 @@ function LayoutVariants:_buildDock(root: Frame)
 		BackgroundColor3 = Color3.fromRGB(40, 44, 58),
 		BackgroundTransparency = 0.2,
 		LayoutOrder = 2,
+		ZIndex = 50,
 		Parent = dock,
 	})
 	Helpers.Corner(homeBtn, 12)
@@ -891,7 +928,7 @@ function LayoutVariants:_buildDock(root: Frame)
 
 	local tabScroll = Instance.new("ScrollingFrame")
 	tabScroll.Name = "DockTabs"
-	tabScroll.Size = UDim2.fromOffset(400, 42)
+	tabScroll.Size = UDim2.fromOffset(460, 42)
 	tabScroll.BackgroundTransparency = 1
 	tabScroll.BorderSizePixel = 0
 	tabScroll.ScrollBarThickness = 0
@@ -900,13 +937,15 @@ function LayoutVariants:_buildDock(root: Frame)
 	tabScroll.AutomaticCanvasSize = Enum.AutomaticSize.X
 	tabScroll.ClipsDescendants = true
 	tabScroll.LayoutOrder = 3
-	tabScroll.Parent = dock
+	tabScroll.ZIndex = 50,
+		Parent = dock
 
 	local tabRow = Helpers.CreateFrame({
 		Name = "Row",
 		Size = UDim2.new(0, 0, 1, 0),
 		AutomaticSize = Enum.AutomaticSize.X,
 		BackgroundTransparency = 1,
+		ZIndex = 50,
 		Parent = tabScroll,
 	})
 	local rowLayout = Instance.new("UIListLayout")
@@ -914,7 +953,8 @@ function LayoutVariants:_buildDock(root: Frame)
 	rowLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 	rowLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 	rowLayout.Padding = UDim.new(0, 6)
-	rowLayout.Parent = tabRow
+	rowLayout.ZIndex = 50,
+		Parent = tabRow
 	self._DockTabRow = tabRow
 
 	-- keep canvas content centered when fewer tabs than width
@@ -932,12 +972,14 @@ function LayoutVariants:_buildDock(root: Frame)
 		Name = "DockClose",
 		Size = UDim2.fromOffset(40, 40),
 		Text = "×",
+		TextXAlignment = Enum.TextXAlignment.Center,
 		Font = Theme.FontBold,
 		TextSize = 20,
 		TextColor3 = Color3.fromRGB(230, 230, 240),
 		BackgroundColor3 = Color3.fromRGB(40, 28, 32),
 		BackgroundTransparency = 0.25,
 		LayoutOrder = 4,
+		ZIndex = 50,
 		Parent = dock,
 	})
 	Helpers.Corner(dockClose, 12)
@@ -984,6 +1026,7 @@ function LayoutVariants:SyncTabs()
 			Font = Theme.Font,
 			TextSize = 12,
 			TextColor3 = Color3.fromRGB(200, 205, 220),
+			TextXAlignment = Enum.TextXAlignment.Center,
 			BackgroundColor3 = Color3.fromRGB(28, 30, 40),
 			BackgroundTransparency = 0.25,
 			LayoutOrder = i,
@@ -1133,8 +1176,8 @@ function LayoutVariants:_ensureOrbit()
 		BackgroundTransparency = 0.08,
 		Parent = root,
 	})
-	rail.Position = UDim2.new(0, 18, 0.5, 0)
-	rail.Size = UDim2.fromOffset(72, 420)
+	rail.Position = UDim2.new(0, 28, 0.5, 0)
+	rail.Size = UDim2.fromOffset(84, 440)
 	Helpers.Corner(rail, 24)
 	local railStroke = Helpers.Stroke(rail, Color3.fromRGB(120, 80, 255), 1)
 	railStroke.Transparency = 0.35
@@ -1180,8 +1223,8 @@ function LayoutVariants:_ensureOrbit()
 	-- Floating stage (content)
 	local stage = Helpers.CreateFrame({
 		Name = "Stage",
-		Size = UDim2.new(1, -140, 1, -48),
-		Position = UDim2.fromOffset(120, 24),
+		Size = UDim2.new(1, -160, 1, -56),
+		Position = UDim2.fromOffset(132, 28),
 		BackgroundColor3 = Color3.fromRGB(12, 14, 22),
 		BackgroundTransparency = 0.06,
 		Parent = root,
@@ -1205,9 +1248,10 @@ function LayoutVariants:_ensureOrbit()
 	local closeBtn = Helpers.CreateButton({
 		Name = "Close",
 		Size = UDim2.fromOffset(40, 40),
-		Position = UDim2.new(1, -16, 0, 16),
+		Position = UDim2.new(1, -20, 0, 20),
 		AnchorPoint = Vector2.new(1, 0),
 		Text = "×",
+		TextXAlignment = Enum.TextXAlignment.Center,
 		Font = Theme.FontBold,
 		TextSize = 22,
 		TextColor3 = Color3.fromRGB(240, 240, 250),
@@ -1292,11 +1336,12 @@ function LayoutVariants:_syncOrbitTabs()
 		local letter = string.upper(string.sub(label, 1, 1))
 		local btn = Helpers.CreateButton({
 			Name = "Orb_" .. i,
-			Size = UDim2.fromOffset(48, 48),
+			Size = UDim2.fromOffset(52, 52),
 			Text = letter,
 			Font = Theme.FontBold,
 			TextSize = 16,
 			TextColor3 = Color3.fromRGB(210, 200, 255),
+			TextXAlignment = Enum.TextXAlignment.Center,
 			BackgroundColor3 = Color3.fromRGB(24, 22, 40),
 			BackgroundTransparency = 0.1,
 			LayoutOrder = i,
@@ -1405,7 +1450,7 @@ function LayoutVariants:_ensureAether()
 		Font = Theme.FontBold,
 		TextSize = 13,
 		TextColor3 = Color3.fromRGB(225, 232, 245),
-		TextXAlignment = Enum.TextXAlignment.Left,
+		TextXAlignment = Enum.TextXAlignment.Center,
 		Parent = top,
 	})
 
@@ -1417,7 +1462,7 @@ function LayoutVariants:_ensureAether()
 		Font = Theme.Font,
 		TextSize = 10,
 		TextColor3 = Color3.fromRGB(120, 132, 150),
-		TextXAlignment = Enum.TextXAlignment.Left,
+		TextXAlignment = Enum.TextXAlignment.Center,
 		Parent = top,
 	})
 
@@ -1441,7 +1486,7 @@ function LayoutVariants:_ensureAether()
 		Font = Theme.FontBold,
 		TextSize = 10,
 		TextColor3 = Color3.fromRGB(120, 220, 170),
-		TextXAlignment = Enum.TextXAlignment.Right,
+		TextXAlignment = Enum.TextXAlignment.Center,
 		Parent = top,
 	})
 
@@ -1453,7 +1498,7 @@ function LayoutVariants:_ensureAether()
 		Font = Theme.FontBold,
 		TextSize = 11,
 		TextColor3 = Color3.fromRGB(190, 198, 214),
-		TextXAlignment = Enum.TextXAlignment.Right,
+		TextXAlignment = Enum.TextXAlignment.Center,
 		Parent = top,
 	})
 
@@ -1484,7 +1529,7 @@ function LayoutVariants:_ensureAether()
 		Font = Theme.FontBold,
 		TextSize = 9,
 		TextColor3 = Color3.fromRGB(105, 118, 140),
-		TextXAlignment = Enum.TextXAlignment.Left,
+		TextXAlignment = Enum.TextXAlignment.Center,
 		Parent = rail,
 	})
 
@@ -1541,7 +1586,7 @@ function LayoutVariants:_ensureAether()
 		Font = Theme.FontBold,
 		TextSize = 9,
 		TextColor3 = Color3.fromRGB(105, 118, 140),
-		TextXAlignment = Enum.TextXAlignment.Left,
+		TextXAlignment = Enum.TextXAlignment.Center,
 		Parent = stageHeader,
 	})
 
@@ -1558,7 +1603,7 @@ function LayoutVariants:_ensureAether()
 	local side = Helpers.CreateFrame({
 		Name = "StatusPane",
 		Size = UDim2.new(0, 190, 1, -118),
-		Position = UDim2.new(1, -16, 0, 94),
+		Position = UDim2.new(1, -20, 0, 20),
 		AnchorPoint = Vector2.new(1, 0),
 		BackgroundColor3 = Color3.fromRGB(16, 17, 26),
 		BackgroundTransparency = 0.02,
@@ -1576,7 +1621,7 @@ function LayoutVariants:_ensureAether()
 		Font = Theme.FontBold,
 		TextSize = 10,
 		TextColor3 = Color3.fromRGB(165, 175, 194),
-		TextXAlignment = Enum.TextXAlignment.Left,
+		TextXAlignment = Enum.TextXAlignment.Center,
 		Parent = side,
 	})
 
@@ -1598,7 +1643,7 @@ function LayoutVariants:_ensureAether()
 			Font = Theme.Font,
 			TextSize = 9,
 			TextColor3 = Color3.fromRGB(105, 118, 140),
-			TextXAlignment = Enum.TextXAlignment.Left,
+			TextXAlignment = Enum.TextXAlignment.Center,
 			Parent = card,
 		})
 		Helpers.CreateLabel({
@@ -1609,7 +1654,7 @@ function LayoutVariants:_ensureAether()
 			Font = Theme.FontBold,
 			TextSize = 12,
 			TextColor3 = Color3.fromRGB(230, 236, 246),
-			TextXAlignment = Enum.TextXAlignment.Left,
+			TextXAlignment = Enum.TextXAlignment.Center,
 			Parent = card,
 		})
 	end
@@ -1825,7 +1870,7 @@ function LayoutVariants:_ensureNova()
 		Font = Theme.FontBold,
 		TextSize = 11,
 		TextColor3 = Color3.fromRGB(80, 210, 230),
-		TextXAlignment = Enum.TextXAlignment.Left,
+		TextXAlignment = Enum.TextXAlignment.Center,
 		Parent = brandBar,
 	})
 
@@ -1849,7 +1894,7 @@ function LayoutVariants:_ensureNova()
 		Font = Theme.FontBold,
 		TextSize = 11,
 		TextColor3 = Color3.fromRGB(140, 190, 200),
-		TextXAlignment = Enum.TextXAlignment.Right,
+		TextXAlignment = Enum.TextXAlignment.Center,
 		Parent = brandBar,
 	})
 
@@ -1973,7 +2018,7 @@ function LayoutVariants:_ensureNova()
 		Font = Theme.FontBold,
 		TextSize = 10,
 		TextColor3 = Color3.fromRGB(80, 220, 180),
-		TextXAlignment = Enum.TextXAlignment.Left,
+		TextXAlignment = Enum.TextXAlignment.Center,
 		Parent = status,
 	})
 
@@ -1997,7 +2042,7 @@ function LayoutVariants:_ensureNova()
 		Font = Theme.Font,
 		TextSize = 10,
 		TextColor3 = Color3.fromRGB(140, 180, 200),
-		TextXAlignment = Enum.TextXAlignment.Right,
+		TextXAlignment = Enum.TextXAlignment.Center,
 		Parent = status,
 	})
 
@@ -2005,7 +2050,7 @@ function LayoutVariants:_ensureNova()
 	local closeBtn = Helpers.CreateButton({
 		Name = "Close",
 		Size = UDim2.fromOffset(40, 40),
-		Position = UDim2.new(1, -16, 0, 14),
+		Position = UDim2.new(1, -20, 0, 20),
 		AnchorPoint = Vector2.new(1, 0),
 		Text = "×",
 		Font = Theme.FontBold,
@@ -2085,6 +2130,7 @@ function LayoutVariants:_syncNovaTabs()
 			Font = Theme.FontBold,
 			TextSize = 12,
 			TextColor3 = Color3.fromRGB(160, 200, 210),
+			TextXAlignment = Enum.TextXAlignment.Center,
 			BackgroundColor3 = Color3.fromRGB(16, 28, 36),
 			BackgroundTransparency = 0.2,
 			LayoutOrder = i,
@@ -2232,7 +2278,7 @@ function LayoutVariants:_ensureVortex()
 		Font = Theme.FontBold,
 		TextSize = 13,
 		TextColor3 = Color3.fromRGB(205, 175, 255),
-		TextXAlignment = Enum.TextXAlignment.Left,
+		TextXAlignment = Enum.TextXAlignment.Center,
 		Parent = root,
 	}).ZIndex = 3
 
@@ -2244,7 +2290,7 @@ function LayoutVariants:_ensureVortex()
 		Font = Theme.Font,
 		TextSize = 10,
 		TextColor3 = Color3.fromRGB(140, 122, 190),
-		TextXAlignment = Enum.TextXAlignment.Left,
+		TextXAlignment = Enum.TextXAlignment.Center,
 		Parent = root,
 	}).ZIndex = 3
 
@@ -2256,7 +2302,7 @@ function LayoutVariants:_ensureVortex()
 		Font = Theme.FontBold,
 		TextSize = 11,
 		TextColor3 = Color3.fromRGB(230, 200, 255),
-		TextXAlignment = Enum.TextXAlignment.Left,
+		TextXAlignment = Enum.TextXAlignment.Center,
 		Parent = root,
 	})
 	self._VortexActiveLabel.ZIndex = 3
@@ -2265,13 +2311,13 @@ function LayoutVariants:_ensureVortex()
 	local clock = Helpers.CreateLabel({
 		Name = "Clock",
 		Size = UDim2.fromOffset(60, 20),
-		Position = UDim2.new(1, -16, 0, 34),
+		Position = UDim2.new(1, -20, 0, 20),
 		AnchorPoint = Vector2.new(1, 0),
 		Text = os.date("%H:%M"),
 		Font = Theme.FontBold,
 		TextSize = 11,
 		TextColor3 = Color3.fromRGB(190, 175, 225),
-		TextXAlignment = Enum.TextXAlignment.Right,
+		TextXAlignment = Enum.TextXAlignment.Center,
 		Parent = root,
 	})
 	clock.ZIndex = 3
@@ -2448,6 +2494,7 @@ function LayoutVariants:_syncVortexTabs()
 			Font = Theme.FontBold,
 			TextSize = 17,
 			TextColor3 = Color3.fromRGB(222, 205, 255),
+			TextXAlignment = Enum.TextXAlignment.Center,
 			BackgroundColor3 = Color3.fromRGB(22, 16, 36),
 			BackgroundTransparency = 0.08,
 			Parent = self._VortexRoot,
@@ -2613,7 +2660,7 @@ function LayoutVariants:_ensurePrism()
 		Font = Theme.FontBold,
 		TextSize = 13,
 		TextColor3 = Color3.fromRGB(235, 225, 250),
-		TextXAlignment = Enum.TextXAlignment.Left,
+		TextXAlignment = Enum.TextXAlignment.Center,
 		Parent = header,
 	})
 
@@ -2625,7 +2672,7 @@ function LayoutVariants:_ensurePrism()
 		Font = Theme.Font,
 		TextSize = 10,
 		TextColor3 = Color3.fromRGB(150, 140, 175),
-		TextXAlignment = Enum.TextXAlignment.Left,
+		TextXAlignment = Enum.TextXAlignment.Center,
 		Parent = header,
 	})
 
@@ -2649,7 +2696,7 @@ function LayoutVariants:_ensurePrism()
 		Font = Theme.FontBold,
 		TextSize = 11,
 		TextColor3 = Color3.fromRGB(200, 190, 225),
-		TextXAlignment = Enum.TextXAlignment.Right,
+		TextXAlignment = Enum.TextXAlignment.Center,
 		Parent = header,
 	})
 
@@ -2689,7 +2736,7 @@ function LayoutVariants:_ensurePrism()
 	local rail = Helpers.CreateFrame({
 		Name = "SpineRail",
 		Size = UDim2.new(0, 280, 1, -120),
-		Position = UDim2.new(1, -16, 0, 90),
+		Position = UDim2.new(1, -20, 0, 20),
 		AnchorPoint = Vector2.new(1, 0),
 		BackgroundTransparency = 1,
 		Parent = root,
@@ -3031,7 +3078,7 @@ function LayoutVariants:_ensureEclipse()
                 Font = Theme.FontBold,
                 TextSize = 11,
                 TextColor3 = Color3.fromRGB(255, 228, 180),
-                TextXAlignment = Enum.TextXAlignment.Left,
+                TextXAlignment = Enum.TextXAlignment.Center,
                 Parent = topCapsule,
         })
 
@@ -3043,20 +3090,20 @@ function LayoutVariants:_ensureEclipse()
                 Font = Theme.FontBold,
                 TextSize = 10,
                 TextColor3 = Color3.fromRGB(255, 200, 130),
-                TextXAlignment = Enum.TextXAlignment.Left,
+                TextXAlignment = Enum.TextXAlignment.Center,
                 Parent = topCapsule,
         })
 
         local clock = Helpers.CreateLabel({
                 Name = "Clock",
                 Size = UDim2.fromOffset(72, 20),
-                Position = UDim2.new(1, -16, 0, 14),
+                Position = UDim2.new(1, -20, 0, 20),
 		AnchorPoint = Vector2.new(1, 0),
                 Text = os.date("%H:%M"),
                 Font = Theme.FontBold,
                 TextSize = 12,
                 TextColor3 = Color3.fromRGB(230, 210, 180),
-                TextXAlignment = Enum.TextXAlignment.Right,
+                TextXAlignment = Enum.TextXAlignment.Center,
                 Parent = topCapsule,
         })
         self._EclipseClock = clock
@@ -3703,7 +3750,7 @@ function LayoutVariants:_ensureZenith()
 	local closeBtn = Helpers.CreateButton({
 		Name = "Close",
 		Size = UDim2.fromOffset(40, 40),
-		Position = UDim2.new(1, -16, 0, 16),
+		Position = UDim2.new(1, -20, 0, 20),
 		AnchorPoint = Vector2.new(1, 0),
 		Text = "×",
 		Font = Theme.FontBold,
@@ -3786,6 +3833,7 @@ function LayoutVariants:_syncZenithTabs()
 			Font = Theme.FontBold,
 			TextSize = 18,
 			TextColor3 = Color3.fromRGB(100, 200, 255),
+			TextXAlignment = Enum.TextXAlignment.Center,
 			BackgroundColor3 = Color3.fromRGB(8, 16, 28),
 			BackgroundTransparency = 0.3,
 			LayoutOrder = i,
