@@ -1442,60 +1442,49 @@ BF.getAvailableStatPoints = function()
 end
 
 BF.getIslandForLevel = function(level)
-    local candidates = {}
-    for _, island in ipairs(islands) do
-        if level >= island.Min and level <= island.Max then
-            if island.Pos and island.Pos.Magnitude > 0.1 then
-                table.insert(candidates, island)
-            end
+    if config.bossPriority then
+        local bossEnemy, bossIsland = BF.findAnyPriorityBoss(level)
+        if bossEnemy and bossIsland then
+            return bossIsland
         end
     end
-    if #candidates == 0 then return islands[#islands] end
 
     local bossCandidates, normalCandidates = {}, {}
-    for _, island in ipairs(candidates) do
-        if island.isBoss then
-            table.insert(bossCandidates, island)
-        else
-            table.insert(normalCandidates, island)
-        end
-    end
-
-    -- Boss Priority: only use boss island if that boss is actually alive
-    if config.bossPriority and #bossCandidates > 0 then
-        for _, island in ipairs(bossCandidates) do
-            local alive = false
-            pcall(function()
-                alive = BF.findBossInWorkspace(island) ~= nil
-            end)
-            if alive then
-                return island
+    for _, island in ipairs(islands) do
+        if island.Pos and island.Pos.Magnitude > 0.1 and level >= island.Min and level <= island.Max then
+            if island.isBoss then
+                table.insert(bossCandidates, island)
+            else
+                table.insert(normalCandidates, island)
             end
         end
-        -- boss not spawned -> farm normals for this level
-        if #normalCandidates > 0 then
-            table.sort(normalCandidates, function(a, b)
-                if a.Max ~= b.Max then return a.Max > b.Max end
-                return a.Min > b.Min
-            end)
-            return normalCandidates[1]
-        end
-        return bossCandidates[1]
     end
 
-    local selectedList = #normalCandidates > 0 and normalCandidates or bossCandidates
-    table.sort(selectedList, function(a, b)
-        if a.Max ~= b.Max then return a.Max > b.Max end
-        return a.Min > b.Min
-    end)
-    return selectedList[1]
-end
+    local function bestOf(list)
+        if not list or #list == 0 then return nil end
+        table.sort(list, function(a, b)
+            if a.Max ~= b.Max then return a.Max > b.Max end
+            return a.Min > b.Min
+        end)
+        return list[1]
+    end
 
--- TrackedQuestFrame = has quest; gone = no quest / completed
--- Text: TrackedQuestFrame.Frame.header.textLabel ContentText e.g. "Defeat 8 Brutes"
-BF._questCacheAt = 0
-BF._questCacheHas = false
-BF._questCacheLabel = nil
+    if #normalCandidates > 0 then return bestOf(normalCandidates) end
+    if #bossCandidates > 0 then return bestOf(bossCandidates) end
+
+    -- nearest normal by level
+    local best, score = nil, math.huge
+    for _, island in ipairs(islands) do
+        if not island.isBoss and island.Pos and island.Pos.Magnitude > 0.1 then
+            local s = 0
+            if level < island.Min then s = island.Min - level + 1000
+            elseif level > island.Max then s = level - island.Max
+            end
+            if s < score then score = s best = island end
+        end
+    end
+    return best or islands[#islands]
+end
 
 BF.getTrackedQuestLabel = function()
     local pg = LocalPlayer:FindFirstChild("PlayerGui")
@@ -1563,6 +1552,14 @@ BF.resolveFarmPatterns = function(island, questType)
 end
 
 BF.resolveFarmIsland = function(level)
+    -- Live boss always wins when Boss Priority is on
+    if config.bossPriority then
+        local bossEnemy, bossIsland = BF.findAnyPriorityBoss(level)
+        if bossEnemy and bossIsland then
+            return bossIsland
+        end
+    end
+
     local island = BF.getIslandForLevel(level)
     if not BF.hasActiveQuest() then
         return island
@@ -1573,22 +1570,37 @@ BF.resolveFarmIsland = function(level)
         return island
     end
     local p = string.lower(fromQuest[1])
+    local matchedInRange, matchedAny = nil, nil
     for _, isl in ipairs(islands) do
+        local hit = false
         for _, ep in ipairs(isl.EnemyPatterns or {}) do
             local epl = string.lower(ep)
             if string.find(epl, p, 1, true) or string.find(p, epl, 1, true) then
-                return isl
+                hit = true
+                break
             end
         end
-        for _, ep in ipairs(isl.BossPatterns or {}) do
-            local epl = string.lower(ep)
-            if string.find(epl, p, 1, true) or string.find(p, epl, 1, true) then
-                return isl
+        if not hit then
+            for _, ep in ipairs(isl.BossPatterns or {}) do
+                local epl = string.lower(ep)
+                if string.find(epl, p, 1, true) or string.find(p, epl, 1, true) then
+                    hit = true
+                    break
+                end
+            end
+        end
+        if hit then
+            matchedAny = matchedAny or isl
+            if level >= isl.Min and level <= isl.Max then
+                matchedInRange = isl
+                break
             end
         end
     end
+    if matchedInRange then return matchedInRange end
     return island
 end
+
 
 BF.getPatternsFromQuestText = function(text, fallbackPatterns)
     text = string.lower(tostring(text or ""))
@@ -1625,25 +1637,78 @@ end
 -- BOSS DETECTION
 -- =============================================
 BF.findBossInWorkspace = function(island)
-    if not island.isBoss then return nil end
+    if not island then return nil end
+    local patterns = island.BossPatterns
+    if not patterns or #patterns == 0 then
+        if island.isBoss and island.Name then
+            patterns = { island.Name }
+        else
+            return nil
+        end
+    end
     local container = Workspace:FindFirstChild("Enemies")
     if not container then return nil end
+    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    local best, bestDist = nil, math.huge
     for _, enemy in ipairs(container:GetChildren()) do
         if enemy:IsA("Model") then
             local humanoid = enemy:FindFirstChildOfClass("Humanoid")
-            if humanoid and humanoid.Health > 0 then
-                if enemy:GetAttribute("isBoss") == true then return enemy end
-                for _, pattern in ipairs(island.BossPatterns) do
-                    if enemy.Name:lower():find(pattern:lower()) then return enemy end
+            local root = enemy:FindFirstChild("HumanoidRootPart")
+            if humanoid and root and humanoid.Health > 0 then
+                local lower = string.lower(enemy.Name)
+                local matched = false
+                for _, pattern in ipairs(patterns) do
+                    local p = string.lower(tostring(pattern or ""))
+                    if p ~= "" and string.find(lower, p, 1, true) then
+                        matched = true
+                        break
+                    end
+                end
+                if matched then
+                    local d = hrp and (root.Position - hrp.Position).Magnitude or 0
+                    if d < bestDist then
+                        bestDist = d
+                        best = enemy
+                    end
                 end
             end
         end
     end
-    return nil
+    return best
 end
 
 BF.bossExists = function(island)
     return BF.findBossInWorkspace(island) ~= nil
+end
+
+-- Any boss for this level (or close) that is currently alive
+BF.findAnyPriorityBoss = function(level)
+    level = level or BF.getPlayerLevel()
+    local container = Workspace:FindFirstChild("Enemies")
+    if not container then return nil, nil end
+    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    local bestEnemy, bestIsland, bestDist = nil, nil, math.huge
+
+    for _, island in ipairs(islands) do
+        if island.isBoss and island.BossPatterns and #island.BossPatterns > 0 then
+            -- allow slight level slack so we still hunt at edges
+            local lo = (island.Min or 0) - 5
+            local hi = (island.Max or 9999) + 15
+            if level >= lo and level <= hi then
+                local enemy = BF.findBossInWorkspace(island)
+                if enemy then
+                    local root = enemy:FindFirstChild("HumanoidRootPart")
+                    local d = (hrp and root) and (root.Position - hrp.Position).Magnitude or 0
+                    if d < bestDist then
+                        bestDist = d
+                        bestEnemy = enemy
+                        bestIsland = island
+                    end
+                end
+            end
+        end
+    end
+    return bestEnemy, bestIsland
 end
 
 BF.getDesiredQuestType = function(island)
@@ -3543,7 +3608,7 @@ BF.startFarm = function()
             if level ~= currentLevel then
                 currentLevel = level
                 lastLevelForStats = level
-                if not BF.hasActiveQuest() then
+                                if not BF.hasActiveQuest() then
                     lockedEnemy = nil
                     heightLocked = false
                     isBossTarget = false
@@ -3557,15 +3622,7 @@ BF.startFarm = function()
                         BF.notifyUser("New Island", "Now farming: " .. island.Name)
                     end
                 else
-                    BF.notifyUser("Level Up", "Finishing current quest first", 3)
-                end
-                -- keep ESP / fruit scan alive across level-ups
-                if config.enemyEspEnabled and not BF.enemyEspRunning then
-                    pcall(function() BF.startEnemyEsp(true) end)
-                end
-                if (config.fruitNotifier or config.fruitAutoCollect or config.fruitEspEnabled)
-                    and not BF.fruitNotifierRunning then
-                    pcall(BF.startFruitNotifier)
+                                        BF.notifyUser("Level Up", "Finishing current quest first", 3)
                 end
             end
 
@@ -3630,15 +3687,8 @@ BF.startFarm = function()
                         hrp.AssemblyAngularVelocity = Vector3.zero
                     end
                 end)
-                                local espWas = config.enemyEspEnabled or BF.enemyEspRunning
-                if BF.enemyEspRunning then
-                    BF.enemyEspRunning = false
-                    if BF.enemyEspTask then
-                        pcall(function() task.cancel(BF.enemyEspTask) end)
-                        BF.enemyEspTask = nil
-                    end
-                    pcall(BF.clearEnemyEsp)
-                end
+                                local espWas = BF.enemyEspRunning
+                if espWas then pcall(BF.stopEnemyEsp) end
                 task.wait(0.45)
 
                 local desiredType = "normal"
@@ -3656,9 +3706,8 @@ BF.startFarm = function()
                     BF.invalidateQuestCache()
                     task.wait(0.6)
                 end
-                if espWas then
-                    config.enemyEspEnabled = true
-                    pcall(function() BF.startEnemyEsp(true) end)
+                if espWas and config.enemyEspEnabled then
+                    pcall(BF.startEnemyEsp)
                 end
                 state = "COMBAT"
                 continue
@@ -3673,25 +3722,35 @@ BF.startFarm = function()
                 -- after target detection has had a chance to find the configured mob.
                                 
                 local bossEnemy = nil
-                if island.isBoss then bossEnemy = BF.findBossInWorkspace(island) end
-                -- no AbandonQuest mid-run
+                if config.bossPriority then
+                    local anyBoss, anyIsland = BF.findAnyPriorityBoss(level)
+                    if anyBoss then
+                        bossEnemy = anyBoss
+                        if anyIsland then island = anyIsland end
+                    end
+                end
+                if not bossEnemy and island.isBoss then
+                    bossEnemy = BF.findBossInWorkspace(island)
+                end
 
                 if bossEnemy and bossEnemy.Parent and bossEnemy:FindFirstChildOfClass("Humanoid")
                     and bossEnemy:FindFirstChildOfClass("Humanoid").Health > 0 then
                     lockedEnemy = bossEnemy
                     isBossTarget = true
+                    currentQuestType = "boss"
+                    if island.BossQuest and not BF.hasActiveQuest() then
+                        pcall(function()
+                            BF.acceptQuestWrapper(island.BossQuest, { allowStack = false })
+                        end)
+                    end
                 else
                     isBossTarget = false
-                    local patternInfo = BF.resolveFarmPatterns(island, "normal")
-                    if not patternInfo or not patternInfo.patterns or #(patternInfo.patterns or {}) == 0 then
-                        patternInfo = { patterns = island.EnemyPatterns or {}, includeBossAttr = false }
-                    end
+                    local patternInfo = BF.resolveFarmPatterns(island, currentQuestType)
                     local allTargets = BF.getMatchingEnemies(island, patternInfo)
                     if #allTargets == 0 then
                         lockedEnemy = nil
-                        state = "ISLAND"
-                        BF.lastIslandName = ""
-                        task.wait(0.25)
+                        state = "PATROL"
+                        task.wait(0.15)
                         continue
                     end
 
@@ -3799,7 +3858,16 @@ BF.startFarm = function()
                 end
 
                 local bossEnemy = nil
-                if island.isBoss then bossEnemy = BF.findBossInWorkspace(island) end
+                if config.bossPriority then
+                    local anyBoss, anyIsland = BF.findAnyPriorityBoss(level)
+                    if anyBoss then
+                        bossEnemy = anyBoss
+                        if anyIsland then island = anyIsland end
+                    end
+                end
+                if not bossEnemy and island.isBoss then
+                    bossEnemy = BF.findBossInWorkspace(island)
+                end
                 if bossEnemy then
                     lockedEnemy = bossEnemy
                     isBossTarget = true
@@ -4572,183 +4640,26 @@ BF.setupRespawnRecovery = function()
 end
 
 
--- =============================================
--- ENEMY ESP (Highlight through walls + name/HP)
--- =============================================
-BF.enemyEspRunning = false
-BF.enemyEspTask = nil
-BF._enemyEspFolder = nil
-BF._enemyEspMap = {}
-
-BF.ensureEnemyEspFolder = function()
-    local pg = LocalPlayer:FindFirstChild("PlayerGui")
-    if not pg then return nil end
-    local f = pg:FindFirstChild("BF_EnemyESP")
-    if not f then
-        f = Instance.new("Folder")
-        f.Name = "BF_EnemyESP"
-        f.Parent = pg
-    end
-    BF._enemyEspFolder = f
-    return f
-end
-
-BF.clearEnemyEsp = function()
-    for _, entry in pairs(BF._enemyEspMap or {}) do
-        pcall(function()
-            if entry.hl then entry.hl:Destroy() end
-            if entry.bb then entry.bb:Destroy() end
-        end)
-    end
-    BF._enemyEspMap = {}
-    if BF._enemyEspFolder then
-        pcall(function() BF._enemyEspFolder:ClearAllChildren() end)
-    end
-end
-
-BF.updateEnemyEsp = function()
-    if not config.enemyEspEnabled then return end
-    local folder = BF.ensureEnemyEspFolder()
-    if not folder then return end
-
-    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    local maxDist = config.enemyEspMaxDist or 2000
-    local enemiesFolder = Workspace:FindFirstChild("Enemies")
-    if not enemiesFolder then return end
-
-    local seen = {}
-    for _, enemy in ipairs(enemiesFolder:GetChildren()) do
-        if enemy:IsA("Model") then
-            local hum = enemy:FindFirstChildOfClass("Humanoid")
-            local root = enemy:FindFirstChild("HumanoidRootPart")
-            if hum and root and hum.Health > 0 then
-                local dist = hrp and (root.Position - hrp.Position).Magnitude or 0
-                if dist <= maxDist then
-                    seen[enemy] = true
-                    local isBoss = enemy:GetAttribute("isBoss") == true
-                        or string.find(string.lower(enemy.Name), "%[boss%]")
-                    local fillColor = isBoss and Color3.fromRGB(255, 70, 70) or Color3.fromRGB(70, 180, 255)
-                    local outlineColor = isBoss and Color3.fromRGB(255, 180, 80) or Color3.fromRGB(200, 230, 255)
-
-                    local entry = BF._enemyEspMap[enemy]
-                    if not entry or not entry.hl or not entry.hl.Parent then
-                        local hl = Instance.new("Highlight")
-                        hl.Name = "BF_EnemyHL"
-                        hl.Adornee = enemy
-                        hl.FillColor = fillColor
-                        hl.OutlineColor = outlineColor
-                        hl.FillTransparency = 0.55
-                        hl.OutlineTransparency = 0
-                        hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-                        hl.Parent = folder
-
-                        local bb = Instance.new("BillboardGui")
-                        bb.Name = "BF_EnemyBB"
-                        bb.AlwaysOnTop = true
-                        bb.Size = UDim2.new(0, 150, 0, 42)
-                        bb.StudsOffset = Vector3.new(0, 3.2, 0)
-                        bb.MaxDistance = maxDist
-                        bb.Adornee = root
-                        bb.Parent = folder
-
-                        local nameLbl = Instance.new("TextLabel")
-                        nameLbl.Size = UDim2.new(1, 0, 0, 20)
-                        nameLbl.BackgroundTransparency = 1
-                        nameLbl.Font = Enum.Font.GothamBold
-                        nameLbl.TextSize = 13
-                        nameLbl.TextColor3 = isBoss and Color3.fromRGB(255, 120, 100) or Color3.fromRGB(220, 235, 255)
-                        nameLbl.TextStrokeTransparency = 0.4
-                        nameLbl.Text = enemy.Name
-                        nameLbl.Parent = bb
-
-                        local hpLbl = Instance.new("TextLabel")
-                        hpLbl.Size = UDim2.new(1, 0, 0, 18)
-                        hpLbl.Position = UDim2.new(0, 0, 0, 20)
-                        hpLbl.BackgroundTransparency = 1
-                        hpLbl.Font = Enum.Font.Gotham
-                        hpLbl.TextSize = 12
-                        hpLbl.TextColor3 = Color3.fromRGB(160, 255, 160)
-                        hpLbl.TextStrokeTransparency = 0.5
-                        hpLbl.Text = ""
-                        hpLbl.Parent = bb
-
-                        entry = { hl = hl, bb = bb, nameLbl = nameLbl, hpLbl = hpLbl }
-                        BF._enemyEspMap[enemy] = entry
-                    end
-
-                    if entry.hl then
-                        entry.hl.FillColor = fillColor
-                        entry.hl.OutlineColor = outlineColor
-                        entry.hl.Adornee = enemy
-                    end
-                    if entry.bb then
-                        entry.bb.Adornee = root
-                        entry.bb.MaxDistance = maxDist
-                    end
-                    if entry.nameLbl then
-                        if config.enemyEspShowName ~= false then
-                            entry.nameLbl.Text = enemy.Name
-                            entry.nameLbl.Visible = true
-                        else
-                            entry.nameLbl.Visible = false
-                        end
-                    end
-                    if entry.hpLbl then
-                        if config.enemyEspShowHealth ~= false then
-                            local hp = math.floor(hum.Health)
-                            local maxHp = math.floor(hum.MaxHealth)
-                            entry.hpLbl.Text = string.format("%d / %d  ·  %dm", hp, maxHp, math.floor(dist))
-                            entry.hpLbl.Visible = true
-                        else
-                            entry.hpLbl.Visible = false
-                        end
-                    end
-                end
-            end
-        end
-    end
-
-    for enemy, entry in pairs(BF._enemyEspMap) do
-        if not seen[enemy] then
-            pcall(function()
-                if entry.hl then entry.hl:Destroy() end
-                if entry.bb then entry.bb:Destroy() end
-            end)
-            BF._enemyEspMap[enemy] = nil
-        end
-    end
-end
-
-BF.startEnemyEsp = function(silent)
+BF.startEnemyEsp = function()
     if BF.enemyEspRunning then return end
     BF.enemyEspRunning = true
     config.enemyEspEnabled = true
     BF.enemyEspTask = task.spawn(function()
         while BF.enemyEspRunning do
-            if not config.enemyEspEnabled then break end
             pcall(BF.updateEnemyEsp)
-            task.wait(0.4)
+            task.wait(0.35)
         end
-        BF.enemyEspRunning = false
         BF.clearEnemyEsp()
     end)
-    if not silent then
-        BF.notifyUser("ESP", "Enemy ESP ON (through walls)", 2)
-    end
+    BF.notifyUser("ESP", "Enemy ESP ON (through walls)", 2)
 end
 
-BF.stopEnemyEsp = function(fromUi)
+BF.stopEnemyEsp = function()
     BF.enemyEspRunning = false
-    if BF.enemyEspTask then
-        pcall(function() task.cancel(BF.enemyEspTask) end)
-        BF.enemyEspTask = nil
-    end
+    config.enemyEspEnabled = false
+    if BF.enemyEspTask then pcall(function() task.cancel(BF.enemyEspTask) end) BF.enemyEspTask = nil end
     BF.clearEnemyEsp()
-    -- Only clear preference when user toggles off in UI
-    if fromUi then
-        config.enemyEspEnabled = false
-        BF.notifyUser("ESP", "Enemy ESP OFF", 2)
-    end
+    BF.notifyUser("ESP", "Enemy ESP OFF", 2)
 end
 
 -- =============================================
@@ -5191,12 +5102,7 @@ if useVaxorin and window then
         Flag = "ESP.Enemy",
         Save = true,
         Callback = function(v)
-            if v then
-                config.enemyEspEnabled = true
-                BF.startEnemyEsp()
-            else
-                BF.stopEnemyEsp(true)
-            end
+            if v then BF.startEnemyEsp() else BF.stopEnemyEsp() end
         end,
     })
     enemyEspSection:CreateToggle({
