@@ -85,10 +85,10 @@ local success, err = pcall(function()
             TopMost = true,
             HideCoreUI = true,
             ConfigurationSaving = {
-                    Enabled = true,
-                    FolderName = "Vaxorin",
-                    FileName = "Blox Fruits",
-                },
+                Enabled = true,
+                FolderName = "Vaxorin",
+                FileName = "Blox Fruits",
+            },
         })
         useVaxorin = true
     end
@@ -1094,8 +1094,7 @@ BF.updateFruitEspEntry = function(key, obj, pos, displayName)
     local folder = BF.ensureFruitEspFolder()
     if not folder then return end
     local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    local dist = hrp and math.floor((hrp.Position - pos).Magnitude + 0.5) or 0
-    local valuable = BF.isValuableFruit and BF.isValuableFruit(displayName)
+    local dist = hrp and math.floor((hrp.Position - pos).Magnitude) or 0
 
     local entry = BF._fruitEspMap[key]
     if not entry or not entry.bb or not entry.bb.Parent then
@@ -1103,88 +1102,39 @@ BF.updateFruitEspEntry = function(key, obj, pos, displayName)
         if not part and obj:IsA("Model") then
             part = obj:FindFirstChildWhichIsA("BasePart")
         end
-        local ownAnchor = false
         if not part then
             part = Instance.new("Part")
             part.Name = "BF_FruitEspAnchor"
             part.Anchored = true
             part.CanCollide = false
             part.Transparency = 1
-            part.Size = Vector3.new(0.2, 0.2, 0.2)
+            part.Size = Vector3.new(1, 1, 1)
             part.Position = pos
             part.Parent = folder
-            ownAnchor = true
         end
-
         local bb = Instance.new("BillboardGui")
         bb.Name = "FruitESP"
         bb.AlwaysOnTop = true
-        bb.Size = UDim2.new(0, 140, 0, 48)
-        bb.StudsOffset = Vector3.new(0, 2.8, 0)
-        bb.MaxDistance = 5000
+        bb.Size = UDim2.new(0, 160, 0, 40)
+        bb.StudsOffset = Vector3.new(0, 3, 0)
         bb.Adornee = part
         bb.Parent = folder
-
-        local frame = Instance.new("Frame")
-        frame.Name = "Card"
-        frame.Size = UDim2.new(1, 0, 1, 0)
-        frame.BackgroundColor3 = Color3.fromRGB(12, 14, 22)
-        frame.BackgroundTransparency = 0.25
-        frame.BorderSizePixel = 0
-        frame.Parent = bb
-        local corner = Instance.new("UICorner")
-        corner.CornerRadius = UDim.new(0, 8)
-        corner.Parent = frame
-        local stroke = Instance.new("UIStroke")
-        stroke.Thickness = 1.5
-        stroke.Color = valuable and Color3.fromRGB(255, 200, 60) or Color3.fromRGB(80, 220, 140)
-        stroke.Transparency = 0.15
-        stroke.Parent = frame
-
-        local nameLbl = Instance.new("TextLabel")
-        nameLbl.Name = "Name"
-        nameLbl.Size = UDim2.new(1, -10, 0, 22)
-        nameLbl.Position = UDim2.new(0, 5, 0, 4)
-        nameLbl.BackgroundTransparency = 1
-        nameLbl.Font = Enum.Font.GothamBold
-        nameLbl.TextSize = 13
-        nameLbl.TextColor3 = valuable and Color3.fromRGB(255, 215, 90) or Color3.fromRGB(140, 255, 170)
-        nameLbl.TextXAlignment = Enum.TextXAlignment.Center
-        nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
-        nameLbl.Text = tostring(displayName or "Fruit")
-        nameLbl.Parent = frame
-
-        local distLbl = Instance.new("TextLabel")
-        distLbl.Name = "Dist"
-        distLbl.Size = UDim2.new(1, -10, 0, 16)
-        distLbl.Position = UDim2.new(0, 5, 0, 26)
-        distLbl.BackgroundTransparency = 1
-        distLbl.Font = Enum.Font.Gotham
-        distLbl.TextSize = 11
-        distLbl.TextColor3 = Color3.fromRGB(180, 190, 210)
-        distLbl.TextXAlignment = Enum.TextXAlignment.Center
-        distLbl.Text = dist .. " studs"
-        distLbl.Parent = frame
-
-        entry = { bb = bb, nameLbl = nameLbl, distLbl = distLbl, stroke = stroke, part = part, ownAnchor = ownAnchor }
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(1, 0, 1, 0)
+        label.BackgroundTransparency = 0.35
+        label.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+        label.TextColor3 = Color3.fromRGB(120, 255, 140)
+        label.Font = Enum.Font.GothamBold
+        label.TextSize = 14
+        label.TextStrokeTransparency = 0.5
+        label.Parent = bb
+        entry = { bb = bb, label = label, part = part }
         BF._fruitEspMap[key] = entry
     end
-
-    if entry.nameLbl then
-        entry.nameLbl.Text = tostring(displayName or "Fruit")
-        if valuable then
-            entry.nameLbl.TextColor3 = Color3.fromRGB(255, 215, 90)
-        else
-            entry.nameLbl.TextColor3 = Color3.fromRGB(140, 255, 170)
-        end
+    if entry.label then
+        entry.label.Text = string.format("%s\n%d studs", displayName, dist)
     end
-    if entry.distLbl then
-        entry.distLbl.Text = tostring(dist) .. " studs"
-    end
-    if entry.stroke then
-        entry.stroke.Color = valuable and Color3.fromRGB(255, 200, 60) or Color3.fromRGB(80, 220, 140)
-    end
-    if entry.ownAnchor and entry.part and entry.part.Parent then
+    if entry.part and entry.part.Name == "BF_FruitEspAnchor" then
         entry.part.Position = pos
     end
 end
@@ -3593,7 +3543,7 @@ BF.startFarm = function()
             if level ~= currentLevel then
                 currentLevel = level
                 lastLevelForStats = level
-                                if not BF.hasActiveQuest() then
+                if not BF.hasActiveQuest() then
                     lockedEnemy = nil
                     heightLocked = false
                     isBossTarget = false
@@ -3607,7 +3557,15 @@ BF.startFarm = function()
                         BF.notifyUser("New Island", "Now farming: " .. island.Name)
                     end
                 else
-                                        BF.notifyUser("Level Up", "Finishing current quest first", 3)
+                    BF.notifyUser("Level Up", "Finishing current quest first", 3)
+                end
+                -- keep ESP / fruit scan alive across level-ups
+                if config.enemyEspEnabled and not BF.enemyEspRunning then
+                    pcall(function() BF.startEnemyEsp(true) end)
+                end
+                if (config.fruitNotifier or config.fruitAutoCollect or config.fruitEspEnabled)
+                    and not BF.fruitNotifierRunning then
+                    pcall(BF.startFruitNotifier)
                 end
             end
 
@@ -3672,8 +3630,15 @@ BF.startFarm = function()
                         hrp.AssemblyAngularVelocity = Vector3.zero
                     end
                 end)
-                                local espWas = BF.enemyEspRunning
-                if espWas then pcall(BF.stopEnemyEsp) end
+                                local espWas = config.enemyEspEnabled or BF.enemyEspRunning
+                if BF.enemyEspRunning then
+                    BF.enemyEspRunning = false
+                    if BF.enemyEspTask then
+                        pcall(function() task.cancel(BF.enemyEspTask) end)
+                        BF.enemyEspTask = nil
+                    end
+                    pcall(BF.clearEnemyEsp)
+                end
                 task.wait(0.45)
 
                 local desiredType = "normal"
@@ -3691,8 +3656,9 @@ BF.startFarm = function()
                     BF.invalidateQuestCache()
                     task.wait(0.6)
                 end
-                if espWas and config.enemyEspEnabled then
-                    pcall(BF.startEnemyEsp)
+                if espWas then
+                    config.enemyEspEnabled = true
+                    pcall(function() BF.startEnemyEsp(true) end)
                 end
                 state = "COMBAT"
                 continue
@@ -3716,12 +3682,16 @@ BF.startFarm = function()
                     isBossTarget = true
                 else
                     isBossTarget = false
-                    local patternInfo = BF.resolveFarmPatterns(island, currentQuestType)
+                    local patternInfo = BF.resolveFarmPatterns(island, "normal")
+                    if not patternInfo or not patternInfo.patterns or #(patternInfo.patterns or {}) == 0 then
+                        patternInfo = { patterns = island.EnemyPatterns or {}, includeBossAttr = false }
+                    end
                     local allTargets = BF.getMatchingEnemies(island, patternInfo)
                     if #allTargets == 0 then
                         lockedEnemy = nil
-                        state = "PATROL"
-                        task.wait(0.15)
+                        state = "ISLAND"
+                        BF.lastIslandName = ""
+                        task.wait(0.25)
                         continue
                     end
 
@@ -4608,7 +4578,7 @@ end
 BF.enemyEspRunning = false
 BF.enemyEspTask = nil
 BF._enemyEspFolder = nil
-BF._enemyEspMap = {} -- enemy model -> {hl, bb, nameLbl, hpLbl}
+BF._enemyEspMap = {}
 
 BF.ensureEnemyEspFolder = function()
     local pg = LocalPlayer:FindFirstChild("PlayerGui")
@@ -4624,7 +4594,7 @@ BF.ensureEnemyEspFolder = function()
 end
 
 BF.clearEnemyEsp = function()
-    for _, entry in pairs(BF._enemyEspMap) do
+    for _, entry in pairs(BF._enemyEspMap or {}) do
         pcall(function()
             if entry.hl then entry.hl:Destroy() end
             if entry.bb then entry.bb:Destroy() end
@@ -4706,7 +4676,6 @@ BF.updateEnemyEsp = function()
                         BF._enemyEspMap[enemy] = entry
                     end
 
-                    -- refresh
                     if entry.hl then
                         entry.hl.FillColor = fillColor
                         entry.hl.OutlineColor = outlineColor
@@ -4717,7 +4686,7 @@ BF.updateEnemyEsp = function()
                         entry.bb.MaxDistance = maxDist
                     end
                     if entry.nameLbl then
-                        if config.enemyEspShowName then
+                        if config.enemyEspShowName ~= false then
                             entry.nameLbl.Text = enemy.Name
                             entry.nameLbl.Visible = true
                         else
@@ -4725,7 +4694,7 @@ BF.updateEnemyEsp = function()
                         end
                     end
                     if entry.hpLbl then
-                        if config.enemyEspShowHealth then
+                        if config.enemyEspShowHealth ~= false then
                             local hp = math.floor(hum.Health)
                             local maxHp = math.floor(hum.MaxHealth)
                             entry.hpLbl.Text = string.format("%d / %d  ·  %dm", hp, maxHp, math.floor(dist))
@@ -4750,26 +4719,36 @@ BF.updateEnemyEsp = function()
     end
 end
 
-BF.startEnemyEsp = function()
+BF.startEnemyEsp = function(silent)
     if BF.enemyEspRunning then return end
     BF.enemyEspRunning = true
     config.enemyEspEnabled = true
     BF.enemyEspTask = task.spawn(function()
         while BF.enemyEspRunning do
+            if not config.enemyEspEnabled then break end
             pcall(BF.updateEnemyEsp)
-            task.wait(0.35)
+            task.wait(0.4)
         end
+        BF.enemyEspRunning = false
         BF.clearEnemyEsp()
     end)
-    BF.notifyUser("ESP", "Enemy ESP ON (through walls)", 2)
+    if not silent then
+        BF.notifyUser("ESP", "Enemy ESP ON (through walls)", 2)
+    end
 end
 
-BF.stopEnemyEsp = function()
+BF.stopEnemyEsp = function(fromUi)
     BF.enemyEspRunning = false
-    config.enemyEspEnabled = false
-    if BF.enemyEspTask then pcall(function() task.cancel(BF.enemyEspTask) end) BF.enemyEspTask = nil end
+    if BF.enemyEspTask then
+        pcall(function() task.cancel(BF.enemyEspTask) end)
+        BF.enemyEspTask = nil
+    end
     BF.clearEnemyEsp()
-    BF.notifyUser("ESP", "Enemy ESP OFF", 2)
+    -- Only clear preference when user toggles off in UI
+    if fromUi then
+        config.enemyEspEnabled = false
+        BF.notifyUser("ESP", "Enemy ESP OFF", 2)
+    end
 end
 
 -- =============================================
@@ -5212,7 +5191,12 @@ if useVaxorin and window then
         Flag = "ESP.Enemy",
         Save = true,
         Callback = function(v)
-            if v then BF.startEnemyEsp() else BF.stopEnemyEsp() end
+            if v then
+                config.enemyEspEnabled = true
+                BF.startEnemyEsp()
+            else
+                BF.stopEnemyEsp(true)
+            end
         end,
     })
     enemyEspSection:CreateToggle({
@@ -5423,16 +5407,6 @@ if useVaxorin and window then
         Callback = function(v) config.fruitFilterNotify = v end,
     })
     fruitSection:CreateToggle({
-        Name = "Fruit ESP",
-        CurrentValue = config.fruitEspEnabled,
-        Flag = "Fruit.ESP", Save = true,
-        Callback = function(v)
-            config.fruitEspEnabled = v
-            if not v then pcall(BF.clearFruitEsp) end
-            if v then BF.startFruitNotifier() end
-        end,
-    })
-    fruitSection:CreateToggle({
         Name = "Auto Collect",
         CurrentValue = config.fruitAutoCollect,
         Flag = "Fruit.AutoCollect", Save = true,
@@ -5466,4 +5440,4 @@ print("[BF] fully loaded, lines ready")
 -- Keep script alive
 while task.wait(1) do end
 
-print("Test 2")
+print("Test 1")
