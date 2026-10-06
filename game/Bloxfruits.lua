@@ -1609,10 +1609,8 @@ end
 -- =============================================
 BF.findBossInWorkspace = function(island)
     if not island then return nil end
-    local patterns = island.BossPatterns
-    if not patterns or #patterns == 0 then
-        if island.Name then patterns = { island.Name } else return nil end
-    end
+    local patterns = island.BossPatterns or (island.Name and { island.Name }) or {}
+    if #patterns == 0 then return nil end
     local container = Workspace:FindFirstChild("Enemies")
     if not container then return nil end
     local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
@@ -1646,28 +1644,52 @@ end
 
 -- Live boss in level range (quest NOT required)
 BF.findAnyPriorityBoss = function(level)
+    return BF.findLiveBossSimple(level)
+end
+
+-- Simple live-boss scan (same idea as popular hubs: scan Enemies for [Boss] name)
+BF.findLiveBossSimple = function(level)
     level = tonumber(level) or BF.getPlayerLevel()
-    local container = Workspace:FindFirstChild("Enemies")
-    if not container then return nil, nil end
+    local enemies = Workspace:FindFirstChild("Enemies")
+    if not enemies then return nil, nil end
     local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    local bestEnemy, bestIsland, bestDist = nil, nil, math.huge
-    for _, island in ipairs(islands) do
-        if island.isBoss and island.BossPatterns and #island.BossPatterns > 0 then
-            if level >= (island.Min or 0) and level <= ((island.Max or 9999) + 20) then
-                local enemy = BF.findBossInWorkspace(island)
-                if enemy then
-                    local root = enemy:FindFirstChild("HumanoidRootPart")
-                    local d = (hrp and root) and (root.Position - hrp.Position).Magnitude or 0
+    local best, bestIsl, bestDist = nil, nil, math.huge
+
+    for _, model in ipairs(enemies:GetChildren()) do
+        if not model:IsA("Model") then continue end
+        local hum = model:FindFirstChildOfClass("Humanoid")
+        local root = model:FindFirstChild("HumanoidRootPart")
+        if not hum or not root or hum.Health <= 0 then continue end
+
+        local lower = string.lower(model.Name)
+        local looksBoss = model:GetAttribute("isBoss") == true
+            or string.find(lower, "[boss]", 1, true) ~= nil
+            or string.find(lower, "boss", 1, true) ~= nil
+
+        -- Match against our island boss table
+        for _, isl in ipairs(islands) do
+            if not isl.isBoss then continue end
+            -- wide level window so we still hunt near the range
+            if level < (isl.Min or 0) - 15 or level > (isl.Max or 9999) + 30 then
+                continue
+            end
+            local patterns = isl.BossPatterns or { isl.Name }
+            for _, p in ipairs(patterns) do
+                local pl = string.lower(tostring(p or ""))
+                if pl ~= "" and string.find(lower, pl, 1, true) then
+                    looksBoss = true
+                    local d = hrp and (root.Position - hrp.Position).Magnitude or 0
                     if d < bestDist then
                         bestDist = d
-                        bestEnemy = enemy
-                        bestIsland = island
+                        best = model
+                        bestIsl = isl
                     end
+                    break
                 end
             end
         end
     end
-    return bestEnemy, bestIsland
+    return best, bestIsl
 end
 
 
@@ -3530,7 +3552,7 @@ BF.startFarm = function()
             -- Always re-check live boss (works without quest)
             local _prioBoss, _prioIsland = nil, nil
             if config.bossPriority then
-                _prioBoss, _prioIsland = BF.findAnyPriorityBoss(level)
+                _prioBoss, _prioIsland = BF.findLiveBossSimple(level)
                 if _prioBoss and _prioIsland then
                     island = _prioIsland
                 end
@@ -3544,6 +3566,50 @@ BF.startFarm = function()
                 island.isBoss = false
             end
             if not hrp then task.wait(0.5) continue end
+
+            -- ===== BOSS SHORT-CIRCUIT (no quest needed) =====
+            -- Same approach as boss-timer hunt: fly above boss + attackEnemy
+            if config.bossPriority then
+                local liveBoss, liveIsl = _prioBoss, _prioIsland
+                if not liveBoss then
+                    liveBoss, liveIsl = BF.findLiveBossSimple(level)
+                end
+                if liveBoss and liveBoss.Parent then
+                    local bHum = liveBoss:FindFirstChildOfClass("Humanoid")
+                    local bRoot = liveBoss:FindFirstChild("HumanoidRootPart")
+                    if bHum and bRoot and bHum.Health > 0 then
+                        if liveIsl then island = liveIsl end
+                        lockedEnemy = liveBoss
+                        isBossTarget = true
+                        currentQuestType = "boss"
+                        state = "COMBAT"
+
+                        -- optional boss quest (never blocks attack)
+                        if liveIsl and liveIsl.BossQuest and (os.clock() - (_lastQuestAcceptAt or 0)) > 6 then
+                            _lastQuestAcceptAt = os.clock()
+                            pcall(function()
+                                BF.acceptQuestWrapper(liveIsl.BossQuest, { allowStack = false })
+                            end)
+                        end
+
+                        if not BF.flying then pcall(BF.enableFly) end
+                        local above = math.clamp(config.aboveHeight or 8, 4, 14)
+                        local dist = (hrp.Position - bRoot.Position).Magnitude
+                        BF.setFlyTarget(bRoot.Position + Vector3.new(0, above, 0), false)
+
+                        if dist <= (config.attackRange or 30) + 15 then
+                            local speed = config.bossAttackSpeed or 0.002
+                            local hits = config.bossHitsPerCycle or 35
+                            pcall(function()
+                                BF.attackEnemy(liveBoss, speed, hits)
+                            end)
+                        end
+                        task.wait(0.05)
+                        continue
+                    end
+                end
+            end
+
 
                         if not _lastStatAt then _lastStatAt = 0 end
             if config.statEnabled and (os.clock() - _lastStatAt) > 2.5 then
