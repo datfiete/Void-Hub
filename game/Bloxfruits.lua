@@ -1610,16 +1610,13 @@ end
 BF.findBossInWorkspace = function(island)
     if not island then return nil end
     local patterns = island.BossPatterns
-    if (not patterns or #patterns == 0) and island.isBoss and island.Name then
-        patterns = { island.Name }
+    if not patterns or #patterns == 0 then
+        if island.Name then patterns = { island.Name } else return nil end
     end
-    if not patterns or #patterns == 0 then return nil end
-
     local container = Workspace:FindFirstChild("Enemies")
     if not container then return nil end
     local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
     local best, bestDist = nil, math.huge
-
     for _, enemy in ipairs(container:GetChildren()) do
         if enemy:IsA("Model") then
             local humanoid = enemy:FindFirstChildOfClass("Humanoid")
@@ -1647,15 +1644,16 @@ BF.bossExists = function(island)
     return BF.findBossInWorkspace(island) ~= nil
 end
 
--- Scan ALL boss islands for a live boss in level range. Quest not required.
+-- Live boss in level range (quest NOT required)
 BF.findAnyPriorityBoss = function(level)
-    level = level or BF.getPlayerLevel()
-    if not Workspace:FindFirstChild("Enemies") then return nil, nil end
+    level = tonumber(level) or BF.getPlayerLevel()
+    local container = Workspace:FindFirstChild("Enemies")
+    if not container then return nil, nil end
     local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
     local bestEnemy, bestIsland, bestDist = nil, nil, math.huge
     for _, island in ipairs(islands) do
         if island.isBoss and island.BossPatterns and #island.BossPatterns > 0 then
-            if level >= (island.Min or 0) and level <= ((island.Max or 9999) + 15) then
+            if level >= (island.Min or 0) and level <= ((island.Max or 9999) + 20) then
                 local enemy = BF.findBossInWorkspace(island)
                 if enemy then
                     local root = enemy:FindFirstChild("HumanoidRootPart")
@@ -1672,8 +1670,8 @@ BF.findAnyPriorityBoss = function(level)
     return bestEnemy, bestIsland
 end
 
+
 BF.getDesiredQuestType = function(island)
-    if not island then return "normal" end
     if not island.isBoss then return "normal" end
     if BF.bossExists(island) then return "boss" else return "normal" end
 end
@@ -3529,14 +3527,12 @@ BF.startFarm = function()
 
             local level = BF.getPlayerLevel()
             local island = BF.resolveFarmIsland(level)
-            -- Force boss island every tick if a priority boss is up
+            -- Always re-check live boss (works without quest)
+            local _prioBoss, _prioIsland = nil, nil
             if config.bossPriority then
-                local liveBoss, liveIsland = BF.findAnyPriorityBoss(level)
-                if liveBoss and liveIsland then
-                    island = liveIsland
-                    if state ~= "COMBAT" and state ~= "QUEST" then
-                        state = "COMBAT"
-                    end
+                _prioBoss, _prioIsland = BF.findAnyPriorityBoss(level)
+                if _prioBoss and _prioIsland then
+                    island = _prioIsland
                 end
             end
             local hrp = character:FindFirstChild("HumanoidRootPart")
@@ -3561,14 +3557,16 @@ BF.startFarm = function()
             end
 
 
-            -- QUEST: TrackedQuestFrame exists = has quest (never StartQuest)
-            --        missing = no quest -> accept once (cooldown)
+            -- QUEST gate: don't interrupt boss fights just because no quest is active
             do
                 if not _lastQuestAcceptAt then _lastQuestAcceptAt = 0 end
                 if BF.hasActiveQuest() then
                     questAccepted = true
                 else
-                                        if (os.clock() - _lastQuestAcceptAt) >= 8 then
+                    local fightingBoss = isBossTarget or (lockedEnemy and lockedEnemy.Parent
+                        and (lockedEnemy:GetAttribute("isBoss") == true
+                            or string.find(string.lower(lockedEnemy.Name), "[boss]", 1, true)))
+                    if not fightingBoss and (os.clock() - _lastQuestAcceptAt) >= 8 then
                         questAccepted = false
                         if state == "COMBAT" or state == "PATROL" then
                             state = "QUEST"
@@ -3664,17 +3662,14 @@ BF.startFarm = function()
                 task.wait(0.45)
 
                 local desiredType = "normal"
-                if config.bossPriority then
-                    local be, bi = BF.findAnyPriorityBoss(level)
-                    if be and bi then
-                        island = bi
-                        desiredType = "boss"
-                    end
-                elseif island.isBoss and BF.bossExists(island) then
+                if _prioBoss and _prioIsland then
+                    island = _prioIsland
+                    desiredType = "boss"
+                elseif island and island.isBoss and BF.bossExists(island) then
                     desiredType = "boss"
                 end
                 local questArgs = BF.getQuestArgs(island, desiredType)
-                -- Boss without BossQuest: skip accept, still fight
+                -- Boss with no BossQuest: go fight immediately
                 if desiredType == "boss" and not questArgs then
                     questAccepted = true
                     currentQuestType = "boss"
@@ -3705,46 +3700,41 @@ BF.startFarm = function()
                 -- If the quest really is not active, the QUEST state will retry it
                 -- after target detection has had a chance to find the configured mob.
                                 
-                -- Boss Priority: hunt live boss even without quest / without island.isBoss
-                local bossEnemy = nil
-                if config.bossPriority then
-                    local anyBoss, anyIsland = BF.findAnyPriorityBoss(level)
-                    if anyBoss then
-                        bossEnemy = anyBoss
-                        if anyIsland then island = anyIsland end
-                    end
+                -- Prefer live priority boss (no quest needed)
+                local bossEnemy = _prioBoss
+                if not bossEnemy and config.bossPriority then
+                    bossEnemy = select(1, BF.findAnyPriorityBoss(level))
                 end
                 if not bossEnemy and island and island.isBoss then
                     bossEnemy = BF.findBossInWorkspace(island)
                 end
+                if _prioIsland then island = _prioIsland end
 
                 if bossEnemy and bossEnemy.Parent and bossEnemy:FindFirstChildOfClass("Humanoid")
                     and bossEnemy:FindFirstChildOfClass("Humanoid").Health > 0 then
                     lockedEnemy = bossEnemy
                     isBossTarget = true
                     currentQuestType = "boss"
-                    -- Optional boss quest (attack works without it)
-                    if island and island.BossQuest then
-                        local needQuest = not BF.hasActiveQuest()
-                        if not needQuest then
-                            local _, qtext = BF.getActiveQuestInfo()
-                            qtext = string.lower(tostring(qtext or ""))
-                            local looksBoss = false
-                            for _, bp in ipairs(island.BossPatterns or {}) do
-                                if string.find(qtext, string.lower(bp), 1, true) then
-                                    looksBoss = true
-                                    break
-                                end
+                    -- Optional: try boss quest once, never block combat
+                    if island and island.BossQuest and (os.clock() - (_lastQuestAcceptAt or 0)) > 5 then
+                        local _, qtext = BF.getActiveQuestInfo()
+                        local qlow = string.lower(tostring(qtext or ""))
+                        local hasBossQ = false
+                        for _, bp in ipairs(island.BossPatterns or {}) do
+                            if string.find(qlow, string.lower(bp), 1, true) then
+                                hasBossQ = true
+                                break
                             end
-                            needQuest = not looksBoss
                         end
-                        if needQuest then
+                        if not hasBossQ then
+                            _lastQuestAcceptAt = os.clock()
                             pcall(function()
                                 BF.acceptQuestWrapper(island.BossQuest, { allowStack = false })
                             end)
                         end
                     end
                 else
+                    isBossTarget = false
                     isBossTarget = false
                     local patternInfo = BF.resolveFarmPatterns(island, currentQuestType)
                     local allTargets = BF.getMatchingEnemies(island, patternInfo)
@@ -3858,13 +3848,9 @@ BF.startFarm = function()
                     BF.setFlyTarget(Vector3.new(hrp.Position.X, BF.hoverY, hrp.Position.Z), false)
                 end
 
-                local bossEnemy = nil
-                if config.bossPriority then
-                    local anyBoss, anyIsland = BF.findAnyPriorityBoss(level)
-                    if anyBoss then
-                        bossEnemy = anyBoss
-                        if anyIsland then island = anyIsland end
-                    end
+                local bossEnemy = _prioBoss
+                if not bossEnemy and config.bossPriority then
+                    bossEnemy = select(1, BF.findAnyPriorityBoss(level))
                 end
                 if not bossEnemy and island and island.isBoss then
                     bossEnemy = BF.findBossInWorkspace(island)
@@ -3872,6 +3858,7 @@ BF.startFarm = function()
                 if bossEnemy then
                     lockedEnemy = bossEnemy
                     isBossTarget = true
+                    if _prioIsland then island = _prioIsland end
                     state = "COMBAT"
                 else
                     local patternInfo = BF.resolveFarmPatterns(island, currentQuestType)
