@@ -21,8 +21,6 @@ local Stats = game:GetService("Stats")
 local LayoutVariants = {}
 LayoutVariants.__index = LayoutVariants
 
--- v21: original layout implementations preserved; contained-shell polish is additive.
-
 local CLASSIC = {
 	WindowSize = Vector2.new(820, 540),
 	TopBarHeight = 82,
@@ -223,108 +221,6 @@ function LayoutVariants.new(window: any, initial: string): any
 	self:_buildMinecraftShell()
 	self:SetMode(initial or "Vaxorin")
 	return self
-end
-
-
-
-----------------------------------------------------------------------
--- Vaxorin v21 visual foundation
--- Full original LayoutVariants implementation is preserved. The code below
--- is an additive visual shell layer: it keeps every existing layout and its
--- routing intact while making alternate layouts contained and viewport-aware.
-----------------------------------------------------------------------
-
-function LayoutVariants:_viewportSize(): Vector2
-	local camera = workspace.CurrentCamera
-	if camera then
-		local size = camera.ViewportSize
-		if size.X > 0 and size.Y > 0 then
-			return size
-		end
-	end
-	return Vector2.new(1280, 720)
-end
-
-function LayoutVariants:_containedSize(): Vector2
-	local viewport = self:_viewportSize()
-	local width = math.floor(viewport.X * 0.90)
-	local height = math.floor(viewport.Y * 0.88)
-
-	width = math.min(width, 1120)
-	height = math.min(height, 720)
-
-	if viewport.X < 900 then
-		width = math.max(0, viewport.X - 32)
-	end
-	if viewport.Y < 650 then
-		height = math.max(0, viewport.Y - 32)
-	end
-
-	return Vector2.new(math.max(width, 360), math.max(height, 300))
-end
-
-function LayoutVariants:_containShell(root: Frame, accent: Color3?, name: string?): Frame
-	-- The original variants use a full-screen Root for convenience. Reuse every
-	-- original child inside one centered shell so game space remains visible.
-	if root:FindFirstChild("VaxorinContainedShell") then
-		return root:FindFirstChild("VaxorinContainedShell") :: Frame
-	end
-
-	local shell = Instance.new("Frame")
-	shell.Name = name or "VaxorinContainedShell"
-	shell.AnchorPoint = Vector2.new(0.5, 0.5)
-	shell.Position = UDim2.fromScale(0.5, 0.5)
-	local size = self:_containedSize()
-	shell.Size = UDim2.fromOffset(size.X, size.Y)
-	shell.BackgroundTransparency = 1
-	shell.BorderSizePixel = 0
-	shell.ClipsDescendants = false
-	shell.ZIndex = 1
-	shell.Parent = root
-
-	local originalChildren = root:GetChildren()
-	for _, child in ipairs(originalChildren) do
-		if child ~= shell then
-			child.Parent = shell
-		end
-	end
-
-	root.BackgroundTransparency = 1
-	root.BorderSizePixel = 0
-	root.ClipsDescendants = false
-
-	-- This glow is safe: it is attached to the shell, never to a list element,
-	-- so it cannot change AutomaticSize/UIListLayout measurements.
-	local glow = Helpers.Glow(shell, accent or Color3.fromRGB(150, 95, 255), 14, 0.93)
-	glow.Name = "VaxorinShellGlow"
-	glow.ZIndex = 0
-
-	local stroke = Helpers.Stroke(shell, accent or Color3.fromRGB(120, 90, 220), 1)
-	stroke.Name = "VaxorinShellStroke"
-	stroke.Transparency = 0.92
-
-	local light = Helpers.CreateFrame({
-		Name = "VaxorinShellAccent",
-		Size = UDim2.new(0.42, 0, 0, 2),
-		Position = UDim2.new(0.29, 0, 0, 0),
-		BackgroundColor3 = accent or Color3.fromRGB(150, 95, 255),
-		BackgroundTransparency = 0.72,
-		Parent = shell,
-	})
-	Helpers.Corner(light, 2)
-	light.ZIndex = 20
-
-	local camera = workspace.CurrentCamera
-	if camera then
-		self._Maid:GiveTask(camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
-			if shell.Parent then
-				local nextSize = self:_containedSize()
-				shell.Size = UDim2.fromOffset(nextSize.X, nextSize.Y)
-			end
-		end))
-	end
-
-	return shell
 end
 
 ----------------------------------------------------------------------
@@ -587,7 +483,7 @@ function LayoutVariants:_buildMinecraftShell()
 		Name = "Dim",
 		Size = UDim2.fromScale(1, 1),
 		BackgroundColor3 = Color3.fromRGB(0, 0, 0),
-		BackgroundTransparency = 0.78,
+		BackgroundTransparency = 0.55,
 		Parent = root,
 	}).ZIndex = 0
 
@@ -726,7 +622,6 @@ function LayoutVariants:_buildMinecraftShell()
 	self._PageHost = pageHost
 
 	self:_buildDock(root)
-	self._Root = self:_containShell(root, Color3.fromRGB(150, 95, 255), "VaxorinMinecraftShellFrame")
 end
 
 function LayoutVariants:_card(parent: Instance, props: any): Frame
@@ -1265,7 +1160,7 @@ function LayoutVariants:_ensureOrbit()
 		Name = "Dim",
 		Size = UDim2.fromScale(1, 1),
 		BackgroundColor3 = Color3.fromRGB(4, 6, 12),
-		BackgroundTransparency = 0.80,
+		BackgroundTransparency = 0.35,
 		Parent = root,
 	})
 	dim.ZIndex = 0
@@ -1384,11 +1279,8 @@ function LayoutVariants:_ensureOrbit()
 		Parent = root,
 	})
 
-
-		self._OrbitRoot = self:_containShell(root, Color3.fromRGB(140, 90, 255), "VaxorinOrbitShellFrame")
-
-		self:_syncOrbitTabs()
-{indent}end
+	self:_syncOrbitTabs()
+end
 
 function LayoutVariants:_setOrbitVisible(visible: boolean)
 	if self._OrbitGui then
@@ -1793,11 +1685,8 @@ function LayoutVariants:_ensureAether()
 		end
 	end)
 
-
-		self._AetherRoot = self:_containShell(root, Color3.fromRGB(170, 100, 130), "VaxorinAetherShellFrame")
-
-		self:_syncAetherTabs()
-{indent}end
+	self:_syncAetherTabs()
+end
 
 function LayoutVariants:_setAetherVisible(visible: boolean)
 	if self._AetherGui then
@@ -1956,7 +1845,7 @@ function LayoutVariants:_ensureNova()
 		Name = "Vignette",
 		Size = UDim2.fromScale(1, 1),
 		BackgroundColor3 = Color3.fromRGB(0, 4, 8),
-		BackgroundTransparency = 0.78,
+		BackgroundTransparency = 0.55,
 		Parent = root,
 	})
 	dim.ZIndex = 0
@@ -2181,11 +2070,8 @@ function LayoutVariants:_ensureNova()
 		end
 	end)
 
-
-		self._NovaRoot = self:_containShell(root, Color3.fromRGB(60, 190, 220), "VaxorinNovaShellFrame")
-
-		self:_syncNovaTabs()
-{indent}end
+	self:_syncNovaTabs()
+end
 
 function LayoutVariants:_setNovaVisible(visible: boolean)
 	if self._NovaGui then
@@ -2345,7 +2231,7 @@ function LayoutVariants:_ensureVortex()
 		Name = "Vignette",
 		Size = UDim2.fromScale(1, 1),
 		BackgroundColor3 = Color3.fromRGB(0, 0, 0),
-		BackgroundTransparency = 0.76,
+		BackgroundTransparency = 0.45,
 		Parent = root,
 	}).ZIndex = 0
 
@@ -2527,11 +2413,8 @@ function LayoutVariants:_ensureVortex()
 		self:_showVortexHome()
 	end)
 
-
-		self._VortexRoot = self:_containShell(root, Color3.fromRGB(160, 90, 255), "VaxorinVortexShellFrame")
-
-		self:_syncVortexTabs()
-{indent}end
+	self:_syncVortexTabs()
+end
 
 function LayoutVariants:_setVortexVisible(visible: boolean)
 	if self._VortexGui then
@@ -2646,7 +2529,7 @@ function LayoutVariants:_syncVortexTabs()
 		stroke.Transparency = 0.4
 		btn.ZIndex = 7
 		-- soft glow under each tab
-		local glow = Helpers.Glow(btn, Color3.fromRGB(140, 80, 255), 8, 0.88)
+		local glow = Helpers.Glow(btn, Color3.fromRGB(140, 80, 255), 10, 0.82)
 		glow.ZIndex = 6
 
 		-- radial tick toward hub
@@ -2953,11 +2836,8 @@ function LayoutVariants:_ensurePrism()
 		end
 	end)
 
-
-		self._PrismRoot = self:_containShell(root, Color3.fromRGB(165, 95, 255), "VaxorinPrismShellFrame")
-
-		self:_syncPrismTabs()
-{indent}end
+	self:_syncPrismTabs()
+end
 
 function LayoutVariants:_setPrismVisible(visible: boolean)
 	if self._PrismGui then
@@ -3431,11 +3311,8 @@ function LayoutVariants:_ensureEclipse()
                 Parent = status,
         })
 
-
-        	self._EclipseRoot = self:_containShell(root, Color3.fromRGB(255, 175, 85), "VaxorinEclipseShellFrame")
-
-        	self:_syncEclipseTabs()
-{indent}end
+        self:_syncEclipseTabs()
+end
 
 function LayoutVariants:_setEclipseVisible(visible: boolean)
         if self._EclipseGui then
@@ -3817,7 +3694,7 @@ function LayoutVariants:_ensureZenith()
 		Name = "Dim",
 		Size = UDim2.fromScale(1, 1),
 		BackgroundColor3 = Color3.fromRGB(2, 4, 8),
-		BackgroundTransparency = 0.80,
+		BackgroundTransparency = 0.4,
 		Parent = root,
 	})
 	dim.ZIndex = 0
@@ -3925,11 +3802,8 @@ function LayoutVariants:_ensureZenith()
 		end
 	end)
 
-
-		self._ZenithRoot = self:_containShell(root, Color3.fromRGB(90, 185, 255), "VaxorinZenithShellFrame")
-
-		self:_syncZenithTabs()
-{indent}end
+	self:_syncZenithTabs()
+end
 
 function LayoutVariants:_setZenithVisible(visible: boolean)
 	if self._ZenithGui then
