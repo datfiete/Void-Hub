@@ -9,6 +9,7 @@
 --   Vortex   = unique radial compass layout: tabs fan-arranged around a bottom-left hub
 --   Prism    = unique book-spine spectrum rail: content stage left, tall color spines right
 --   Eclipse  = unique eclipse monolith: timeline command rail + corona stage + top capsule
+--   Zenith   = unique minimalist floating sidebar + cyan glass stage
 --   Compact  = alias for Orbit
 
 local Theme = require(script.Parent.Theme)
@@ -483,7 +484,7 @@ function LayoutVariants:_buildMinecraftShell()
 		Name = "Dim",
 		Size = UDim2.fromScale(1, 1),
 		BackgroundColor3 = Color3.fromRGB(0, 0, 0),
-		BackgroundTransparency = 0.55,
+		BackgroundTransparency = 0.78,
 		Parent = root,
 	}).ZIndex = 0
 
@@ -595,14 +596,14 @@ function LayoutVariants:_buildMinecraftShell()
 	r2.Parent = row2
 	self:_buildProfileStrip(row2)
 
-	-- Content (above dock)
+	-- Content (above dock) — glass so game stays visible behind
 	local contentHost = Helpers.CreateFrame({
 		Name = "ContentHost",
 		Size = UDim2.new(1, -80, 1, -120),
 		Position = UDim2.new(0.5, 0, 0, 24),
 		AnchorPoint = Vector2.new(0.5, 0),
 		BackgroundColor3 = Color3.fromRGB(12, 14, 20),
-		BackgroundTransparency = 0.08,
+		BackgroundTransparency = 0.22,
 		Visible = false,
 		Parent = root,
 	})
@@ -629,7 +630,7 @@ function LayoutVariants:_card(parent: Instance, props: any): Frame
 		Name = props.Name,
 		Size = props.Size,
 		BackgroundColor3 = props.BackgroundColor3 or Color3.fromRGB(16, 18, 26),
-		BackgroundTransparency = 0.08,
+		BackgroundTransparency = props.BackgroundTransparency or 0.22,
 		LayoutOrder = props.LayoutOrder or 0,
 		Parent = parent,
 	})
@@ -872,7 +873,7 @@ function LayoutVariants:_buildDock(root: Frame)
 		Position = UDim2.new(0.5, 0, 1, -80),
 		AnchorPoint = Vector2.new(0.5, 0),
 		BackgroundColor3 = Color3.fromRGB(14, 16, 22),
-		BackgroundTransparency = 0.06,
+		BackgroundTransparency = 0.18,
 		Parent = root,
 	})
 	Helpers.Corner(dock, 22)
@@ -1155,38 +1156,39 @@ function LayoutVariants:_ensureOrbit()
 	})
 	self._OrbitRoot = root
 
-	-- soft radial dim
+	-- soft radial dim — light so game stays visible
 	local dim = Helpers.CreateFrame({
 		Name = "Dim",
 		Size = UDim2.fromScale(1, 1),
 		BackgroundColor3 = Color3.fromRGB(4, 6, 12),
-		BackgroundTransparency = 0.35,
+		BackgroundTransparency = 0.78,
 		Parent = root,
 	})
 	dim.ZIndex = 0
 
-	-- Left neon rail
+	-- Left neon rail (glass)
 	local rail = Helpers.CreateFrame({
 		Name = "Rail",
 		Size = UDim2.fromOffset(72, 0),
 		Position = UDim2.fromOffset(18, 0),
 		AnchorPoint = Vector2.new(0, 0.5),
 		BackgroundColor3 = Color3.fromRGB(10, 12, 20),
-		BackgroundTransparency = 0.08,
+		BackgroundTransparency = 0.22,
 		Parent = root,
 	})
 	rail.Position = UDim2.new(0, 28, 0.5, 0)
 	rail.Size = UDim2.fromOffset(84, 440)
 	Helpers.Corner(rail, 24)
 	local railStroke = Helpers.Stroke(rail, Color3.fromRGB(120, 80, 255), 1)
-	railStroke.Transparency = 0.35
-	-- accent glow line
+	railStroke.Transparency = 0.4
+	-- accent line
 	local glow = Helpers.CreateFrame({
 		Name = "Glow",
 		Size = UDim2.new(0, 3, 1, -32),
 		Position = UDim2.new(1, -3, 0.5, 0),
 		AnchorPoint = Vector2.new(1, 0.5),
 		BackgroundColor3 = Color3.fromRGB(140, 90, 255),
+		BackgroundTransparency = 0.25,
 		Parent = rail,
 	})
 	Helpers.Corner(glow, 2)
@@ -1219,18 +1221,18 @@ function LayoutVariants:_ensureOrbit()
 	self._OrbitOrbList = orbList
 	self._OrbitOrbs = {}
 
-	-- Floating stage (content)
+	-- Floating stage (glass content)
 	local stage = Helpers.CreateFrame({
 		Name = "Stage",
 		Size = UDim2.new(1, -160, 1, -56),
 		Position = UDim2.fromOffset(132, 28),
 		BackgroundColor3 = Color3.fromRGB(12, 14, 22),
-		BackgroundTransparency = 0.06,
+		BackgroundTransparency = 0.22,
 		Parent = root,
 	})
 	Helpers.Corner(stage, 20)
 	local stageStroke = Helpers.Stroke(stage, Color3.fromRGB(100, 70, 220), 1)
-	stageStroke.Transparency = 0.45
+	stageStroke.Transparency = 0.5
 	self._OrbitStage = stage
 
 	local stageHost = Helpers.CreateFrame({
@@ -1414,17 +1416,17 @@ function LayoutVariants:_ensureAether()
 	local root = Helpers.CreateFrame({
 		Name = "Root",
 		Size = UDim2.fromScale(1, 1),
-		BackgroundColor3 = Color3.fromRGB(5, 7, 12),
+		BackgroundTransparency = 1,
 		Parent = gui,
 	})
 	self._AetherRoot = root
 
+	-- light dim only — game remains visible
 	local backdrop = Helpers.CreateFrame({
 		Name = "Backdrop",
-		Size = UDim2.new(1, 0, 1, -48),
-		Position = UDim2.fromOffset(0, 48),
-		BackgroundColor3 = Color3.fromRGB(8, 10, 16),
-		BackgroundTransparency = 0.1,
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Color3.fromRGB(5, 7, 12),
+		BackgroundTransparency = 0.78,
 		Parent = root,
 	})
 	backdrop.ZIndex = 0
@@ -1434,7 +1436,7 @@ function LayoutVariants:_ensureAether()
 		Size = UDim2.new(1, -240, 0, 62),
 		Position = UDim2.fromOffset(24, 18),
 		BackgroundColor3 = Color3.fromRGB(14, 18, 28),
-		BackgroundTransparency = 0.02,
+		BackgroundTransparency = 0.18,
 		Parent = root,
 	})
 	Helpers.Corner(top, 18)
@@ -1515,7 +1517,7 @@ function LayoutVariants:_ensureAether()
 		Size = UDim2.new(0, 112, 1, -118),
 		Position = UDim2.fromOffset(24, 94),
 		BackgroundColor3 = Color3.fromRGB(12, 15, 23),
-		BackgroundTransparency = 0.03,
+		BackgroundTransparency = 0.22,
 		Parent = root,
 	})
 	Helpers.Corner(rail, 18)
@@ -1565,7 +1567,7 @@ function LayoutVariants:_ensureAether()
 		Size = UDim2.new(1, -370, 1, -118),
 		Position = UDim2.fromOffset(152, 94),
 		BackgroundColor3 = Color3.fromRGB(10, 13, 20),
-		BackgroundTransparency = 0.02,
+		BackgroundTransparency = 0.22,
 		Parent = root,
 	})
 	Helpers.Corner(stage, 20)
@@ -1607,7 +1609,7 @@ function LayoutVariants:_ensureAether()
 		Position = UDim2.new(1, -24, 0, 94),
 		AnchorPoint = Vector2.new(1, 0),
 		BackgroundColor3 = Color3.fromRGB(16, 17, 26),
-		BackgroundTransparency = 0.02,
+		BackgroundTransparency = 0.22,
 		Parent = root,
 	})
 	Helpers.Corner(side, 18)
@@ -1835,28 +1837,28 @@ function LayoutVariants:_ensureNova()
 	local root = Helpers.CreateFrame({
 		Name = "Root",
 		Size = UDim2.fromScale(1, 1),
-		BackgroundColor3 = Color3.fromRGB(4, 8, 12),
+		BackgroundTransparency = 1,
 		Parent = gui,
 	})
 	self._NovaRoot = root
 
-	-- soft vignette
+	-- soft vignette — light so game stays visible
 	local dim = Helpers.CreateFrame({
 		Name = "Vignette",
 		Size = UDim2.fromScale(1, 1),
 		BackgroundColor3 = Color3.fromRGB(0, 4, 8),
-		BackgroundTransparency = 0.55,
+		BackgroundTransparency = 0.78,
 		Parent = root,
 	})
 	dim.ZIndex = 0
 
-	-- Top floating brand strip
+	-- Top floating brand strip (glass)
 	local brandBar = Helpers.CreateFrame({
 		Name = "BrandBar",
 		Size = UDim2.new(1, -80, 0, 36),
 		Position = UDim2.fromOffset(40, 14),
 		BackgroundColor3 = Color3.fromRGB(8, 16, 22),
-		BackgroundTransparency = 0.15,
+		BackgroundTransparency = 0.22,
 		Parent = root,
 	})
 	Helpers.Corner(brandBar, 18)
@@ -1912,7 +1914,7 @@ function LayoutVariants:_ensureNova()
 		Size = UDim2.new(1, -80, 0, 52),
 		Position = UDim2.fromOffset(40, 58),
 		BackgroundColor3 = Color3.fromRGB(10, 18, 26),
-		BackgroundTransparency = 0.08,
+		BackgroundTransparency = 0.22,
 		Parent = root,
 	})
 	Helpers.Corner(nav, 26)
@@ -1962,18 +1964,18 @@ function LayoutVariants:_ensureNova()
 		end
 	end)
 
-	-- Centered crystal stage
+	-- Centered crystal stage (glass)
 	local stage = Helpers.CreateFrame({
 		Name = "CrystalStage",
 		Size = UDim2.new(1, -80, 1, -180),
 		Position = UDim2.fromOffset(40, 124),
 		BackgroundColor3 = Color3.fromRGB(8, 14, 20),
-		BackgroundTransparency = 0.04,
+		BackgroundTransparency = 0.22,
 		Parent = root,
 	})
 	Helpers.Corner(stage, 22)
 	local stageStroke = Helpers.Stroke(stage, Color3.fromRGB(50, 140, 160), 1)
-	stageStroke.Transparency = 0.4
+	stageStroke.Transparency = 0.45
 	stage.ZIndex = 2
 	self._NovaStage = stage
 
@@ -1998,13 +2000,13 @@ function LayoutVariants:_ensureNova()
 	})
 	self._NovaPageHost = pageHost
 
-	-- Bottom status strip
+	-- Bottom status strip (glass)
 	local status = Helpers.CreateFrame({
 		Name = "StatusStrip",
 		Size = UDim2.new(1, -80, 0, 36),
 		Position = UDim2.new(0, 40, 1, -52),
 		BackgroundColor3 = Color3.fromRGB(8, 16, 22),
-		BackgroundTransparency = 0.12,
+		BackgroundTransparency = 0.22,
 		Parent = root,
 	})
 	Helpers.Corner(status, 18)
@@ -2221,27 +2223,27 @@ function LayoutVariants:_ensureVortex()
 	local root = Helpers.CreateFrame({
 		Name = "Root",
 		Size = UDim2.fromScale(1, 1),
-		BackgroundColor3 = Color3.fromRGB(3, 5, 10),
+		BackgroundTransparency = 1,
 		Parent = gui,
 	})
 	self._VortexRoot = root
 
-	-- deep vignette
+	-- light vignette — game stays visible
 	Helpers.CreateFrame({
 		Name = "Vignette",
 		Size = UDim2.fromScale(1, 1),
 		BackgroundColor3 = Color3.fromRGB(0, 0, 0),
-		BackgroundTransparency = 0.45,
+		BackgroundTransparency = 0.78,
 		Parent = root,
 	}).ZIndex = 0
 
-	-- Right-side content stage
+	-- Right-side content stage (glass)
 	local stage = Helpers.CreateFrame({
 		Name = "Stage",
 		Size = UDim2.new(1, -290, 1, -60),
 		Position = UDim2.fromOffset(260, 30),
 		BackgroundColor3 = Color3.fromRGB(10, 12, 22),
-		BackgroundTransparency = 0.04,
+		BackgroundTransparency = 0.22,
 		Parent = root,
 	})
 	Helpers.Corner(stage, 24)
@@ -2381,18 +2383,18 @@ function LayoutVariants:_ensureVortex()
 	local ring2Stroke = Helpers.Stroke(ring2, Color3.fromRGB(90, 55, 160), 1)
 	ring2Stroke.Transparency = 0.75
 
-	-- central hub
+	-- central hub (glass)
 	local hub = Helpers.CreateFrame({
 		Name = "Hub",
 		Size = UDim2.fromOffset(76, 76),
 		Position = UDim2.new(0, hubX - 38, 1, -(hubY + 38)),
 		BackgroundColor3 = Color3.fromRGB(26, 16, 44),
-		BackgroundTransparency = 0.02,
+		BackgroundTransparency = 0.15,
 		Parent = root,
 	})
 	Helpers.Corner(hub, 38)
 	local hubStroke = Helpers.Stroke(hub, Color3.fromRGB(165, 95, 255), 1.5)
-	hubStroke.Transparency = 0.15
+	hubStroke.Transparency = 0.2
 	hub.ZIndex = 6
 	self._VortexHub = hub
 	Helpers.Glow(hub, Color3.fromRGB(160, 90, 255), 18, 0.75)
@@ -2653,37 +2655,46 @@ function LayoutVariants:_ensurePrism()
 	local root = Helpers.CreateFrame({
 		Name = "Root",
 		Size = UDim2.fromScale(1, 1),
-		BackgroundColor3 = Color3.fromRGB(6, 5, 12),
+		BackgroundTransparency = 1,
 		Parent = gui,
 	})
 	self._PrismRoot = root
 
-	-- spectral diagonal wash (unique background: rotated color bands)
+	-- light dim so game stays visible
+	Helpers.CreateFrame({
+		Name = "Dim",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Color3.fromRGB(6, 5, 12),
+		BackgroundTransparency = 0.78,
+		Parent = root,
+	}).ZIndex = 0
+
+	-- spectral diagonal wash (very subtle so background remains readable)
 	for i = 1, 6 do
 		local band = Helpers.CreateFrame({
 			Name = "Band" .. i,
 			Size = UDim2.new(1, 160, 0, 110),
 			Position = UDim2.new(0, -80, 0, 120 * (i - 1) - 60),
 			Rotation = -8,
-			BackgroundColor3 = Color3.fromHSV((i - 1) / 6, 0.5, 0.15),
-			BackgroundTransparency = 0.3,
+			BackgroundColor3 = Color3.fromHSV((i - 1) / 6, 0.45, 0.18),
+			BackgroundTransparency = 0.82,
 			Parent = root,
 		})
 		band.ZIndex = 0
 	end
 
-	-- top header strip
+	-- top header strip (glass)
 	local header = Helpers.CreateFrame({
 		Name = "Header",
 		Size = UDim2.new(1, -110, 0, 44),
 		Position = UDim2.fromOffset(30, 18),
 		BackgroundColor3 = Color3.fromRGB(12, 10, 22),
-		BackgroundTransparency = 0.08,
+		BackgroundTransparency = 0.22,
 		Parent = root,
 	})
 	Helpers.Corner(header, 14)
 	local headerStroke = Helpers.Stroke(header, Color3.fromHSV(0.75, 0.45, 0.85), 1)
-	headerStroke.Transparency = 0.6
+	headerStroke.Transparency = 0.55
 
 	Helpers.CreateLabel({
 		Name = "Brand",
@@ -2740,18 +2751,18 @@ function LayoutVariants:_ensurePrism()
 		end
 	end)
 
-	-- LEFT content stage (unique: stage on the left, spines on the right)
+	-- LEFT content stage (glass — game visible behind)
 	local stage = Helpers.CreateFrame({
 		Name = "Stage",
 		Size = UDim2.new(1, -350, 1, -120),
 		Position = UDim2.fromOffset(30, 90),
 		BackgroundColor3 = Color3.fromRGB(11, 10, 20),
-		BackgroundTransparency = 0.04,
+		BackgroundTransparency = 0.22,
 		Parent = root,
 	})
 	Helpers.Corner(stage, 18)
 	local stageStroke = Helpers.Stroke(stage, Color3.fromRGB(120, 100, 180), 1)
-	stageStroke.Transparency = 0.55
+	stageStroke.Transparency = 0.5
 	stage.ZIndex = 2
 	self._PrismStage = stage
 
@@ -3051,17 +3062,17 @@ function LayoutVariants:_ensureEclipse()
         local root = Helpers.CreateFrame({
                 Name = "Root",
                 Size = UDim2.fromScale(1,1),
-                BackgroundColor3 = Color3.fromRGB(7, 7, 11),
+                BackgroundTransparency = 1,
                 Parent = gui,
         })
         self._EclipseRoot = root
 
-        -- vignette + subtle aurora
+        -- light vignette — game stays visible
         local vign = Helpers.CreateFrame({
                 Name = "Vignette",
                 Size = UDim2.fromScale(1,1),
                 BackgroundColor3 = Color3.fromRGB(0,0,0),
-                BackgroundTransparency = 0.42,
+                BackgroundTransparency = 0.78,
                 Parent = root,
         })
         vign.ZIndex = 0
@@ -3072,7 +3083,7 @@ function LayoutVariants:_ensureEclipse()
                 Position = UDim2.fromOffset(0, -40),
                 Rotation = -3,
                 BackgroundColor3 = Color3.fromRGB(255, 180, 80),
-                BackgroundTransparency = 0.92,
+                BackgroundTransparency = 0.94,
                 Parent = root,
         })
         auroraTop.ZIndex = 0
@@ -3083,24 +3094,24 @@ function LayoutVariants:_ensureEclipse()
                 ColorSequenceKeypoint.new(1, Color3.fromRGB(140, 60, 255)),
         })
         grad1.Transparency = NumberSequence.new({
-                NumberSequenceKeypoint.new(0, 0.6),
+                NumberSequenceKeypoint.new(0, 0.75),
                 NumberSequenceKeypoint.new(1, 1),
         })
         grad1.Rotation = 90
         grad1.Parent = auroraTop
 
-        -- Top capsule nav (centered)
+        -- Top capsule nav (glass)
         local topCapsule = Helpers.CreateFrame({
                 Name = "TopCapsule",
                 Size = UDim2.new(0, 720, 0, 48),
                 Position = UDim2.new(0.5, -360, 0, 18),
                 BackgroundColor3 = Color3.fromRGB(18, 16, 24),
-                BackgroundTransparency = 0.06,
+                BackgroundTransparency = 0.2,
                 Parent = root,
         })
         Helpers.Corner(topCapsule, 24)
         local capStroke = Helpers.Stroke(topCapsule, Color3.fromRGB(255, 200, 100), 1)
-        capStroke.Transparency = 0.55
+        capStroke.Transparency = 0.5
         topCapsule.ZIndex = 5
 
         Helpers.CreateLabel({
@@ -3166,13 +3177,13 @@ function LayoutVariants:_ensureEclipse()
                 if w.SetVisible then w:SetVisible(false) end
         end)
 
-        -- Left timeline rail (command rail)
+        -- Left timeline rail (glass)
         local timelineWrap = Helpers.CreateFrame({
                 Name = "TimelineWrap",
                 Size = UDim2.new(0, 220, 1, -96),
                 Position = UDim2.fromOffset(24, 84),
                 BackgroundColor3 = Color3.fromRGB(13, 12, 18),
-                BackgroundTransparency = 0.06,
+                BackgroundTransparency = 0.22,
                 Parent = root,
         })
         Helpers.Corner(timelineWrap, 18)
@@ -3216,13 +3227,13 @@ function LayoutVariants:_ensureEclipse()
         self._EclipseTimeline = tlList
 
         
-        -- Center corona stage (content) - ENHANCED
+        -- Center corona stage (glass)
         local stage = Helpers.CreateFrame({
                 Name = "Stage",
                 Size = UDim2.new(1, -284, 1, -96),
                 Position = UDim2.new(0, 260, 0, 84),
                 BackgroundColor3 = Color3.fromRGB(14, 13, 20),
-                BackgroundTransparency = 0.03,
+                BackgroundTransparency = 0.22,
                 Parent = root,
         })
         Helpers.Corner(stage, 22)
@@ -3689,29 +3700,29 @@ function LayoutVariants:_ensureZenith()
 	})
 	self._ZenithRoot = root
 
-	-- Subtle background dim
+	-- Light dim — game stays clearly visible
 	local dim = Helpers.CreateFrame({
 		Name = "Dim",
 		Size = UDim2.fromScale(1, 1),
 		BackgroundColor3 = Color3.fromRGB(2, 4, 8),
-		BackgroundTransparency = 0.4,
+		BackgroundTransparency = 0.78,
 		Parent = root,
 	})
 	dim.ZIndex = 0
 
-	-- Left sidebar (floating)
+	-- Left sidebar (floating glass)
 	local sidebar = Helpers.CreateFrame({
 		Name = "Sidebar",
 		Size = UDim2.fromOffset(94, 480),
 		Position = UDim2.new(0, 28, 0.5, 0),
 		AnchorPoint = Vector2.new(0, 0.5),
 		BackgroundColor3 = Color3.fromRGB(8, 10, 18),
-		BackgroundTransparency = 0.05,
+		BackgroundTransparency = 0.22,
 		Parent = root,
 	})
 	Helpers.Corner(sidebar, 20)
 	local sidebarStroke = Helpers.Stroke(sidebar, Color3.fromRGB(0, 200, 255), 1)
-	sidebarStroke.Transparency = 0.6
+	sidebarStroke.Transparency = 0.55
 	self._ZenithSidebar = sidebar
 
 	-- Sidebar scroll area
@@ -3755,13 +3766,13 @@ function LayoutVariants:_ensureZenith()
 		Parent = sidebar,
 	})
 
-	-- Main content stage
+	-- Main content stage (glass)
 	local stage = Helpers.CreateFrame({
 		Name = "Stage",
 		Size = UDim2.new(1, -180, 1, -48),
 		Position = UDim2.fromOffset(148, 24),
 		BackgroundColor3 = Color3.fromRGB(10, 12, 20),
-		BackgroundTransparency = 0.08,
+		BackgroundTransparency = 0.22,
 		Parent = root,
 	})
 	Helpers.Corner(stage, 18)
