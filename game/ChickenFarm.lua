@@ -10,7 +10,7 @@ local Avatar = Players:GetUserThumbnailAsync(
     Enum.ThumbnailSize.Size150x150
 )
 
-local CyberUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/datfiete/Void-Hub/main/CyberUI/load.lua"))()
+local CyberUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/datfiete/Void-Hub/refs/heads/main/CyberUI%20-%20Kopie/load.lua"))()
 
 CyberUI.Theme.Style = "Meng"
 
