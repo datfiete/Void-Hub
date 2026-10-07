@@ -1662,22 +1662,20 @@ BF.findLiveBossSimple = function(level)
         if not hum or not root or hum.Health <= 0 then continue end
 
         local lower = string.lower(model.Name)
-        local looksBoss = model:GetAttribute("isBoss") == true
-            or string.find(lower, "[boss]", 1, true) ~= nil
-            or string.find(lower, "boss", 1, true) ~= nil
 
-        -- Match against our island boss table
+        -- Only bosses listed in islands, and only if player level is high enough
         for _, isl in ipairs(islands) do
             if not isl.isBoss then continue end
-            -- wide level window so we still hunt near the range
-            if level < (isl.Min or 0) - 15 or level > (isl.Max or 9999) + 30 then
+            local minLv = isl.Min or 0
+            local maxLv = isl.Max or 9999
+            -- Strict: must meet Min. Small +5 on Max so a level-up mid-fight still finishes.
+            if level < minLv or level > maxLv + 5 then
                 continue
             end
             local patterns = isl.BossPatterns or { isl.Name }
             for _, p in ipairs(patterns) do
                 local pl = string.lower(tostring(p or ""))
                 if pl ~= "" and string.find(lower, pl, 1, true) then
-                    looksBoss = true
                     local d = hrp and (root.Position - hrp.Position).Magnitude or 0
                     if d < bestDist then
                         bestDist = d
