@@ -29,7 +29,6 @@ local MODULE_PATHS = {
 	"Elements/Keybind",
 	"Elements/ColorPicker",
 	"Elements/Paragraph",
-	-- neu in 5.0:
 	"Elements/Card",
 	"Elements/Badge",
 	"Elements/Progress",
@@ -44,7 +43,7 @@ local MODULE_PATHS = {
 	"Core/ESPBuilder",
 	"Core/ESPWorldRenderer",
 	"Core/WorldRadar",
-	"Core/LayoutVariants",   -- neu in 5.0
+	"Core/LayoutVariants",
 	"Core/Window",
 }
 
