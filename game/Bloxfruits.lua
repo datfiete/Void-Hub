@@ -14,7 +14,6 @@ print("[BF] load ok - full autofarm script")
 
 local BF = {}
 
-
 -- Load Vaxorin (or fallback UI)
 local useVaxorin = false
 local window = nil
