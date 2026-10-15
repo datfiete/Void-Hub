@@ -1317,7 +1317,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		local absPos = island.AbsolutePosition
 		local absSize = island.AbsoluteSize
 		local host = self._IslandActivityHost or islandActivityHost
-		host.Position = UDim2.fromOffset(absPos.X + absSize.X * 0.5, absPos.Y + absSize.Y - 2)
+		host.Position = UDim2.fromOffset(absPos.X + absSize.X * 0.5, absPos.Y + absSize.Y + 14)
 		host.AnchorPoint = Vector2.new(0.5, 0)
 		host.Size = UDim2.fromOffset(230, 0)
 		host.Visible = true
@@ -1489,19 +1489,30 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	self._WeatherScope = "Screen"
 	self._OpenStyle = "Island" -- or "Button"
 
-	-- Full-screen dim behind the window when open
+	-- Dim in SEPARATE ScreenGui with lower DisplayOrder — never covers Vaxorin UI
+	local dimGui = Instance.new("ScreenGui")
+	dimGui.Name = "VaxorinDimGui"
+	dimGui.ResetOnSpawn = false
+	dimGui.IgnoreGuiInset = true
+	dimGui.DisplayOrder = math.max(0, (screenGui.DisplayOrder or 100) - 20)
+	dimGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	dimGui.Parent = screenGui.Parent
+	self._DimGui = dimGui
+
 	local dim = Instance.new("Frame")
 	dim.Name = "VaxorinDim"
 	dim.Size = UDim2.fromScale(1, 1)
-	dim.Position = UDim2.fromScale(0, 0)
 	dim.BackgroundColor3 = Color3.new(0, 0, 0)
 	dim.BackgroundTransparency = 1
 	dim.BorderSizePixel = 0
-	dim.ZIndex = 1
 	dim.Active = false
 	dim.Visible = true
-	dim.Parent = screenGui
+	dim.Parent = dimGui
 	self._Dim = dim
+	self._DimAmount = self._DimAmount or 0.45
+
+	main.ZIndex = 50
+	screenGui.DisplayOrder = math.max(screenGui.DisplayOrder or 100, dimGui.DisplayOrder + 20)
 
 	-- Window open/close scale
 	local mainScale = Instance.new("UIScale")
@@ -3780,6 +3791,10 @@ function Window:Notify(options: any)
 end
 
 function Window:Destroy()
+	if self._DimGui then
+		pcall(function() self._DimGui:Destroy() end)
+		self._DimGui = nil
+	end
 	if self._LayoutVariants then
 		pcall(function() self._LayoutVariants:Destroy() end)
 		self._LayoutVariants = nil
