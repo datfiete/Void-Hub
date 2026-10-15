@@ -8,7 +8,6 @@ local Tween = require(script.Parent.Parent.Utils.Tween)
 local ESPBuilder = require(script.Parent.ESPBuilder)
 local ESPWorldRenderer = require(script.Parent.ESPWorldRenderer)
 local LayoutVariants = require(script.Parent.LayoutVariants)
-local Weather = require(script.Parent.Weather)
 
 local TweenService = game:GetService("TweenService")
 local Lighting = game:GetService("Lighting")
@@ -19,6 +18,86 @@ local GUI_NAME = "Vaxorin"
 local VERSION = "5.0"
 local Vaxorin_Logo = "rbxassetid://135320038058277"
 local LEGACY_LOGO = "rbxassetid://128228297210141"
+
+
+-- Inline weather (no separate module — works with older load.lua MODULE_PATHS)
+local function createWeather(parent: Instance)
+	local RunService = game:GetService("RunService")
+	local layer = Instance.new("Frame")
+	layer.Name = "WeatherLayer"
+	layer.BackgroundTransparency = 1
+	layer.Size = UDim2.fromScale(1, 1)
+	layer.ZIndex = 5
+	layer.ClipsDescendants = true
+	layer.Visible = false
+	layer.Parent = parent
+
+	local presets = {
+		Rain = { count = 40, color = Color3.fromRGB(160, 190, 220), sx = 1, sy = 14, spd = {180, 300}, drift = {-15, 15}, t = 0.35, corner = 0, rot = 12 },
+		Snow = { count = 32, color = Color3.fromRGB(240, 245, 255), sx = 4, sy = 4, spd = {30, 70}, drift = {-40, 40}, t = 0.25, corner = 8, rot = 0 },
+		Sakura = { count = 24, color = Color3.fromRGB(255, 160, 190), sx = 6, sy = 6, spd = {25, 55}, drift = {-50, 50}, t = 0.2, corner = 3, rot = 0 },
+		Stars = { count = 36, color = Color3.fromRGB(255, 255, 255), sx = 2, sy = 2, spd = {4, 12}, drift = {-8, 8}, t = 0.4, corner = 8, rot = 0 },
+		Leaves = { count = 20, color = Color3.fromRGB(180, 120, 50), sx = 7, sy = 5, spd = {35, 80}, drift = {-70, 70}, t = 0.15, corner = 2, rot = 0 },
+	}
+
+	local api = { _kind = "None", _parts = {} :: { Frame }, _conn = nil :: RBXScriptConnection? }
+
+	function api:Set(kind: string)
+		kind = kind or "None"
+		if self._conn then self._conn:Disconnect(); self._conn = nil end
+		for _, p in self._parts do if p then p:Destroy() end end
+		table.clear(self._parts)
+		self._kind = kind
+		local preset = presets[kind]
+		if not preset then layer.Visible = false; return end
+		layer.Visible = true
+		local rng = Random.new()
+		local speeds, drifts = {}, {}
+		for i = 1, preset.count do
+			local f = Instance.new("Frame")
+			f.BorderSizePixel = 0
+			f.BackgroundColor3 = preset.color
+			f.BackgroundTransparency = preset.t + rng:NextNumber(0, 0.2)
+			f.Size = UDim2.fromOffset(preset.sx, preset.sy)
+			f.Position = UDim2.fromScale(rng:NextNumber(0, 1), rng:NextNumber(-0.2, 1))
+			f.Rotation = if preset.rot ~= 0 then preset.rot else rng:NextNumber(-25, 25)
+			f.ZIndex = 6
+			f.Parent = layer
+			if preset.corner > 0 then
+				local c = Instance.new("UICorner")
+				c.CornerRadius = UDim.new(0, preset.corner)
+				c.Parent = f
+			end
+			self._parts[i] = f
+			speeds[i] = rng:NextNumber(preset.spd[1], preset.spd[2])
+			drifts[i] = rng:NextNumber(preset.drift[1], preset.drift[2])
+		end
+		self._conn = RunService.RenderStepped:Connect(function(dt)
+			local abs = layer.AbsoluteSize
+			if abs.X < 2 or abs.Y < 2 then return end
+			for i, p in self._parts do
+				if not p or not p.Parent then continue end
+				local x = p.Position.X.Scale * abs.X + p.Position.X.Offset
+				local y = p.Position.Y.Scale * abs.Y + p.Position.Y.Offset
+				y += speeds[i] * dt
+				x += drifts[i] * dt
+				if kind == "Sakura" or kind == "Leaves" then p.Rotation += drifts[i] * dt * 0.35 end
+				if y > abs.Y + 20 then y = rng:NextNumber(-30, -4); x = rng:NextNumber(0, abs.X) end
+				if x < -20 then x = abs.X + 10 elseif x > abs.X + 20 then x = -10 end
+				p.Position = UDim2.fromOffset(x, y)
+			end
+		end)
+	end
+
+	function api:Destroy()
+		if self._conn then self._conn:Disconnect() end
+		for _, p in self._parts do if p then p:Destroy() end end
+		layer:Destroy()
+	end
+
+	return api
+end
+
 
 -- Soft 9-slice drop shadow, used behind the main window for real depth instead
 -- of a flat card floating on nothing.
@@ -1031,7 +1110,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 
 	self._Maid:Give(island)
 	-- Weather layer on main window body
-	self._Weather = Weather.new(main)
+	self._Weather = createWeather(main)
 	self._WeatherKind = "None"
 
 
