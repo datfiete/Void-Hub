@@ -1177,17 +1177,29 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	self._IslandCompact = islandCompact
 
 	-- Activity panel (hover info) — Deep Fishing style
+	-- Clip host so the card appears to slide out of the island
+	local islandActivityHost = Instance.new("Frame")
+	islandActivityHost.Name = "ActivityHost"
+	islandActivityHost.BackgroundTransparency = 1
+	islandActivityHost.BorderSizePixel = 0
+	islandActivityHost.ClipsDescendants = true
+	islandActivityHost.Visible = false
+	islandActivityHost.ZIndex = 59
+	islandActivityHost.AnchorPoint = Vector2.new(0.5, 0)
+	islandActivityHost.Size = UDim2.fromOffset(230, 0)
+	islandActivityHost.Parent = screenGui
+	self._IslandActivityHost = islandActivityHost
+
 	local islandActivity = Instance.new("Frame")
 	islandActivity.Name = "Activity"
-	islandActivity.Size = UDim2.fromOffset(220, 0)
-	islandActivity.AutomaticSize = Enum.AutomaticSize.Y
-	islandActivity.Position = UDim2.new(0.5, 0, 1, 8)
+	islandActivity.Size = UDim2.fromOffset(220, 96)
+	islandActivity.Position = UDim2.new(0.5, 0, 0, 0)
 	islandActivity.AnchorPoint = Vector2.new(0.5, 0)
 	islandActivity.BackgroundColor3 = library.Theme.Secondary
 	islandActivity.BackgroundTransparency = 0.02
-	islandActivity.Visible = false
+	islandActivity.Visible = true
 	islandActivity.ZIndex = 60
-	islandActivity.Parent = screenGui
+	islandActivity.Parent = islandActivityHost
 	Helpers.Corner(islandActivity, 12)
 	Helpers.Stroke(islandActivity, library.Theme.Border, 1)
 	Helpers.Padding(islandActivity, 10)
@@ -1299,23 +1311,24 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	activityScale.Scale = 0.9
 	activityScale.Parent = islandActivity
 
+	local ACTIVITY_H = 100
 	local function showIslandActivity()
-		-- Island pill stays fixed; card slides out underneath (Deep Fishing style)
+		-- Expand a clip host downward from the island — content is revealed, island untouched
 		local absPos = island.AbsolutePosition
 		local absSize = island.AbsoluteSize
-		local targetPos = UDim2.fromOffset(absPos.X + absSize.X * 0.5, absPos.Y + absSize.Y + 8)
-		local startPos = UDim2.fromOffset(absPos.X + absSize.X * 0.5, absPos.Y + absSize.Y - 4)
-		islandActivity.AnchorPoint = Vector2.new(0.5, 0)
+		local host = self._IslandActivityHost or islandActivityHost
+		host.Position = UDim2.fromOffset(absPos.X + absSize.X * 0.5, absPos.Y + absSize.Y - 2)
+		host.AnchorPoint = Vector2.new(0.5, 0)
+		host.Size = UDim2.fromOffset(230, 0)
+		host.Visible = true
 		islandActivity.BackgroundColor3 = library.Theme.Secondary
 		actTitle.TextColor3 = library.Theme.Text
 		actStatus.TextColor3 = library.Theme.TextMuted
 		actStats.TextColor3 = library.Theme.Accent
 		actHint.TextColor3 = library.Theme.TextMuted
-		islandActivity.Visible = true
-		islandActivity.Position = startPos
-		activityScale.Scale = 0.92
-		Tween.Play(islandActivity, { Position = targetPos }, { Time = 0.18, EasingStyle = Enum.EasingStyle.Quint })
-		Tween.Play(activityScale, { Scale = 1 }, { Time = 0.18, EasingStyle = Enum.EasingStyle.Quint })
+		-- card sits at top of host; host grows so card appears to slide out
+		islandActivity.Position = UDim2.new(0.5, 0, 0, 0)
+		Tween.Play(host, { Size = UDim2.fromOffset(230, ACTIVITY_H) }, { Time = 0.22, EasingStyle = Enum.EasingStyle.Quint })
 		for _, bar in bars:GetChildren() do
 			if bar:IsA("Frame") then
 				Tween.Play(bar, { BackgroundColor3 = library.Theme.AccentAlt or library.Theme.Accent }, { Time = 0.12 })
@@ -1324,18 +1337,13 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	end
 
 	local function hideIslandActivity()
-		if not self._IslandActivity or not self._IslandActivity.Visible then
+		local host = self._IslandActivityHost
+		if not host or not host.Visible then
 			return
 		end
-		local absPos = island.AbsolutePosition
-		local absSize = island.AbsoluteSize
-		local hidePos = UDim2.fromOffset(absPos.X + absSize.X * 0.5, absPos.Y + absSize.Y - 2)
-		Tween.Play(islandActivity, { Position = hidePos }, { Time = 0.12 })
-		Tween.Play(activityScale, { Scale = 0.92 }, { Time = 0.12 })
-		task.delay(0.12, function()
-			if self._IslandActivity then
-				self._IslandActivity.Visible = false
-			end
+		Tween.Play(host, { Size = UDim2.fromOffset(230, 0) }, { Time = 0.16, EasingStyle = Enum.EasingStyle.Quint })
+		task.delay(0.16, function()
+			if host then host.Visible = false end
 		end)
 		for _, bar in bars:GetChildren() do
 			if bar:IsA("Frame") then
@@ -1412,17 +1420,17 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 
 
 	self._Maid:GiveTask(islandHit.MouseLeave:Connect(function()
-		task.delay(0.08, function()
-			if not islandActivity:IsDescendantOf(game) then return end
-			-- keep open if mouse moved onto the card
+		task.delay(0.12, function()
+			-- stay open if pointer moved onto the revealed card
 		end)
 		hideIslandActivity()
 	end))
-	islandActivity.Active = true
-	self._Maid:GiveTask(islandActivity.MouseEnter:Connect(function()
-		islandActivity.Visible = true
+	islandActivityHost.Active = true
+	self._Maid:GiveTask(islandActivityHost.MouseEnter:Connect(function()
+		local host = self._IslandActivityHost
+		if host then host.Visible = true end
 	end))
-	self._Maid:GiveTask(islandActivity.MouseLeave:Connect(hideIslandActivity))
+	self._Maid:GiveTask(islandActivityHost.MouseLeave:Connect(hideIslandActivity))
 
 	-- Drag-vs-click distinction: only treat it as a "toggle" click if the pointer
 	-- barely moved. Previously any drag would also fire SetVisible(true) on release.
@@ -2554,6 +2562,10 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 			self._WeatherKind = weather
 			self._Weather:Set(weather)
 		end
+		local dimPct = self.Library:_getSavedFlag("Vaxorin.Visual.DimAmount", 45, true)
+		if typeof(dimPct) == "number" then
+			self._DimAmount = math.clamp(dimPct / 100, 0, 1)
+		end
 	end)
 	-- Footer click opens a lightweight dashboard notify for now
 	if footer then
@@ -2928,6 +2940,22 @@ function Window:_createOptionsTab()
 			self._WeatherScope = value
 			if self._Weather and self._Weather.SetScope then
 				self._Weather:SetScope(value)
+			end
+		end,
+	})
+
+	visualSection:CreateSlider({
+		Name = "Background Dim",
+		Min = 0,
+		Max = 100,
+		Default = math.floor((self._DimAmount or 0.45) * 100 + 0.5),
+		Flag = "Vaxorin.Visual.DimAmount",
+		Save = true,
+		Callback = function(value)
+			local n = tonumber(value) or 45
+			self._DimAmount = math.clamp(n / 100, 0, 1)
+			if self._Dim and self._Visible then
+				Tween.Play(self._Dim, { BackgroundTransparency = 1 - self._DimAmount }, { Time = 0.12 })
 			end
 		end,
 	})
@@ -3663,7 +3691,8 @@ function Window:SetVisible(visible: boolean)
 	end
 
 	local function hideOpenControls()
-		if self._IslandActivity then self._IslandActivity.Visible = false end
+		if self._IslandActivityHost then self._IslandActivityHost.Visible = false end
+		if self._IslandActivity then self._IslandActivity.Visible = true end
 		local islandBtn = self.Gui and self.Gui:FindFirstChild("Island")
 		if islandBtn then islandBtn.Visible = false end
 		if self._ClassicOpen then self._ClassicOpen.Visible = false end
