@@ -27,9 +27,10 @@ local function createWeather(parent: Instance)
 	layer.Name = "WeatherLayer"
 	layer.BackgroundTransparency = 1
 	layer.Size = UDim2.fromScale(1, 1)
-	layer.ZIndex = 5
-	layer.ClipsDescendants = true
+	layer.ZIndex = 20
+	layer.ClipsDescendants = false
 	layer.Visible = false
+	layer.Active = false
 	layer.Parent = parent
 
 	local presets = {
@@ -1042,6 +1043,176 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	self._IslandBars = bars
 	self._IslandCompact = islandCompact
 
+	-- Activity panel (hover info) — Deep Fishing style
+	local islandActivity = Instance.new("Frame")
+	islandActivity.Name = "Activity"
+	islandActivity.Size = UDim2.fromOffset(220, 0)
+	islandActivity.AutomaticSize = Enum.AutomaticSize.Y
+	islandActivity.Position = UDim2.new(0.5, 0, 1, 8)
+	islandActivity.AnchorPoint = Vector2.new(0.5, 0)
+	islandActivity.BackgroundColor3 = library.Theme.Secondary
+	islandActivity.BackgroundTransparency = 0.02
+	islandActivity.Visible = false
+	islandActivity.ZIndex = 59
+	islandActivity.Parent = island
+	Helpers.Corner(islandActivity, 12)
+	Helpers.Stroke(islandActivity, library.Theme.Border, 1)
+	Helpers.Padding(islandActivity, 10)
+
+	local actLayout = Instance.new("UIListLayout")
+	actLayout.FillDirection = Enum.FillDirection.Vertical
+	actLayout.Padding = UDim.new(0, 4)
+	actLayout.Parent = islandActivity
+
+	local actTitle = Helpers.CreateLabel({
+		Name = "ActTitle",
+		Size = UDim2.new(1, 0, 0, 16),
+		Text = "Vaxorin",
+		Font = Theme.FontBold,
+		TextSize = 13,
+		TextColor3 = library.Theme.Text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = islandActivity,
+	})
+	local actStatus = Helpers.CreateLabel({
+		Name = "ActStatus",
+		Size = UDim2.new(1, 0, 0, 14),
+		Text = "Ready",
+		Font = Theme.Font,
+		TextSize = 11,
+		TextColor3 = library.Theme.TextMuted,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = islandActivity,
+	})
+	local actStats = Helpers.CreateLabel({
+		Name = "ActStats",
+		Size = UDim2.new(1, 0, 0, 14),
+		Text = "FPS —  ·  Ping —",
+		Font = Theme.Font,
+		TextSize = 11,
+		TextColor3 = library.Theme.Accent,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = islandActivity,
+	})
+	local actHint = Helpers.CreateLabel({
+		Name = "ActHint",
+		Size = UDim2.new(1, 0, 0, 14),
+		Text = "Click or press RCtrl to open",
+		Font = Theme.Font,
+		TextSize = 10,
+		TextColor3 = library.Theme.TextMuted,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = islandActivity,
+	})
+	self._IslandActivity = islandActivity
+	self._IslandActStatus = actStatus
+	self._IslandActStats = actStats
+
+	-- Classic circular open button (legacy)
+	local classicBtn = Instance.new("ImageButton")
+	classicBtn.Name = "ClassicOpen"
+	classicBtn.Size = UDim2.fromOffset(50, 50)
+	classicBtn.Position = UDim2.new(0, 43, 0.5, 0)
+	classicBtn.AnchorPoint = Vector2.new(0, 0.5)
+	classicBtn.BackgroundColor3 = library.Theme.Background
+	classicBtn.BackgroundTransparency = 0
+	classicBtn.Image = ""
+	classicBtn.AutoButtonColor = false
+	classicBtn.Visible = false
+	classicBtn.ZIndex = 55
+	classicBtn.Parent = screenGui
+	Helpers.Corner(classicBtn, 12)
+	local classicStroke = Helpers.Stroke(classicBtn, library.Theme.Border, 1.3)
+	local classicIcon = Instance.new("ImageLabel")
+	classicIcon.BackgroundTransparency = 1
+	classicIcon.Size = UDim2.fromOffset(23, 23)
+	classicIcon.Position = UDim2.fromScale(0.5, 0.5)
+	classicIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+	classicIcon.Image = logoAsset
+	classicIcon.ScaleType = Enum.ScaleType.Fit
+	classicIcon.ZIndex = 56
+	classicIcon.Parent = classicBtn
+	self._ClassicOpen = classicBtn
+	self._ClassicStroke = classicStroke
+
+	function self:_applyOpenStyle(style: string)
+		style = style or "Island"
+		self._OpenStyle = style
+		local useIsland = style ~= "Button"
+		if island then
+			-- visibility controlled by SetVisible; just track preferred control
+			island:SetAttribute("Preferred", useIsland)
+		end
+		if classicBtn then
+			classicBtn:SetAttribute("Preferred", not useIsland)
+		end
+		-- If currently hidden UI, show the right control
+		if not self._Visible and self._StartupComplete then
+			if useIsland then
+				island.Visible = true
+				classicBtn.Visible = false
+				self._FloatingButton = island
+			else
+				island.Visible = false
+				classicBtn.Visible = true
+				self._FloatingButton = classicBtn
+			end
+		end
+	end
+
+	-- Island hover → show activity
+	self._Maid:GiveTask(islandHit.MouseEnter:Connect(function()
+		islandActivity.Visible = true
+		islandActivity.BackgroundColor3 = library.Theme.Secondary
+		actTitle.TextColor3 = library.Theme.Text
+		actStatus.TextColor3 = library.Theme.TextMuted
+		actStats.TextColor3 = library.Theme.Accent
+		actHint.TextColor3 = library.Theme.TextMuted
+	end))
+	-- note: size hover already connected; keep activity until leave
+	local oldLeave -- patched below via combined leave
+
+	self._Maid:GiveTask(classicBtn.MouseEnter:Connect(function()
+		Tween.Play(classicBtn, { BackgroundColor3 = library.Theme.SurfaceHover }, { Time = 0.12 })
+	end))
+	self._Maid:GiveTask(classicBtn.MouseLeave:Connect(function()
+		Tween.Play(classicBtn, { BackgroundColor3 = library.Theme.Background }, { Time = 0.12 })
+	end))
+	self._Maid:GiveTask(classicBtn.MouseButton1Click:Connect(function()
+		playClick()
+		self:SetVisible(true)
+	end))
+
+	-- Live stats for island activity
+	self._Maid:GiveTask(task.spawn(function()
+		local frames, last = 0, os.clock()
+		local fps = 0
+		self._Maid:GiveTask(game:GetService("RunService").RenderStepped:Connect(function()
+			frames += 1
+			local now = os.clock()
+			if now - last >= 0.5 then
+				fps = math.floor(frames / (now - last) + 0.5)
+				frames = 0
+				last = now
+			end
+		end))
+		while self.Gui and self.Gui.Parent do
+			local ping = 0
+			pcall(function()
+				local item = Stats.Network.ServerStatsItem["Data Ping"]
+				if item then ping = math.floor((item:GetValue() or 0) + 0.5) end
+			end)
+			if self._IslandActStats then
+				self._IslandActStats.Text = string.format("FPS %d  ·  Ping %dms", fps, ping)
+			end
+			if self._IslandActStatus then
+				self._IslandActStatus.Text = (self._FooterStatus and self._FooterStatus.Text) or "Ready"
+			end
+			task.wait(0.5)
+		end
+	end))
+
+
 	self._Maid:GiveTask(islandHit.MouseEnter:Connect(function()
 		Tween.Play(island, { Size = UDim2.fromOffset(188, 36) }, { Time = 0.15 })
 		for _, bar in bars:GetChildren() do
@@ -1056,6 +1227,9 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 			if bar:IsA("Frame") then
 				Tween.Play(bar, { BackgroundColor3 = library.Theme.Accent }, { Time = 0.12 })
 			end
+		end
+		if self._IslandActivity then
+			self._IslandActivity.Visible = false
 		end
 	end))
 
@@ -1109,9 +1283,10 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	end))
 
 	self._Maid:Give(island)
-	-- Weather layer on main window body
-	self._Weather = createWeather(main)
+	-- Weather layer on full ScreenGui so particles are always visible
+	self._Weather = createWeather(screenGui)
 	self._WeatherKind = "None"
+	self._OpenStyle = "Island" -- or "Button"
 
 
 	-- ============================================
@@ -1533,13 +1708,14 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Name = "FooterBar",
 		Size = UDim2.new(1, 0, 0, footerHeight),
 		Position = UDim2.new(0, 0, 1, -footerHeight),
-		BackgroundColor3 = library.Theme.Secondary,
-		BackgroundTransparency = 0.02,
+		BackgroundColor3 = library.Theme.ElementBackground or library.Theme.Secondary,
+		BackgroundTransparency = 0,
 		Parent = sidebar,
 	})
 	Helpers.Corner(footer, Theme.CornerRadiusSmall)
-	local footerStroke = Helpers.Stroke(footer, library.Theme.Border, 1)
-	footerStroke.Transparency = 0.2
+	local footerStroke = Helpers.Stroke(footer, library.Theme.BorderStrong or library.Theme.Border, 1)
+	footerStroke.Transparency = 0.05
+	self._Footer = footer
 	self._FooterStroke = footerStroke
 
 	local avatarImage = Instance.new("ImageLabel")
@@ -1776,9 +1952,12 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		if self._SearchResults then
 			self._SearchResults.BackgroundColor3 = library.Theme.Surface
 		end
-		footer.BackgroundColor3 = library.Theme.Secondary
+		local footerBg = library.Theme.ElementBackground or library.Theme.Secondary
+		footer.BackgroundColor3 = footerBg
+		footer.BackgroundTransparency = 0
 		if self._FooterStroke then
-			self._FooterStroke.Color = library.Theme.Border
+			self._FooterStroke.Color = library.Theme.BorderStrong or library.Theme.Border
+			self._FooterStroke.Transparency = 0.05
 		end
 		if footerName then
 			footerName.TextColor3 = library.Theme.Text
@@ -1786,10 +1965,15 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		if footerStatus then
 			footerStatus.TextColor3 = library.Theme.Accent
 		end
-		-- Force-recolor footer chrome (avatar ring etc.)
 		for _, d in footer:GetDescendants() do
 			if d:IsA("UIStroke") then
 				d.Color = library.Theme.BorderStrong or library.Theme.Border
+			elseif d:IsA("TextLabel") and d ~= footerStatus then
+				if d.Name == "Status" then
+					d.TextColor3 = library.Theme.Accent
+				else
+					d.TextColor3 = library.Theme.Text
+				end
 			end
 		end
 		if minimizeButton then
@@ -2132,7 +2316,34 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 			self.Library.Theme.Style = style
 		end
 	end)
-	self:_createHomeTab()
+	-- Restore open control + weather (no Home tab — dashboard via Island hover / footer)
+	pcall(function()
+		local openStyle = self.Library:_getSavedFlag("Vaxorin.Visual.OpenStyle", self._OpenStyle or "Island", true)
+		if self._applyOpenStyle then self:_applyOpenStyle(openStyle) end
+		local weather = self.Library:_getSavedFlag("Vaxorin.Visual.Weather", "None", true)
+		if weather and self._Weather then
+			self._WeatherKind = weather
+			self._Weather:Set(weather)
+		end
+	end)
+	-- Footer click opens a lightweight dashboard notify for now
+	if footer then
+		footer.Active = true
+		self._Maid:GiveTask(footer.InputBegan:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 then
+				local fpsText = self._IslandActStats and self._IslandActStats.Text or ""
+				self:Notify({
+					Title = "Dashboard",
+					Content = string.format("%s\n%s\nPlace %s", 
+						(footerName and footerName.Text) or "Welcome",
+						fpsText,
+						tostring(game.PlaceId)),
+					Type = "Info",
+					Duration = 3,
+				})
+			end
+		end))
+	end
 	self:SetLayout(restoredLayout)
 	return self :: any
 end
@@ -2436,8 +2647,43 @@ function Window:_createOptionsTab()
 		Options = { "Vaxorin", "Deep", "Sakura", "Midnight", "Ocean", "Emerald", "Crimson", "Amber", "Frost", "Rose", "Neon", "Sunset", "Forest", "Slate", "Dark", "Light", "Cyber" },
 		CurrentOption = self.Library.Theme.Style,
 		Flag = "Vaxorin.Theme.Style",
+		Save = true,
 		Callback = function(value)
-			self.Library.Theme.Style = value
+			if type(value) == "table" then value = value[1] end
+			self.Library.Theme.Style = tostring(value or "Vaxorin")
+			if self.RefreshTheme then self:RefreshTheme() end
+		end,
+	})
+
+	visualSection:CreateDropdown({
+		Name = "Open Control",
+		Options = { "Island", "Button" },
+		CurrentOption = self._OpenStyle or "Island",
+		Flag = "Vaxorin.Visual.OpenStyle",
+		Save = true,
+		Callback = function(value)
+			if type(value) == "table" then value = value[1] end
+			if self._applyOpenStyle then
+				self:_applyOpenStyle(tostring(value or "Island"))
+			else
+				self._OpenStyle = tostring(value or "Island")
+			end
+		end,
+	})
+
+	visualSection:CreateDropdown({
+		Name = "Weather",
+		Options = { "None", "Rain", "Snow", "Sakura", "Stars", "Leaves" },
+		CurrentOption = self._WeatherKind or "None",
+		Flag = "Vaxorin.Visual.Weather",
+		Save = true,
+		Callback = function(value)
+			if type(value) == "table" then value = value[1] end
+			value = tostring(value or "None")
+			self._WeatherKind = value
+			if self._Weather then
+				self._Weather:Set(value)
+			end
 		end,
 	})
 
@@ -3197,22 +3443,34 @@ function Window:SetVisible(visible: boolean)
 			self.Main.Visible = false
 		end
 
-		if self._FloatingButton and self._StartupComplete then
-			local btn = self._FloatingButton
-			btn.Visible = true
-			btn.Size = UDim2.fromOffset(8, 8)
-			if btn:IsA("CanvasGroup") then
-				btn.GroupTransparency = 1
+		if self._StartupComplete then
+			local useIsland = (self._OpenStyle or "Island") ~= "Button"
+			if self._ClassicOpen then self._ClassicOpen.Visible = false end
+			local islandBtn = self._FloatingButton
+			-- Prefer explicit island canvas if open style is Island
+			if self.Gui then
+				local found = self.Gui:FindFirstChild("Island")
+				if found then islandBtn = found end
 			end
-			Tween.Play(btn, {
-				Size = UDim2.fromOffset(178, 36),
-				GroupTransparency = 0,
-			}, { Time = 0.16 })
-			task.delay(0.16, function()
-				if btn and btn.Parent then
-					Tween.Play(btn, { Size = UDim2.fromOffset(168, 34) }, { Time = 0.1 })
-				end
-			end)
+			if useIsland and islandBtn and islandBtn.Name == "Island" then
+				if self._ClassicOpen then self._ClassicOpen.Visible = false end
+				self._FloatingButton = islandBtn
+				islandBtn.Visible = true
+				islandBtn.Size = UDim2.fromOffset(8, 8)
+				if islandBtn:IsA("CanvasGroup") then islandBtn.GroupTransparency = 1 end
+				Tween.Play(islandBtn, { Size = UDim2.fromOffset(178, 36), GroupTransparency = 0 }, { Time = 0.16 })
+				task.delay(0.16, function()
+					if islandBtn and islandBtn.Parent then
+						Tween.Play(islandBtn, { Size = UDim2.fromOffset(168, 34) }, { Time = 0.1 })
+					end
+				end)
+			elseif self._ClassicOpen then
+				if islandBtn and islandBtn.Name == "Island" then islandBtn.Visible = false end
+				self._FloatingButton = self._ClassicOpen
+				self._ClassicOpen.Visible = true
+				self._ClassicOpen.Size = UDim2.fromOffset(0, 0)
+				Tween.Play(self._ClassicOpen, { Size = UDim2.fromOffset(50, 50) }, { Time = 0.16 })
+			end
 		end
 	end
 end
