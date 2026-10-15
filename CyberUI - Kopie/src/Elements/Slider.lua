@@ -62,6 +62,7 @@ function Slider.new(section: any, data: SliderOptions): SliderHandle
 	Helpers.Corner(row, Theme.CornerRadiusSmall)
 	local rowStroke = Helpers.Stroke(row, library.Theme.Border, 1)
 	rowStroke.Transparency = 0.18
+	self._RowStroke = rowStroke
 
 	local label = Helpers.CreateLabel({
 		Name = "Label",
@@ -219,13 +220,28 @@ end
 
 function Slider:RefreshTheme()
 	local theme = self._Section.Tab.Window.Library.Theme
-	self.Instance.BackgroundColor3 = theme.ElementBackground or theme.Background
-	self.Label.TextColor3 = theme.Text
-	self.ValueLabel.TextColor3 = theme.Accent
-	self.Track.BackgroundColor3 = theme.Border
-	self.Fill.BackgroundColor3 = theme.Accent
-	self.FillGlow.Color = theme.Accent
-	self.Knob.BackgroundColor3 = theme.Text
+	local Tween = require(script.Parent.Parent.Utils.Tween)
+	Tween.Play(self.Instance, { BackgroundColor3 = theme.ElementBackground or theme.Background }, { Time = 0.22 })
+	Tween.Play(self.Label, { TextColor3 = theme.Text }, { Time = 0.22 })
+	Tween.Play(self.ValueLabel, { TextColor3 = theme.Accent }, { Time = 0.22 })
+	Tween.Play(self.Track, { BackgroundColor3 = theme.Border }, { Time = 0.22 })
+	Tween.Play(self.Fill, { BackgroundColor3 = theme.Accent }, { Time = 0.22 })
+	if self.FillGlow then
+		Tween.Play(self.FillGlow, { Color = theme.Accent }, { Time = 0.22 })
+	end
+	Tween.Play(self.Knob, { BackgroundColor3 = theme.Text }, { Time = 0.22 })
+	if self._RowStroke then
+		Tween.Play(self._RowStroke, { Color = theme.Border }, { Time = 0.22 })
+	end
+	for _, d in self.Instance:GetDescendants() do
+		if d:IsA("UIStroke") then
+			if d == self.FillGlow or (d.Transparency or 0) > 0.5 then
+				Tween.Play(d, { Color = theme.Accent }, { Time = 0.22 })
+			else
+				Tween.Play(d, { Color = theme.Border }, { Time = 0.22 })
+			end
+		end
+	end
 	self:_applyVisual(false)
 end
 

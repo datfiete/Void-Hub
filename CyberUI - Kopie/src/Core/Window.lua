@@ -1312,13 +1312,25 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	activityScale.Parent = islandActivity
 
 	local ACTIVITY_H = 100
-	local function showIslandActivity()
-		-- Expand a clip host downward from the island — content is revealed, island untouched
-		local absPos = island.AbsolutePosition
-		local absSize = island.AbsoluteSize
+	local activityFollowConn = nil :: RBXScriptConnection?
+
+	local function placeActivityHost()
 		local host = self._IslandActivityHost or islandActivityHost
-		host.Position = UDim2.fromOffset(absPos.X + absSize.X * 0.5, absPos.Y + absSize.Y + 14)
+		if not host then return end
+		-- Follow island Position (works after drag) in the same ScreenGui space
+		local yOff = island.Position.Y.Offset + island.AbsoluteSize.Y + 10
 		host.AnchorPoint = Vector2.new(0.5, 0)
+		host.Position = UDim2.new(
+			island.Position.X.Scale,
+			island.Position.X.Offset,
+			island.Position.Y.Scale,
+			yOff
+		)
+	end
+
+	local function showIslandActivity()
+		local host = self._IslandActivityHost or islandActivityHost
+		placeActivityHost()
 		host.Size = UDim2.fromOffset(230, 0)
 		host.Visible = true
 		islandActivity.BackgroundColor3 = library.Theme.Secondary
@@ -1326,9 +1338,15 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		actStatus.TextColor3 = library.Theme.TextMuted
 		actStats.TextColor3 = library.Theme.Accent
 		actHint.TextColor3 = library.Theme.TextMuted
-		-- card sits at top of host; host grows so card appears to slide out
 		islandActivity.Position = UDim2.new(0.5, 0, 0, 0)
 		Tween.Play(host, { Size = UDim2.fromOffset(230, ACTIVITY_H) }, { Time = 0.22, EasingStyle = Enum.EasingStyle.Quint })
+		if activityFollowConn then activityFollowConn:Disconnect() end
+		activityFollowConn = game:GetService("RunService").RenderStepped:Connect(function()
+			if host.Visible then
+				placeActivityHost()
+			end
+		end)
+		self._Maid:GiveTask(activityFollowConn)
 		for _, bar in bars:GetChildren() do
 			if bar:IsA("Frame") then
 				Tween.Play(bar, { BackgroundColor3 = library.Theme.AccentAlt or library.Theme.Accent }, { Time = 0.12 })
@@ -1340,6 +1358,10 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		local host = self._IslandActivityHost
 		if not host or not host.Visible then
 			return
+		end
+		if activityFollowConn then
+			activityFollowConn:Disconnect()
+			activityFollowConn = nil
 		end
 		Tween.Play(host, { Size = UDim2.fromOffset(230, 0) }, { Time = 0.16, EasingStyle = Enum.EasingStyle.Quint })
 		task.delay(0.16, function()
@@ -2154,8 +2176,9 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	-- THEME REFRESH
 	-- ============================================
 	local function refreshWindowTheme()
-		main.BackgroundColor3 = library.Theme.Background
-		topBar.BackgroundColor3 = library.Theme.Secondary
+		local fadeT = 0.28
+		Tween.Play(main, { BackgroundColor3 = library.Theme.Background }, { Time = fadeT })
+		Tween.Play(topBar, { BackgroundColor3 = library.Theme.Secondary }, { Time = fadeT })
 		topBarGradient.Color = ColorSequence.new({
 			ColorSequenceKeypoint.new(0, library.Theme.Secondary),
 			ColorSequenceKeypoint.new(0.55, library.Theme.Secondary),
@@ -2182,7 +2205,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		logoFrame.BackgroundColor3 = library.Theme.Background
 		logoStroke.Color = library.Theme.BorderStrong or library.Theme.Border
 		logoAccentStroke.Color = library.Theme.Accent
-		sidebar.BackgroundColor3 = library.Theme.Secondary
+		Tween.Play(sidebar, { BackgroundColor3 = library.Theme.Secondary }, { Time = 0.28 })
 		navLabel.TextColor3 = library.Theme.TextMuted
 		if searchBox then
 			searchBox.TextColor3 = library.Theme.Text
@@ -2198,8 +2221,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 			self._SearchResults.BackgroundColor3 = library.Theme.Surface
 		end
 		local footerBg = library.Theme.ElementBackground or library.Theme.Surface or library.Theme.Secondary
-		footer.BackgroundColor3 = footerBg
-		footer.BackgroundTransparency = 0
+		Tween.Play(footer, { BackgroundColor3 = footerBg, BackgroundTransparency = 0 }, { Time = 0.28 })
 		if self._FooterStroke then
 			self._FooterStroke.Color = library.Theme.Accent
 			self._FooterStroke.Transparency = 0.55
