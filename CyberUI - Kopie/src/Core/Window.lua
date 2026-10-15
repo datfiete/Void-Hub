@@ -1783,7 +1783,15 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		if footerName then
 			footerName.TextColor3 = library.Theme.Text
 		end
-		footerStatus.TextColor3 = library.Theme.Accent
+		if footerStatus then
+			footerStatus.TextColor3 = library.Theme.Accent
+		end
+		-- Force-recolor footer chrome (avatar ring etc.)
+		for _, d in footer:GetDescendants() do
+			if d:IsA("UIStroke") then
+				d.Color = library.Theme.BorderStrong or library.Theme.Border
+			end
+		end
 		if minimizeButton then
 			minimizeButton.BackgroundColor3 = library.Theme.Background
 		end

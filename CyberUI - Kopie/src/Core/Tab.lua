@@ -427,6 +427,11 @@ function Tab:SetActive(active: boolean)
     self._Icon.ImageColor3 = if active then theme.Text else theme.TextMuted
     self._Icon.ImageTransparency = if self._Icon.Image == "" then 1 else 0
     self._Label.TextColor3 = if active then theme.Text else theme.TextMuted
+
+    if self.Button then
+        self.Button.BackgroundColor3 = if active then theme.SurfaceHover else theme.ElementBackground
+        self.Button.BackgroundTransparency = if active then 0.05 else 0.22
+    end
 end
 
 function Tab:RefreshTheme()

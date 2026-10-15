@@ -201,8 +201,13 @@ function Dropdown.new(section: any, data: DropdownOptions): DropdownHandle
 					self:_buildOptions()
 					library:_setFlag(data.Flag, selectedValues, data.Save)
 					self._Changed:Fire(selectedValues)
-					if data.Callback then
-						task.spawn(data.Callback, selectedValues)
+					if type(data.Callback) == "function" then
+						task.spawn(function()
+							local ok, err = pcall(data.Callback, selectedValues)
+							if not ok then
+								warn("[Vaxorin] Dropdown callback error:", err)
+							end
+						end)
 					end
 				else
 					self:_commit(option)
@@ -229,8 +234,13 @@ function Dropdown.new(section: any, data: DropdownOptions): DropdownHandle
 		self._Changed:Fire(value)
 		self:_buildOptions()
 
-		if fireCallback ~= false and data.Callback then
-			task.spawn(data.Callback, value)
+		if fireCallback ~= false and type(data.Callback) == "function" then
+			task.spawn(function()
+				local ok, err = pcall(data.Callback, value)
+				if not ok then
+					warn("[Vaxorin] Dropdown callback error:", err)
+				end
+			end)
 		end
 	end
 
@@ -247,9 +257,12 @@ function Dropdown.new(section: any, data: DropdownOptions): DropdownHandle
 	self:_updateSelectedLabel()
 	self:_buildOptions()
 
-	if data.Callback and data.FireOnLoad ~= false and savedRaw ~= nil then
+	if type(data.Callback) == "function" and data.FireOnLoad ~= false and savedRaw ~= nil then
 		task.defer(function()
-			data.Callback(self._Value)
+			local ok, err = pcall(data.Callback, self._Value)
+			if not ok then
+				warn("[Vaxorin] Dropdown FireOnLoad error:", err)
+			end
 		end)
 	end
 

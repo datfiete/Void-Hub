@@ -159,8 +159,13 @@ function Slider.new(section: any, data: SliderOptions): SliderHandle
 		library:_setFlag(data.Flag, value, data.Save)
 		self._Changed:Fire(value)
 
-		if fireCallback ~= false and data.Callback then
-			task.spawn(data.Callback, value)
+		if fireCallback ~= false and type(data.Callback) == "function" then
+			task.spawn(function()
+				local ok, err = pcall(data.Callback, value)
+				if not ok then
+					warn("[Vaxorin] Slider callback error:", err)
+				end
+			end)
 		end
 	end
 

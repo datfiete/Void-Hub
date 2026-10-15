@@ -124,8 +124,13 @@ function Toggle.new(section: any, data: ToggleOptions): ToggleHandle
 		library:_setFlag(data.Flag, value, data.Save)
 		self._Changed:Fire(value)
 
-		if fireCallback ~= false and data.Callback then
-			task.spawn(data.Callback, value)
+		if fireCallback ~= false and type(data.Callback) == "function" then
+			task.spawn(function()
+				local ok, err = pcall(data.Callback, value)
+				if not ok then
+					warn("[Vaxorin] Toggle callback error:", err)
+				end
+			end)
 		end
 	end
 
@@ -144,9 +149,12 @@ function Toggle.new(section: any, data: ToggleOptions): ToggleHandle
 	self:_applyVisual(self._Value, false)
 
 	-- Config restored the value but did not run the feature callback — fire once on load.
-	if data.Callback and data.FireOnLoad ~= false and savedRaw ~= nil then
+	if type(data.Callback) == "function" and data.FireOnLoad ~= false and savedRaw ~= nil then
 		task.defer(function()
-			data.Callback(self._Value)
+			local ok, err = pcall(data.Callback, self._Value)
+			if not ok then
+				warn("[Vaxorin] Toggle FireOnLoad error:", err)
+			end
 		end)
 	end
 
