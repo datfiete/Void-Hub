@@ -8,6 +8,7 @@ local Tween = require(script.Parent.Parent.Utils.Tween)
 local ESPBuilder = require(script.Parent.ESPBuilder)
 local ESPWorldRenderer = require(script.Parent.ESPWorldRenderer)
 local LayoutVariants = require(script.Parent.LayoutVariants)
+local Weather = require(script.Parent.Weather)
 
 local TweenService = game:GetService("TweenService")
 local Lighting = game:GetService("Lighting")
@@ -869,47 +870,113 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	-- ============================================
 	-- FLOATING BUTTON
 	-- ============================================
-	-- Floating open button (Deep Fishing style: solid pill on left, icon centered)
-	local floatingButton = Instance.new("ImageButton")
+	-- ============================================
+	-- DYNAMIC ISLAND (open control — Deep Fishing style)
+	-- Compact top-center pill; expands slightly on hover.
+	-- ============================================
+	local island = Instance.new("CanvasGroup")
+	island.Name = "Island"
+	island.Size = UDim2.fromOffset(168, 34)
+	island.Position = UDim2.new(0.5, 0, 0, 10)
+	island.AnchorPoint = Vector2.new(0.5, 0)
+	island.BackgroundColor3 = Color3.fromRGB(30, 30, 34)
+	island.BackgroundTransparency = 0
+	island.BorderSizePixel = 0
+	island.Visible = false
+	island.ZIndex = 55
+	island.Parent = screenGui
+	Helpers.Corner(island, 16)
+	local islandStroke = Helpers.Stroke(island, library.Theme.Border, 1)
+	islandStroke.Transparency = 0.35
+	self._IslandStroke = islandStroke
+
+	local islandCompact = Helpers.CreateFrame({
+		Name = "Compact",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Color3.fromRGB(30, 30, 34),
+		BackgroundTransparency = 0,
+		Parent = island,
+	})
+	Helpers.Corner(islandCompact, 16)
+
+	local islandIcon = Instance.new("ImageLabel")
+	islandIcon.Name = "Icon"
+	islandIcon.BackgroundTransparency = 1
+	islandIcon.Size = UDim2.fromOffset(18, 18)
+	islandIcon.Position = UDim2.new(0, 12, 0.5, 0)
+	islandIcon.AnchorPoint = Vector2.new(0, 0.5)
+	islandIcon.Image = logoAsset
+	islandIcon.ScaleType = Enum.ScaleType.Fit
+	islandIcon.ZIndex = 56
+	islandIcon.Parent = islandCompact
+
+	local islandTitle = Helpers.CreateLabel({
+		Name = "Title",
+		Size = UDim2.new(1, -70, 1, 0),
+		Position = UDim2.fromOffset(36, 0),
+		Text = "Vaxorin",
+		Font = Theme.FontBold,
+		TextSize = 12,
+		TextColor3 = library.Theme.Text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = islandCompact,
+	})
+	islandTitle.ZIndex = 56
+
+	-- Accent bars (right side), like Deep Fishing island signal marks
+	local bars = Helpers.CreateFrame({
+		Name = "Bars",
+		Size = UDim2.fromOffset(18, 16),
+		Position = UDim2.new(1, -14, 0.5, 0),
+		AnchorPoint = Vector2.new(1, 0.5),
+		BackgroundTransparency = 1,
+		Parent = islandCompact,
+	})
+	bars.ZIndex = 56
+	for i, h in ipairs({ 13, 15, 4, 4 }) do
+		local bar = Instance.new("Frame")
+		bar.Name = "Bar" .. i
+		bar.Size = UDim2.fromOffset(3, h)
+		bar.Position = UDim2.new(0, (i - 1) * 5, 0.5, 0)
+		bar.AnchorPoint = Vector2.new(0, 0.5)
+		bar.BackgroundColor3 = library.Theme.Accent
+		bar.BorderSizePixel = 0
+		bar.ZIndex = 57
+		bar.Parent = bars
+		Helpers.Corner(bar, 1)
+	end
+
+	local islandHit = Instance.new("TextButton")
+	islandHit.Name = "Hit"
+	islandHit.Size = UDim2.fromScale(1, 1)
+	islandHit.BackgroundTransparency = 1
+	islandHit.Text = ""
+	islandHit.ZIndex = 58
+	islandHit.Parent = island
+
+	-- Keep legacy name so existing SetVisible logic still finds a toggle control
+	local floatingButton = islandHit
 	floatingButton.Name = "FloatingToggle"
-	floatingButton.Size = UDim2.fromOffset(50, 50)
-	floatingButton.Position = UDim2.new(0, 43, 0.5, 0)
-	floatingButton.AnchorPoint = Vector2.new(0, 0.5)
-	floatingButton.BackgroundColor3 = library.Theme.Background
-	floatingButton.BackgroundTransparency = 0
-	floatingButton.Image = ""
-	floatingButton.AutoButtonColor = false
-	floatingButton.Visible = false
-	floatingButton.ZIndex = 50
-	floatingButton.Active = true
-	floatingButton.Selectable = true
-	floatingButton.Parent = screenGui
-	Helpers.Corner(floatingButton, 12)
-	local floatStroke = Helpers.Stroke(floatingButton, library.Theme.Border, 1.3)
-	self._FloatingStroke = floatStroke
+	self._FloatingButton = island
+	self._FloatingIcon = islandIcon
+	self._IslandTitle = islandTitle
+	self._IslandBars = bars
+	self._IslandCompact = islandCompact
 
-	local floatIcon = Instance.new("ImageLabel")
-	floatIcon.Name = "Icon"
-	floatIcon.BackgroundTransparency = 1
-	floatIcon.Size = UDim2.fromOffset(23, 23)
-	floatIcon.Position = UDim2.fromScale(0.5, 0.5)
-	floatIcon.AnchorPoint = Vector2.new(0.5, 0.5)
-	floatIcon.Image = logoAsset
-	floatIcon.ScaleType = Enum.ScaleType.Fit
-	floatIcon.ZIndex = 51
-	floatIcon.Parent = floatingButton
-	self._FloatingIcon = floatIcon
-
-	self._Maid:GiveTask(floatingButton.MouseEnter:Connect(function()
-		Tween.Play(floatingButton, { BackgroundColor3 = library.Theme.SurfaceHover }, { Time = 0.15 })
-		if floatStroke then
-			Tween.Play(floatStroke, { Color = library.Theme.Accent }, { Time = 0.15 })
+	self._Maid:GiveTask(islandHit.MouseEnter:Connect(function()
+		Tween.Play(island, { Size = UDim2.fromOffset(188, 36) }, { Time = 0.15 })
+		for _, bar in bars:GetChildren() do
+			if bar:IsA("Frame") then
+				Tween.Play(bar, { BackgroundColor3 = library.Theme.AccentAlt or library.Theme.Accent }, { Time = 0.12 })
+			end
 		end
 	end))
-	self._Maid:GiveTask(floatingButton.MouseLeave:Connect(function()
-		Tween.Play(floatingButton, { BackgroundColor3 = library.Theme.Background }, { Time = 0.15 })
-		if floatStroke then
-			Tween.Play(floatStroke, { Color = library.Theme.Border }, { Time = 0.15 })
+	self._Maid:GiveTask(islandHit.MouseLeave:Connect(function()
+		Tween.Play(island, { Size = UDim2.fromOffset(168, 34) }, { Time = 0.15 })
+		for _, bar in bars:GetChildren() do
+			if bar:IsA("Frame") then
+				Tween.Play(bar, { BackgroundColor3 = library.Theme.Accent }, { Time = 0.12 })
+			end
 		end
 	end))
 
@@ -927,7 +994,8 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			self._FloatDragging = true
 			self._FloatDragStart = input.Position
-			self._FloatStart = floatingButton.Position
+			local target = self._FloatingButton or floatingButton
+			self._FloatStart = target.Position
 			self._FloatDragInputType = input.UserInputType
 			floatMovedDistance = 0
 		end
@@ -940,7 +1008,8 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 			local delta = input.Position - self._FloatDragStart
 			floatMovedDistance = delta.Magnitude
-			floatingButton.Position = UDim2.new(
+			local target = self._FloatingButton or floatingButton
+			target.Position = UDim2.new(
 				self._FloatStart.X.Scale,
 				self._FloatStart.X.Offset + delta.X,
 				self._FloatStart.Y.Scale,
@@ -960,8 +1029,11 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		end
 	end))
 
-	self._Maid:Give(floatingButton)
-	self._FloatingButton = floatingButton
+	self._Maid:Give(island)
+	-- Weather layer on main window body
+	self._Weather = Weather.new(main)
+	self._WeatherKind = "None"
+
 
 	-- ============================================
 	-- WATERMARK (compact draggable FPS / Ping / Uptime pill)
@@ -1640,10 +1712,26 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 			closeButton.BackgroundColor3 = library.Theme.Background
 		end
 		if self._FloatingButton then
-			self._FloatingButton.BackgroundColor3 = library.Theme.Background
+			self._FloatingButton.BackgroundColor3 = Color3.fromRGB(30, 30, 34)
+			if self._IslandCompact then
+				self._IslandCompact.BackgroundColor3 = Color3.fromRGB(30, 30, 34)
+			end
+		end
+		if self._IslandStroke then
+			self._IslandStroke.Color = library.Theme.Border
 		end
 		if self._FloatingStroke then
 			self._FloatingStroke.Color = library.Theme.Border
+		end
+		if self._IslandTitle then
+			self._IslandTitle.TextColor3 = library.Theme.Text
+		end
+		if self._IslandBars then
+			for _, bar in self._IslandBars:GetChildren() do
+				if bar:IsA("Frame") then
+					bar.BackgroundColor3 = library.Theme.Accent
+				end
+			end
 		end
 		atmosphere.BackgroundColor3 = library.Theme.Background
 		atmosphereGradient.Color = ColorSequence.new({
@@ -2258,7 +2346,7 @@ function Window:_createOptionsTab()
 
 	visualSection:CreateDropdown({
 		Name = "Theme Preset",
-		Options = { "Vaxorin", "Deep", "Dark", "Light", "Cyber" },
+		Options = { "Vaxorin", "Deep", "Sakura", "Midnight", "Ocean", "Emerald", "Crimson", "Amber", "Frost", "Rose", "Neon", "Sunset", "Forest", "Slate", "Dark", "Light", "Cyber" },
 		CurrentOption = self.Library.Theme.Style,
 		Flag = "Vaxorin.Theme.Style",
 		Callback = function(value)
@@ -3006,14 +3094,14 @@ function Window:SetVisible(visible: boolean)
 		if self._FloatingButton and self._FloatingButton.Visible then
 			local btn = self._FloatingButton
 			Tween.Play(btn, {
-				Size = UDim2.fromOffset(0, 0),
-				ImageTransparency = 1,
-				Rotation = 90,
-			}, { Time = 0.15 })
-			task.delay(0.15, function()
+				Size = UDim2.fromOffset(8, 8),
+				GroupTransparency = 1,
+			}, { Time = 0.14 })
+			task.delay(0.14, function()
 				if btn and btn.Parent then
 					btn.Visible = false
-					btn.Rotation = 0
+					btn.GroupTransparency = 0
+					btn.Size = UDim2.fromOffset(168, 34)
 				end
 			end)
 		end
@@ -3025,22 +3113,17 @@ function Window:SetVisible(visible: boolean)
 		if self._FloatingButton and self._StartupComplete then
 			local btn = self._FloatingButton
 			btn.Visible = true
-			btn.Size = UDim2.fromOffset(0, 0)
-			btn.ImageTransparency = 1
-			btn.Rotation = -90
-
+			btn.Size = UDim2.fromOffset(8, 8)
+			if btn:IsA("CanvasGroup") then
+				btn.GroupTransparency = 1
+			end
 			Tween.Play(btn, {
-				Size = UDim2.fromOffset(58, 58),
-				ImageTransparency = 0,
-				Rotation = 10,
-			}, { Time = 0.18 })
-
-			task.delay(0.18, function()
+				Size = UDim2.fromOffset(178, 36),
+				GroupTransparency = 0,
+			}, { Time = 0.16 })
+			task.delay(0.16, function()
 				if btn and btn.Parent then
-					Tween.Play(btn, {
-						Size = UDim2.fromOffset(50, 50),
-						Rotation = 0,
-					}, { Time = 0.12 })
+					Tween.Play(btn, { Size = UDim2.fromOffset(168, 34) }, { Time = 0.1 })
 				end
 			end)
 		end

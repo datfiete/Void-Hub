@@ -393,8 +393,7 @@ function Tab.new(window: any, name: string): TabHandle
     end))
 
     self._ThemeConnection = window.Library.Theme.Changed:Connect(function()
-        self:SetActive(self == window._ActiveTab)
-        page.ScrollBarImageColor3 = window.Library.Theme.Accent
+        self:RefreshTheme()
         activeGradient.Color = ColorSequence.new({
             ColorSequenceKeypoint.new(0, window.Library.Theme.Accent),
             ColorSequenceKeypoint.new(1, window.Library.Theme.AccentAlt or window.Library.Theme.Accent),

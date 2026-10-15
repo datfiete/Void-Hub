@@ -258,11 +258,17 @@ end
 
 function Dropdown:RefreshTheme()
 	local theme = self._Section.Tab.Window.Library.Theme
-	self.Header.BackgroundColor3 = theme.Background
+	local bg = theme.ElementBackground or theme.Background
+	self.Header.BackgroundColor3 = bg
 	self.Header.TextColor3 = theme.Text
-	self.List.BackgroundColor3 = theme.Background
+	self.List.BackgroundColor3 = bg
+	local headerStroke = self.Header:FindFirstChildOfClass("UIStroke")
+	if headerStroke then headerStroke.Color = theme.Border end
+	local listStroke = self.List:FindFirstChildOfClass("UIStroke")
+	if listStroke then listStroke.Color = theme.Border end
 	self.SelectedLabel.TextColor3 = theme.Accent
 	self.Arrow.TextColor3 = theme.TextMuted
+	if self.Label then self.Label.TextColor3 = theme.Text end
 	self:_buildOptions()
 end
 
