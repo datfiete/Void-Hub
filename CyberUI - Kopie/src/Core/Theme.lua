@@ -61,6 +61,22 @@ local stylePresets = {
         Accent = Color3.fromRGB(61, 220, 255),
         AccentAlt = Color3.fromRGB(120, 92, 255),
     },
+    Deep = {
+        -- Inspired by Deep Fishing hub palette (mauve / soft pink accent)
+        Background = Color3.fromRGB(24, 14, 20),
+        Secondary = Color3.fromRGB(29, 17, 24),
+        Surface = Color3.fromRGB(35, 20, 29),
+        SurfaceHover = Color3.fromRGB(54, 32, 45),
+        ElementBackground = Color3.fromRGB(35, 20, 29),
+        ElementHover = Color3.fromRGB(54, 32, 45),
+        Text = Color3.fromRGB(248, 232, 240),
+        TextMuted = Color3.fromRGB(150, 112, 132),
+        Border = Color3.fromRGB(50, 29, 41),
+        BorderStrong = Color3.fromRGB(70, 40, 55),
+        Accent = Color3.fromRGB(255, 158, 200),
+        AccentAlt = Color3.fromRGB(255, 120, 180),
+        AccentSoft = Color3.fromRGB(180, 90, 130),
+    },
     -- Backwards-compatible alias.
     Meng = {
         Background = Color3.fromRGB(4, 6, 10),
@@ -130,6 +146,29 @@ local function applyStyle(style)
     themeValues.Accent = preset.Accent
     themeValues.AccentAlt = preset.AccentAlt or preset.Accent
     themeValues.AccentSoft = preset.AccentSoft or preset.Accent
+
+    -- Deep uses a tighter shell closer to the reference hub
+    if style == "Deep" then
+        themeValues.CornerRadius = 10
+        themeValues.CornerRadiusSmall = 8
+        themeValues.ElementHeight = 40
+        themeValues.SidebarWidth = 188
+        themeValues.WindowSize = Vector2.new(760, 520)
+        themeValues.Padding = 16
+        themeValues.Gap = 10
+        themeValues.TopBarHeight = 62
+        themeValues.LogoSize = 32
+    else
+        themeValues.CornerRadius = 14
+        themeValues.CornerRadiusSmall = 10
+        themeValues.ElementHeight = 44
+        themeValues.SidebarWidth = 202
+        themeValues.WindowSize = Vector2.new(920, 600)
+        themeValues.Padding = 18
+        themeValues.Gap = 12
+        themeValues.TopBarHeight = 72
+        themeValues.LogoSize = 50
+    end
 end
 
 local Theme = {

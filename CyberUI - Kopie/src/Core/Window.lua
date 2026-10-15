@@ -869,29 +869,48 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	-- ============================================
 	-- FLOATING BUTTON
 	-- ============================================
+	-- Floating open button (Deep Fishing style: solid pill on left, icon centered)
 	local floatingButton = Instance.new("ImageButton")
 	floatingButton.Name = "FloatingToggle"
-	floatingButton.Size = UDim2.fromOffset(48, 48)
-	floatingButton.Position = UDim2.new(0.5, 0, 0, 20)
-	floatingButton.BackgroundColor3 = library.Theme.Secondary
-	floatingButton.BackgroundTransparency = 0.1
-	floatingButton.Image = logoAsset
-	floatingButton.ScaleType = Enum.ScaleType.Fit
-	floatingButton.ImageTransparency = 0
-	floatingButton.Visible = false
+	floatingButton.Size = UDim2.fromOffset(50, 50)
+	floatingButton.Position = UDim2.new(0, 43, 0.5, 0)
+	floatingButton.AnchorPoint = Vector2.new(0, 0.5)
+	floatingButton.BackgroundColor3 = library.Theme.Background
+	floatingButton.BackgroundTransparency = 0
+	floatingButton.Image = ""
 	floatingButton.AutoButtonColor = false
+	floatingButton.Visible = false
 	floatingButton.ZIndex = 50
 	floatingButton.Active = true
 	floatingButton.Selectable = true
 	floatingButton.Parent = screenGui
-	Helpers.Corner(floatingButton, 10)
-	Helpers.Stroke(floatingButton, library.Theme.Accent, 1.5)
+	Helpers.Corner(floatingButton, 12)
+	local floatStroke = Helpers.Stroke(floatingButton, library.Theme.Border, 1.3)
+	self._FloatingStroke = floatStroke
+
+	local floatIcon = Instance.new("ImageLabel")
+	floatIcon.Name = "Icon"
+	floatIcon.BackgroundTransparency = 1
+	floatIcon.Size = UDim2.fromOffset(23, 23)
+	floatIcon.Position = UDim2.fromScale(0.5, 0.5)
+	floatIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+	floatIcon.Image = logoAsset
+	floatIcon.ScaleType = Enum.ScaleType.Fit
+	floatIcon.ZIndex = 51
+	floatIcon.Parent = floatingButton
+	self._FloatingIcon = floatIcon
 
 	self._Maid:GiveTask(floatingButton.MouseEnter:Connect(function()
-		Tween.Play(floatingButton, { BackgroundTransparency = 0 }, { Time = 0.15 })
+		Tween.Play(floatingButton, { BackgroundColor3 = library.Theme.SurfaceHover }, { Time = 0.15 })
+		if floatStroke then
+			Tween.Play(floatStroke, { Color = library.Theme.Accent }, { Time = 0.15 })
+		end
 	end))
 	self._Maid:GiveTask(floatingButton.MouseLeave:Connect(function()
-		Tween.Play(floatingButton, { BackgroundTransparency = 0.1 }, { Time = 0.15 })
+		Tween.Play(floatingButton, { BackgroundColor3 = library.Theme.Background }, { Time = 0.15 })
+		if floatStroke then
+			Tween.Play(floatStroke, { Color = library.Theme.Border }, { Time = 0.15 })
+		end
 	end))
 
 	-- Drag-vs-click distinction: only treat it as a "toggle" click if the pointer
@@ -2035,7 +2054,7 @@ function Window:_createOptionsTab()
 
 	visualSection:CreateDropdown({
 		Name = "Theme Preset",
-		Options = { "Vaxorin", "Dark", "Light", "Cyber" },
+		Options = { "Vaxorin", "Deep", "Dark", "Light", "Cyber" },
 		CurrentOption = self.Library.Theme.Style,
 		Flag = "Vaxorin.Theme.Style",
 		Callback = function(value)
