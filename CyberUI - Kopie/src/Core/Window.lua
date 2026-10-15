@@ -1313,6 +1313,8 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Helpers.Corner(searchHolder, Theme.CornerRadiusSmall)
 		local searchStroke = Helpers.Stroke(searchHolder, library.Theme.Border, 1)
 		searchStroke.Transparency = 0.28
+		self._SearchHolder = searchHolder
+		self._SearchStroke = searchStroke
 
 		local searchIcon, searchIconStroke, searchIconHandle = createMagnifier(searchHolder, library.Theme)
 
@@ -1377,15 +1379,17 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	tabLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
 
 	local footer = Helpers.CreateFrame({
-		Name = "Footer",
+		Name = "FooterBar",
 		Size = UDim2.new(1, 0, 0, footerHeight),
 		Position = UDim2.new(0, 0, 1, -footerHeight),
-		BackgroundColor3 = library.Theme.Background,
-		BackgroundTransparency = 0.03,
+		BackgroundColor3 = library.Theme.Secondary,
+		BackgroundTransparency = 0.02,
 		Parent = sidebar,
 	})
 	Helpers.Corner(footer, Theme.CornerRadiusSmall)
-	Helpers.Stroke(footer, library.Theme.Border, 1)
+	local footerStroke = Helpers.Stroke(footer, library.Theme.Border, 1)
+	footerStroke.Transparency = 0.2
+	self._FooterStroke = footerStroke
 
 	local avatarImage = Instance.new("ImageLabel")
 	avatarImage.Name = "Avatar"
@@ -1612,8 +1616,35 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 			searchBox.TextColor3 = library.Theme.Text
 			searchBox.PlaceholderColor3 = library.Theme.TextMuted
 		end
-		footer.BackgroundColor3 = library.Theme.Background
+		if self._SearchHolder then
+			self._SearchHolder.BackgroundColor3 = library.Theme.Background
+		end
+		if self._SearchStroke then
+			self._SearchStroke.Color = library.Theme.Border
+		end
+		if self._SearchResults then
+			self._SearchResults.BackgroundColor3 = library.Theme.Surface
+		end
+		footer.BackgroundColor3 = library.Theme.Secondary
+		if self._FooterStroke then
+			self._FooterStroke.Color = library.Theme.Border
+		end
+		if footerName then
+			footerName.TextColor3 = library.Theme.Text
+		end
 		footerStatus.TextColor3 = library.Theme.Accent
+		if minimizeButton then
+			minimizeButton.BackgroundColor3 = library.Theme.Background
+		end
+		if closeButton then
+			closeButton.BackgroundColor3 = library.Theme.Background
+		end
+		if self._FloatingButton then
+			self._FloatingButton.BackgroundColor3 = library.Theme.Background
+		end
+		if self._FloatingStroke then
+			self._FloatingStroke.Color = library.Theme.Border
+		end
 		atmosphere.BackgroundColor3 = library.Theme.Background
 		atmosphereGradient.Color = ColorSequence.new({
 			ColorSequenceKeypoint.new(0, library.Theme.Background),
@@ -1919,6 +1950,14 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		local fromSession = self.Library.GetSession and self.Library:GetSession("Layout", nil)
 		restoredLayout = fromFlag or fromSession or restoredLayout
 	end
+	-- Apply saved theme so Home / chrome use correct colors from the start
+	pcall(function()
+		local style = self.Library:_getSavedFlag("Vaxorin.Theme.Style", self.Library.Theme.Style, true)
+		if style then
+			self.Library.Theme.Style = style
+		end
+	end)
+	self:_createHomeTab()
 	self:SetLayout(restoredLayout)
 	return self :: any
 end
@@ -2004,6 +2043,171 @@ function Window:SetLayout(mode: string)
 	end
 	if self._LayoutModeLabel then self._LayoutModeLabel.Text = normalized .. " interface" end
 	return normalized
+end
+
+
+function Window:_createHomeTab()
+	if self._HomeTab then
+		return self._HomeTab
+	end
+
+	local library = self.Library
+	local Players = game:GetService("Players")
+	local Stats = game:GetService("Stats")
+	local localPlayer = Players.LocalPlayer
+
+	local homeTab = Tab.new(self, "Home")
+	self._HomeTab = homeTab
+	table.insert(self._Tabs, homeTab)
+	if self._LayoutVariants and self._LayoutVariants.SyncTabs then
+		self._LayoutVariants:SyncTabs()
+	end
+
+	-- Welcome card
+	local welcome = homeTab:CreateSection({
+		Name = "Welcome",
+		Description = "Account overview",
+	})
+	local displayName = localPlayer.DisplayName or localPlayer.Name
+	local userName = localPlayer.Name
+	welcome:CreateParagraph({
+		Title = "WELCOME BACK",
+		Content = displayName .. "\n@" .. userName,
+	})
+	welcome:CreateStat({
+		Label = "UserId",
+		Value = tostring(localPlayer.UserId),
+		Delta = "Local",
+	})
+
+	-- Performance
+	local perf = homeTab:CreateSection({
+		Name = "Performance",
+		Description = "Live client stats",
+	})
+	local fpsStat = perf:CreateStat({
+		Label = "FPS",
+		Value = "—",
+		Delta = "Live",
+	})
+	local pingStat = perf:CreateStat({
+		Label = "Ping",
+		Value = "—",
+		Delta = "ms",
+	})
+	local sessionStat = perf:CreateStat({
+		Label = "Session",
+		Value = "0m 0s",
+		Delta = "Uptime",
+	})
+
+	-- Game info
+	local gameSec = homeTab:CreateSection({
+		Name = "Game",
+		Description = "Current place",
+	})
+	local gameName = "Unknown"
+	pcall(function()
+		local info = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId)
+		if info and info.Name then
+			gameName = info.Name
+		end
+	end)
+	gameSec:CreateParagraph({
+		Title = gameName,
+		Content = string.format(
+			"PlaceId: %s\nGameId: %s\nPlayers: %d",
+			tostring(game.PlaceId),
+			tostring(game.GameId),
+			#Players:GetPlayers()
+		),
+	})
+	local playersStat = gameSec:CreateStat({
+		Label = "Players",
+		Value = tostring(#Players:GetPlayers()),
+		Delta = "Server",
+	})
+
+	-- Links
+	local links = homeTab:CreateSection({
+		Name = "Links",
+		Description = "Quick actions",
+	})
+	local discord = (self._DiscordLink) or "https://discord.gg/9jZTsy7Wtb"
+	links:CreateButton({
+		Name = "Copy Discord invite",
+		Callback = function()
+			if setclipboard then
+				pcall(setclipboard, discord)
+			end
+			self:Notify({ Title = "Discord", Content = "Invite copied", Type = "Success", Duration = 2 })
+		end,
+	})
+	links:CreateButton({
+		Name = "Copy JobId",
+		Callback = function()
+			if setclipboard then
+				pcall(setclipboard, game.JobId)
+			end
+			self:Notify({ Title = "JobId", Content = "Copied", Type = "Info", Duration = 2 })
+		end,
+	})
+	links:CreateButton({
+		Name = "Rejoin server",
+		Callback = function()
+			pcall(function()
+				game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, game.JobId, localPlayer)
+			end)
+		end,
+	})
+
+	-- Live FPS / Ping / session
+	local frames = 0
+	local lastFpsUpdate = os.clock()
+	local fpsValue = 0
+	self._Maid:GiveTask(game:GetService("RunService").RenderStepped:Connect(function()
+		frames += 1
+		local now = os.clock()
+		if now - lastFpsUpdate >= 0.5 then
+			fpsValue = math.floor(frames / (now - lastFpsUpdate) + 0.5)
+			frames = 0
+			lastFpsUpdate = now
+		end
+	end))
+
+	self._Maid:GiveTask(task.spawn(function()
+		while self.Gui and self.Gui.Parent do
+			local pingMs = 0
+			pcall(function()
+				local item = Stats.Network.ServerStatsItem["Data Ping"]
+				if item then
+					pingMs = math.floor((item:GetValue() or 0) + 0.5)
+				end
+			end)
+			if fpsStat and fpsStat.Set then
+				fpsStat:Set(tostring(fpsValue))
+			end
+			if pingStat and pingStat.Set then
+				pingStat:Set(tostring(pingMs) .. "ms")
+			end
+			if sessionStat and sessionStat.Set and self._StartupTime then
+				local up = os.clock() - self._StartupTime
+				local m = math.floor(up / 60)
+				local s = math.floor(up % 60)
+				sessionStat:Set(string.format("%dm %ds", m, s))
+			end
+			if playersStat and playersStat.Set then
+				playersStat:Set(tostring(#Players:GetPlayers()))
+			end
+			task.wait(0.5)
+		end
+	end))
+
+	if not self._ActiveTab then
+		self:_selectTab(homeTab)
+	end
+
+	return homeTab
 end
 
 function Window:CreateTab(name: string)

@@ -75,11 +75,13 @@ function Section.new(tab: any, name: string?, description: string?): SectionHand
     Helpers.Corner(inner, Theme.CornerRadius)
     local innerStroke = Helpers.Stroke(inner, theme.Border, 1)
     innerStroke.Transparency = 0.16
+    self._InnerStroke = innerStroke
     -- Subtle accent light without inserting a GuiObject into the section's
     -- UIListLayout. Image-based glow children would be measured as layout
     -- items and create the giant empty boxes seen in earlier builds.
     local innerGlow = Helpers.Stroke(inner, theme.Accent, 2)
     innerGlow.Transparency = 0.90
+    self._InnerGlow = innerGlow
     Helpers.Padding(inner, 16, 16)
 
     local layout = Helpers.ListLayout(inner, 10)
@@ -175,9 +177,11 @@ end
 function Section:RefreshTheme()
     local theme = self.Tab.Window.Library.Theme
     self.Inner.BackgroundColor3 = theme.Surface
-    local stroke = self.Inner:FindFirstChildOfClass("UIStroke")
-    if stroke then
-        stroke.Color = theme.Border
+    if self._InnerStroke then
+        self._InnerStroke.Color = theme.Border
+    end
+    if self._InnerGlow then
+        self._InnerGlow.Color = theme.Accent
     end
     if self._HeaderLabel then
         self._HeaderLabel.TextColor3 = theme.Text
@@ -187,9 +191,6 @@ function Section:RefreshTheme()
     end
     if self._HeaderAccent then
         self._HeaderAccent.BackgroundColor3 = theme.Accent
-    end
-    if self._InnerGlow then
-        self._InnerGlow.Color = theme.Accent
     end
     for _, element in self._Elements do
         if element.RefreshTheme then

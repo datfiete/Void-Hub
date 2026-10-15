@@ -9,6 +9,17 @@ function Stat.new(section:any,data:any?):any
  self.Instance,self.Label,self.ValueLabel,self.DeltaLabel,self._Stroke=root,label,val,delta,stroke; return self
 end
 function Stat:Set(value:any,delta:any?) self.ValueLabel.Text=tostring(value); if delta~=nil then self.DeltaLabel.Text=tostring(delta) end end
-function Stat:RefreshTheme() local theme=self._Section.Tab.Window.Library.Theme; self.Label.TextColor3=theme.TextMuted; self.ValueLabel.TextColor3=theme.Text; self._Stroke.Color=theme.Border; if not self._Data.Color then self.DeltaLabel.TextColor3=theme.Accent end end
+function Stat:RefreshTheme()
+	local theme = self._Section.Tab.Window.Library.Theme
+	if self.Instance then
+		self.Instance.BackgroundColor3 = theme.ElementBackground
+	end
+	self.Label.TextColor3 = theme.TextMuted
+	self.ValueLabel.TextColor3 = theme.Text
+	self._Stroke.Color = theme.Border
+	if not self._Data.Color then
+		self.DeltaLabel.TextColor3 = theme.Accent
+	end
+end
 function Stat:Destroy() if self.Instance and self.Instance.Parent then self.Instance:Destroy() end end
 return Stat

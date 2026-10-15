@@ -435,6 +435,11 @@ function Tab:RefreshTheme()
     if self._PageTitle then self._PageTitle.TextColor3 = theme.Text end
     if self._PageEyebrow then self._PageEyebrow.TextColor3 = theme.Accent end
     if self._PageLine then self._PageLine.BackgroundColor3 = theme.Accent end
+    for _, section in self._Sections do
+        if section and section.RefreshTheme then
+            section:RefreshTheme()
+        end
+    end
 end
 
 function Tab:Show()

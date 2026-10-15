@@ -11,6 +11,16 @@ function Notice.new(section:any,data:any?):any
  self.Instance,self.TitleLabel,self.ContentLabel,self._Stroke,self._Rail=root,title,body,stroke,rail; if data.Callback then self._Maid:GiveTask(root.InputBegan:Connect(function(input) if input.UserInputType==Enum.UserInputType.MouseButton1 then task.spawn(data.Callback) end end)) end; return self
 end
 function Notice:Set(content:string) self.ContentLabel.Text=tostring(content) end
-function Notice:RefreshTheme() local theme=self._Section.Tab.Window.Library.Theme; local c=self._Data.Color or theme.Accent; self._Stroke.Color=c; self._Rail.BackgroundColor3=c; self.TitleLabel.TextColor3=theme.Text; self.ContentLabel.TextColor3=theme.TextMuted end
+function Notice:RefreshTheme()
+	local theme = self._Section.Tab.Window.Library.Theme
+	local c = self._Data.Color or theme.Accent
+	if self.Instance then
+		self.Instance.BackgroundColor3 = self._Data.BackgroundColor or theme.SurfaceHover
+	end
+	if self._Stroke then self._Stroke.Color = c end
+	if self._Rail then self._Rail.BackgroundColor3 = c end
+	if self.TitleLabel then self.TitleLabel.TextColor3 = theme.Text end
+	if self.ContentLabel then self.ContentLabel.TextColor3 = theme.TextMuted end
+end
 function Notice:Destroy() self._Maid:DoCleaning(); if self.Instance and self.Instance.Parent then self.Instance:Destroy() end end
 return Notice
