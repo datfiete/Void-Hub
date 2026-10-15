@@ -3899,11 +3899,6 @@ BF.startFarm = function()
             end
 
             if state == "PATROL" then
-                                -- GUI is delayed, the farmer should still scan Workspace.Enemies
-                -- and immediately switch back to COMBAT when a Raider appears.
-
-                -- No enemy: stay at the current safe Y. The old code used a
-                -- target of nil plus a fixed +Y velocity, which caused the slow fall.
                 if heightLocked then
                     BF.setFlyTarget(Vector3.new(hrp.Position.X, lockedY, hrp.Position.Z), false)
                 else
@@ -4060,7 +4055,6 @@ BF.startAutoRandomFruit = function()
             if config.autoRandomFruit then
                 pcall(BF.buyRandomFruitOnce)
             end
-            -- check every 5 min (server CD is 2h)
             task.wait(300)
         end
     end)
@@ -4108,7 +4102,6 @@ BF.equipSword = function()
                 end
             end
         end
-        -- any melee tool fallback
         for _, t in ipairs(bp:GetChildren()) do
             if t:IsA("Tool") and (t.ToolTip == "Melee" or t.ToolTip == "") then
                 hum:EquipTool(t)
@@ -4217,7 +4210,6 @@ BF.secretWindmill = function()
         if not BF.secretsRunning then return end
         BF.hitPart(rope)
     end
-    -- claim area: docks NPC
     BF.flyTo(Vector3.new(-1140, 20, 3850), 1.5)
     BF._secretDone[key] = true
 end
@@ -4281,7 +4273,6 @@ BF.secretJungleTrees = function()
         if n >= 25 then break end
         BF.hitPart(t)
         n = n + 1
-        -- monkey thief spawn
         local enemies = Workspace:FindFirstChild("Enemies")
         if enemies then
             for _, m in ipairs(enemies:GetChildren()) do
@@ -4354,9 +4345,7 @@ BF.startAutoSecrets = function()
                 BF.runSecretsCycle()
             end)
             if not ok then warn("[BF] secrets:", err) end
-            -- full cycle then wait before retrying incomplete ones
             task.wait(15)
-            -- allow retry of failed finds after a while
             if os.clock() % 120 < 20 then
                 BF._secretDone = {}
             end
@@ -4370,7 +4359,6 @@ BF.stopAutoSecrets = function()
     BF.notifyUser("Secrets", "Auto Secrets OFF", 2)
 end
 
--- =============================================
 BF.raidRunning = false
 BF.raidTask = nil
 BF.lastRaidChipAt = 0
@@ -4412,7 +4400,6 @@ BF.isPlayerDead = function()
 end
 
 BF.isInRaid = function()
-    -- Timer HUD OR any Island part under Locations
     if BF.raidTimerVisible() then return true end
     local locs = BF.getRaidLocations()
     if not locs then return false end
@@ -4441,7 +4428,6 @@ BF.getPartCFrame = function(obj)
     return cf
 end
 
--- Prefer highest Island N; also accept "Island1" / loose names
 BF.getActiveRaidIsland = function()
     local locs = BF.getRaidLocations()
     if not locs then return nil, 0, nil end
@@ -4454,7 +4440,6 @@ BF.getActiveRaidIsland = function()
         end
     end
 
-    -- fallback: any child with Island in name, pick furthest from player or first
     local best, bestI, bestCf, bestScore = nil, 0, nil, -1
     for _, ch in ipairs(locs:GetChildren()) do
         local n = string.lower(ch.Name)
@@ -4494,19 +4479,17 @@ end
 
 BF.raidOrbitAngle = 0
 BF.raidHoverY = 22
-BF.raidDodgeAmp = 35 -- side-to-side dodge distance (not stuck mid-island)
+BF.raidDodgeAmp = 35
 BF.currentRaidIslandIndex = 0
 BF.raidEndedAt = 0
 local RAID_REENTRY_COOLDOWN = 8
 
--- Stay over the island, but STRAFE left/right (real dodge), not tiny circle in the center
 BF.raidFlyToPos = function(pos)
     if not pos then return end
     pcall(function()
         BF._bossFlyUnlock = true
         if not BF.flying then BF.enableFly() end
 
-        -- smooth left-right + slight forward/back (figure-8-ish)
         BF.raidOrbitAngle = BF.raidOrbitAngle + 0.07
         local ox = math.sin(BF.raidOrbitAngle) * BF.raidDodgeAmp
         local oz = math.sin(BF.raidOrbitAngle * 0.5) * (BF.raidDodgeAmp * 0.45)
@@ -4538,7 +4521,6 @@ BF.raidKillLoop = function()
     local island, idx, cf = BF.getActiveRaidIsland()
     local focusPos = cf and cf.Position or nil
 
-    -- Fallback: no Locations parts -> use living enemies as focus (still progress raid)
     if not focusPos then
         local all = BF.getAllRaidEnemies()
         if #all > 0 then
@@ -4555,7 +4537,6 @@ BF.raidKillLoop = function()
     end
 
     if not focusPos then
-        -- truly nothing: stay put briefly (island between spawns)
         return false
     end
 
@@ -4605,7 +4586,6 @@ BF.startAutoRaid = function()
             local ok, err = pcall(function()
                 if not config.autoRaid then return end
 
-                -- DEAD: wait for respawn, do not fly to old raid
                 if BF.isPlayerDead() then
                     BF.notifyUser("Raid", "Dead - waiting respawn", 2)
                     task.wait(1)
@@ -4621,13 +4601,11 @@ BF.startAutoRaid = function()
                     return
                 end
 
-                -- Raid ended (timer gone, no islands)
                 BF.currentRaidIslandIndex = 0
                 if BF.raidEndedAt == 0 then
                     BF.raidEndedAt = os.clock()
                     BF.notifyUser("Raid", "Raid ended - cooldown then new chip", 3)
                 end
-                -- short cooldown so we don't path back into a finishing raid
                 if os.clock() - BF.raidEndedAt < RAID_REENTRY_COOLDOWN then
                     task.wait(0.5)
                     return
@@ -4714,10 +4692,6 @@ BF.stopEnemyEsp = function()
 end
 
 -- =============================================
--- VAXORIN UI CREATION (if successful)
--- =============================================
-
--- =============================================
 -- FPS BOOSTER + ISLAND FLY
 -- =============================================
 BF.fpsBoostOn = false
@@ -4745,7 +4719,6 @@ BF.applyFpsBoost = function(on)
         return
     end
 
-    -- Graphics (hub-style)
     pcall(function()
         settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
         settings().Rendering.MeshPartDetailLevel = Enum.MeshPartDetailLevel.Level01
@@ -4759,7 +4732,6 @@ BF.applyFpsBoost = function(on)
         if setfpscap then setfpscap(999) end
     end)
 
-    -- Lighting
     pcall(function()
         lighting.GlobalShadows = false
         lighting.FogEnd = 9e9
@@ -4780,7 +4752,6 @@ BF.applyFpsBoost = function(on)
         end
     end)
 
-    -- Terrain / water
     pcall(function()
         if terrain then
             terrain.WaterWaveSize = 0
@@ -4811,7 +4782,6 @@ BF.applyFpsBoost = function(on)
         end
     end
 
-    -- One-shot pass (can hitch briefly once)
     task.spawn(function()
         pcall(function()
             for _, v in ipairs(workspace:GetDescendants()) do
@@ -4958,7 +4928,6 @@ if useVaxorin and window then
         Flag = "Misc.IslandSelect",
         Save = false,
         Callback = function(v)
-            -- dropdown may pass string or table
             local name = v
             if type(v) == "table" then name = v[1] or v.Name or tostring(v) end
             BF._selectedIslandFly = tostring(name)
@@ -5394,7 +5363,6 @@ else
 end
 
 print("[BF] fully loaded, lines ready")
--- Keep script alive
 while task.wait(1) do end
 
 print("Test 1")
