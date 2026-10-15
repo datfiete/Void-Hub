@@ -114,6 +114,8 @@ local function createWeather(parent: Instance)
 			layer.Parent = target
 		end
 		layer.ClipsDescendants = (scope == "UI")
+		-- Behind chrome when inside UI, above dim when full-screen
+		layer.ZIndex = if scope == "UI" then 2 else 100
 	end
 
 	function api:Set(kind: string)
@@ -1298,9 +1300,11 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	activityScale.Parent = islandActivity
 
 	local function showIslandActivity()
+		-- Island pill stays fixed; card slides out underneath (Deep Fishing style)
 		local absPos = island.AbsolutePosition
 		local absSize = island.AbsoluteSize
-		islandActivity.Position = UDim2.fromOffset(absPos.X + absSize.X * 0.5, absPos.Y + absSize.Y + 10)
+		local targetPos = UDim2.fromOffset(absPos.X + absSize.X * 0.5, absPos.Y + absSize.Y + 8)
+		local startPos = UDim2.fromOffset(absPos.X + absSize.X * 0.5, absPos.Y + absSize.Y - 4)
 		islandActivity.AnchorPoint = Vector2.new(0.5, 0)
 		islandActivity.BackgroundColor3 = library.Theme.Secondary
 		actTitle.TextColor3 = library.Theme.Text
@@ -1308,8 +1312,10 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		actStats.TextColor3 = library.Theme.Accent
 		actHint.TextColor3 = library.Theme.TextMuted
 		islandActivity.Visible = true
-		activityScale.Scale = 0.88
-		Tween.Play(activityScale, { Scale = 1 }, { Time = 0.16, EasingStyle = Enum.EasingStyle.Back })
+		islandActivity.Position = startPos
+		activityScale.Scale = 0.92
+		Tween.Play(islandActivity, { Position = targetPos }, { Time = 0.18, EasingStyle = Enum.EasingStyle.Quint })
+		Tween.Play(activityScale, { Scale = 1 }, { Time = 0.18, EasingStyle = Enum.EasingStyle.Quint })
 		for _, bar in bars:GetChildren() do
 			if bar:IsA("Frame") then
 				Tween.Play(bar, { BackgroundColor3 = library.Theme.AccentAlt or library.Theme.Accent }, { Time = 0.12 })
@@ -1318,14 +1324,19 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	end
 
 	local function hideIslandActivity()
-		if self._IslandActivity then
-			Tween.Play(activityScale, { Scale = 0.9 }, { Time = 0.1 })
-			task.delay(0.1, function()
-				if self._IslandActivity then
-					self._IslandActivity.Visible = false
-				end
-			end)
+		if not self._IslandActivity or not self._IslandActivity.Visible then
+			return
 		end
+		local absPos = island.AbsolutePosition
+		local absSize = island.AbsoluteSize
+		local hidePos = UDim2.fromOffset(absPos.X + absSize.X * 0.5, absPos.Y + absSize.Y - 2)
+		Tween.Play(islandActivity, { Position = hidePos }, { Time = 0.12 })
+		Tween.Play(activityScale, { Scale = 0.92 }, { Time = 0.12 })
+		task.delay(0.12, function()
+			if self._IslandActivity then
+				self._IslandActivity.Visible = false
+			end
+		end)
 		for _, bar in bars:GetChildren() do
 			if bar:IsA("Frame") then
 				Tween.Play(bar, { BackgroundColor3 = library.Theme.Accent }, { Time = 0.12 })
@@ -1346,34 +1357,58 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		self:SetVisible(true)
 	end))
 
-	-- Live stats for island activity
-	self._Maid:GiveTask(task.spawn(function()
+	-- Live stats for island activity (always running)
+	self._LiveFps = 0
+	self._LivePing = 0
+	do
 		local frames, last = 0, os.clock()
-		local fps = 0
 		self._Maid:GiveTask(game:GetService("RunService").RenderStepped:Connect(function()
 			frames += 1
 			local now = os.clock()
-			if now - last >= 0.5 then
-				fps = math.floor(frames / (now - last) + 0.5)
+			if now - last >= 0.4 then
+				self._LiveFps = math.floor(frames / (now - last) + 0.5)
 				frames = 0
 				last = now
 			end
 		end))
-		while self.Gui and self.Gui.Parent do
-			local ping = 0
-			pcall(function()
-				local item = Stats.Network.ServerStatsItem["Data Ping"]
-				if item then ping = math.floor((item:GetValue() or 0) + 0.5) end
-			end)
-			if self._IslandActStats then
-				self._IslandActStats.Text = string.format("FPS %d  ·  Ping %dms", fps, ping)
+		self._Maid:GiveTask(task.spawn(function()
+			while true do
+				local ping = 0
+				pcall(function()
+					local okFps = workspace:GetRealPhysicsFPS()
+					if typeof(okFps) == "number" and okFps > 0 and (self._LiveFps or 0) < 1 then
+						self._LiveFps = math.floor(okFps + 0.5)
+					end
+				end)
+				pcall(function()
+					local item = Stats.Network.ServerStatsItem["Data Ping"]
+					if item and item.GetValue then
+						ping = math.floor((item:GetValue() or 0) + 0.5)
+					end
+				end)
+				if ping == 0 then
+					pcall(function()
+						local localPlayer = game:GetService("Players").LocalPlayer
+						if localPlayer and localPlayer.GetNetworkPing then
+							ping = math.floor(localPlayer:GetNetworkPing() * 1000 + 0.5)
+						end
+					end)
+				end
+				self._LivePing = ping
+				if self._IslandActStats then
+					self._IslandActStats.Text = string.format("FPS %d  ·  Ping %dms", self._LiveFps or 0, self._LivePing or 0)
+				end
+				if self._IslandActStatus then
+					local st = "Ready"
+					if self._FooterStatus and self._FooterStatus.Text and self._FooterStatus.Text ~= "" then
+						st = self._FooterStatus.Text
+					end
+					self._IslandActStatus.Text = st
+				end
+				task.wait(0.35)
 			end
-			if self._IslandActStatus then
-				self._IslandActStatus.Text = (self._FooterStatus and self._FooterStatus.Text) or "Ready"
-			end
-			task.wait(0.5)
-		end
-	end))
+		end))
+	end
 
 
 	self._Maid:GiveTask(islandHit.MouseLeave:Connect(function()
@@ -1445,6 +1480,27 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	self._WeatherKind = "None"
 	self._WeatherScope = "Screen"
 	self._OpenStyle = "Island" -- or "Button"
+
+	-- Full-screen dim behind the window when open
+	local dim = Instance.new("Frame")
+	dim.Name = "VaxorinDim"
+	dim.Size = UDim2.fromScale(1, 1)
+	dim.Position = UDim2.fromScale(0, 0)
+	dim.BackgroundColor3 = Color3.new(0, 0, 0)
+	dim.BackgroundTransparency = 1
+	dim.BorderSizePixel = 0
+	dim.ZIndex = 1
+	dim.Active = false
+	dim.Visible = true
+	dim.Parent = screenGui
+	self._Dim = dim
+
+	-- Window open/close scale
+	local mainScale = Instance.new("UIScale")
+	mainScale.Name = "OpenScale"
+	mainScale.Scale = 1
+	mainScale.Parent = main
+	self._MainScale = mainScale
 
 
 	-- ============================================
@@ -1708,6 +1764,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		BackgroundTransparency = 1,
 		Parent = main,
 	})
+	contentArea.ZIndex = 10
 
 	-- Small status capsule in the new header/content gutter. It provides a
 	-- deliberate visual transition so the cards do not begin directly under the
@@ -1766,6 +1823,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	})
 	local sidebarCorner = Helpers.Corner(sidebar, Theme.CornerRadius)
 	sidebar.ClipsDescendants = true
+	sidebar.ZIndex = 10
 	Helpers.Padding(sidebar, 16)
 
 
@@ -1935,6 +1993,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	pages.BackgroundTransparency = 1
 	pages.BorderSizePixel = 0
 	pages.ClipsDescendants = true
+	pages.ZIndex = 10
 	pages.Parent = contentArea
 
 	-- ============================================
@@ -3603,43 +3662,73 @@ function Window:SetVisible(visible: boolean)
 		self._ApplyBlurTarget()
 	end
 
-	if visible then
-		if self.Main then
-			local useMain = self._LayoutMode == "Vaxorin" or self._LayoutMode == "Classic"
-			self.Main.Visible = self._StartupComplete and useMain
-		end
-		-- Hide open controls
+	local function hideOpenControls()
 		if self._IslandActivity then self._IslandActivity.Visible = false end
-		local function hideControl(btn: Instance?)
-			if not btn or not btn.Parent then return end
-			btn.Visible = false
-			if btn:IsA("CanvasGroup") then
-				btn.GroupTransparency = 0
+		local islandBtn = self.Gui and self.Gui:FindFirstChild("Island")
+		if islandBtn then islandBtn.Visible = false end
+		if self._ClassicOpen then self._ClassicOpen.Visible = false end
+	end
+
+	local function showOpenControls()
+		if not self._StartupComplete then return end
+		local useIsland = (self._OpenStyle or "Island") ~= "Button"
+		local islandBtn = self.Gui and self.Gui:FindFirstChild("Island")
+		if self._ClassicOpen then self._ClassicOpen.Visible = false end
+		if islandBtn then islandBtn.Visible = false end
+		if useIsland and islandBtn then
+			self._FloatingButton = islandBtn
+			islandBtn.Visible = true
+			islandBtn.Size = UDim2.fromOffset(168, 34)
+			if islandBtn:IsA("CanvasGroup") then islandBtn.GroupTransparency = 0 end
+		elseif self._ClassicOpen then
+			self._FloatingButton = self._ClassicOpen
+			self._ClassicOpen.Visible = true
+			self._ClassicOpen.Size = UDim2.fromOffset(50, 50)
+		end
+	end
+
+	if visible then
+		hideOpenControls()
+		local useMain = self._LayoutMode == "Vaxorin" or self._LayoutMode == "Classic"
+		if self.Main and self._StartupComplete and useMain then
+			self.Main.Visible = true
+			if self._MainScale then
+				self._MainScale.Scale = 0.92
+				Tween.Play(self._MainScale, { Scale = 1 }, { Time = 0.22, EasingStyle = Enum.EasingStyle.Quint })
 			end
-		end
-		hideControl(self.Gui and self.Gui:FindFirstChild("Island"))
-		hideControl(self._ClassicOpen)
-	else
-		if self.Main then
-			self.Main.Visible = false
-		end
-		if self._StartupComplete then
-			local useIsland = (self._OpenStyle or "Island") ~= "Button"
-			local islandBtn = self.Gui and self.Gui:FindFirstChild("Island")
-			if self._ClassicOpen then self._ClassicOpen.Visible = false end
-			if islandBtn then islandBtn.Visible = false end
-			if useIsland and islandBtn then
-				self._FloatingButton = islandBtn
-				islandBtn.Visible = true
-				islandBtn.Size = UDim2.fromOffset(168, 34)
-				if islandBtn:IsA("CanvasGroup") then
-					islandBtn.GroupTransparency = 0
+			-- fade main in via Group if CanvasGroup else skip
+			pcall(function()
+				if self.Main:IsA("CanvasGroup") then
+					self.Main.GroupTransparency = 0.2
+					Tween.Play(self.Main, { GroupTransparency = 0 }, { Time = 0.2 })
 				end
-			elseif self._ClassicOpen then
-				self._FloatingButton = self._ClassicOpen
-				self._ClassicOpen.Visible = true
-				self._ClassicOpen.Size = UDim2.fromOffset(50, 50)
+			end)
+		elseif self.Main and self._StartupComplete then
+			self.Main.Visible = true
+		end
+		if self._Dim then
+			self._Dim.Visible = true
+			Tween.Play(self._Dim, { BackgroundTransparency = 0.45 }, { Time = 0.22 })
+		end
+	else
+		-- close animation then hide
+		if self._Dim then
+			Tween.Play(self._Dim, { BackgroundTransparency = 1 }, { Time = 0.18 })
+		end
+		if self.Main and self.Main.Visible then
+			if self._MainScale then
+				Tween.Play(self._MainScale, { Scale = 0.94 }, { Time = 0.14 })
 			end
+			task.delay(0.14, function()
+				if self.Main and not self._Visible then
+					self.Main.Visible = false
+					if self._MainScale then self._MainScale.Scale = 1 end
+				end
+				showOpenControls()
+			end)
+		else
+			if self.Main then self.Main.Visible = false end
+			showOpenControls()
 		end
 	end
 end
