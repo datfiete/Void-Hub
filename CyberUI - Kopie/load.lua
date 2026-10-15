@@ -45,6 +45,7 @@ local MODULE_PATHS = {
 	"Core/ESPWorldRenderer",
 	"Core/WorldRadar",
 	"Core/LayoutVariants",   -- neu in 5.0
+	"Core/Weather",
 	"Core/Window",
 }
 
