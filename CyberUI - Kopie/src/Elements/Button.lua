@@ -67,9 +67,18 @@ function Button:RefreshTheme()
 	local theme = self._Section.Tab.Window.Library.Theme
 	self.Instance.BackgroundColor3 = theme.ElementBackground or theme.Background
 	self.Instance.TextColor3 = theme.Text
-	local stroke = self.Instance:FindFirstChildOfClass("UIStroke")
-	if stroke then
-		stroke.Color = theme.Border
+	for _, child in self.Instance:GetChildren() do
+		if child:IsA("UIStroke") then
+			-- border stroke is tighter transparency; accent glow is ~0.95
+			if child.Transparency > 0.5 then
+				child.Color = theme.Accent
+			else
+				child.Color = theme.Border
+			end
+		end
+	end
+	if self.RowGlow then
+		self.RowGlow.Color = theme.Accent
 	end
 end
 

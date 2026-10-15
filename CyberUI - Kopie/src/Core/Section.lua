@@ -194,10 +194,17 @@ function Section:RefreshTheme()
     end
     for _, element in self._Elements do
         if element.RefreshTheme then
-            element:RefreshTheme()
+            pcall(function()
+                element:RefreshTheme()
+            end)
         end
         if element._VaxorinGlow then
-            element._VaxorinGlow.Color = theme.Accent
+            local g = element._VaxorinGlow
+            if g:IsA("ImageLabel") then
+                g.ImageColor3 = theme.Accent
+            elseif g:IsA("UIStroke") then
+                g.Color = theme.Accent
+            end
         end
     end
 end

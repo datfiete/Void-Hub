@@ -215,17 +215,19 @@ function Tab.new(window: any, name: string): TabHandle
 
     button.MouseEnter:Connect(function()
         if window._ActiveTab ~= self then
-            Tween.Play(hoverFill, { BackgroundTransparency = 0.82 }, { Time = 0.12 })
-            Tween.Play(icon, { ImageColor3 = theme.Text, ImageTransparency = 0 }, { Time = 0.12 })
-            Tween.Play(label, { TextColor3 = theme.Text }, { Time = 0.12 })
+            local t = window.Library.Theme
+            Tween.Play(hoverFill, { BackgroundTransparency = 0.82, BackgroundColor3 = t.SurfaceHover }, { Time = 0.12 })
+            Tween.Play(icon, { ImageColor3 = t.Text, ImageTransparency = 0 }, { Time = 0.12 })
+            Tween.Play(label, { TextColor3 = t.Text }, { Time = 0.12 })
         end
     end)
 
     button.MouseLeave:Connect(function()
         if window._ActiveTab ~= self then
+            local t = window.Library.Theme
             Tween.Play(hoverFill, { BackgroundTransparency = 1 }, { Time = 0.14 })
-            Tween.Play(icon, { ImageColor3 = theme.TextMuted, ImageTransparency = if icon.Image == "" then 1 else 0 }, { Time = 0.12 })
-            Tween.Play(label, { TextColor3 = theme.TextMuted }, { Time = 0.12 })
+            Tween.Play(icon, { ImageColor3 = t.TextMuted, ImageTransparency = if icon.Image == "" then 1 else 0 }, { Time = 0.12 })
+            Tween.Play(label, { TextColor3 = t.TextMuted }, { Time = 0.12 })
         end
     end)
 
@@ -428,15 +430,21 @@ function Tab:SetActive(active: boolean)
 end
 
 function Tab:RefreshTheme()
-    self:SetActive(self == self.Window._ActiveTab)
     local theme = self.Window.Library.Theme
+    self:SetActive(self == self.Window._ActiveTab)
     self.Page.ScrollBarImageColor3 = theme.Accent
     if self._PageTitle then self._PageTitle.TextColor3 = theme.Text end
     if self._PageEyebrow then self._PageEyebrow.TextColor3 = theme.Accent end
     if self._PageLine then self._PageLine.BackgroundColor3 = theme.Accent end
+    -- Ensure tab sidebar button chrome tracks theme even when inactive
+    if self._HoverFill then
+        self._HoverFill.BackgroundColor3 = theme.SurfaceHover
+    end
     for _, section in self._Sections do
         if section and section.RefreshTheme then
-            section:RefreshTheme()
+            pcall(function()
+                section:RefreshTheme()
+            end)
         end
     end
 end

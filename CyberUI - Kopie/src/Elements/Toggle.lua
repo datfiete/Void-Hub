@@ -156,11 +156,23 @@ end
 function Toggle:RefreshTheme()
 	local theme = self._Section.Tab.Window.Library.Theme
 	self.Instance.BackgroundColor3 = theme.ElementBackground or theme.Background
-	self.Label.TextColor3 = theme.Text
+	local rootStroke = self.Instance:FindFirstChildOfClass("UIStroke")
+	if rootStroke then
+		rootStroke.Color = theme.Border
+	end
+	if self.Label then
+		self.Label.TextColor3 = theme.Text
+	end
 	self.Switch.BackgroundColor3 = if self._Value then theme.Accent else theme.Border
+	-- VaxorinGlow is an ImageLabel (Helpers.Glow), not UIStroke
 	if self.SwitchGlow then
-		self.SwitchGlow.Color = theme.Accent
-		self.SwitchGlow.Transparency = if self._Value then 0.84 else 1
+		if self.SwitchGlow:IsA("ImageLabel") then
+			self.SwitchGlow.ImageColor3 = theme.Accent
+			self.SwitchGlow.ImageTransparency = if self._Value then 0.84 else 1
+		elseif self.SwitchGlow:IsA("UIStroke") then
+			self.SwitchGlow.Color = theme.Accent
+			self.SwitchGlow.Transparency = if self._Value then 0.84 else 1
+		end
 	end
 	local switchStroke = self.Switch:FindFirstChildOfClass("UIStroke")
 	if switchStroke then
