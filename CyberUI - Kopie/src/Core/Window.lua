@@ -21,27 +21,75 @@ local LEGACY_LOGO = "rbxassetid://128228297210141"
 
 
 -- Inline weather (no separate module — works with older load.lua MODULE_PATHS)
+
 local function createWeather(parent: Instance)
 	local RunService = game:GetService("RunService")
 	local layer = Instance.new("Frame")
 	layer.Name = "WeatherLayer"
 	layer.BackgroundTransparency = 1
 	layer.Size = UDim2.fromScale(1, 1)
-	layer.ZIndex = 20
-	layer.ClipsDescendants = false
+	layer.ZIndex = 100
+	layer.ClipsDescendants = true
 	layer.Visible = false
 	layer.Active = false
 	layer.Parent = parent
 
+	-- Soft circular-ish blob via UICorner full round
 	local presets = {
-		Rain = { count = 40, color = Color3.fromRGB(160, 190, 220), sx = 1, sy = 14, spd = {180, 300}, drift = {-15, 15}, t = 0.35, corner = 0, rot = 12 },
-		Snow = { count = 32, color = Color3.fromRGB(240, 245, 255), sx = 4, sy = 4, spd = {30, 70}, drift = {-40, 40}, t = 0.25, corner = 8, rot = 0 },
-		Sakura = { count = 24, color = Color3.fromRGB(255, 160, 190), sx = 6, sy = 6, spd = {25, 55}, drift = {-50, 50}, t = 0.2, corner = 3, rot = 0 },
-		Stars = { count = 36, color = Color3.fromRGB(255, 255, 255), sx = 2, sy = 2, spd = {4, 12}, drift = {-8, 8}, t = 0.4, corner = 8, rot = 0 },
-		Leaves = { count = 20, color = Color3.fromRGB(180, 120, 50), sx = 7, sy = 5, spd = {35, 80}, drift = {-70, 70}, t = 0.15, corner = 2, rot = 0 },
+		Rain = {
+			count = 55,
+			color = Color3.fromRGB(170, 200, 230),
+			size = function(rng) return 1, rng:NextInteger(12, 20) end,
+			spd = { 220, 380 }, drift = { -12, 12 }, t = 0.3, corner = 0, rot = 15, shape = "rect",
+		},
+		Snow = {
+			count = 40,
+			color = Color3.fromRGB(245, 248, 255),
+			size = function(rng) local s = rng:NextInteger(3, 7) return s, s end,
+			spd = { 22, 55 }, drift = { -35, 35 }, t = 0.15, corner = 99, rot = 0, shape = "circle",
+		},
+		Sakura = {
+			count = 32,
+			color = Color3.fromRGB(255, 150, 185),
+			size = function(rng) return rng:NextInteger(5, 9), rng:NextInteger(4, 7) end,
+			spd = { 28, 60 }, drift = { -55, 55 }, t = 0.12, corner = 3, rot = 0, shape = "petal",
+		},
+		Stars = {
+			count = 45,
+			color = Color3.fromRGB(255, 255, 255),
+			size = function(rng) local s = rng:NextInteger(2, 4) return s, s end,
+			spd = { 3, 10 }, drift = { -6, 6 }, t = 0.25, corner = 99, rot = 0, shape = "circle",
+		},
+		Leaves = {
+			count = 26,
+			color = Color3.fromRGB(200, 140, 55),
+			size = function(rng) return rng:NextInteger(6, 11), rng:NextInteger(4, 7) end,
+			spd = { 40, 85 }, drift = { -75, 75 }, t = 0.1, corner = 2, rot = 0, shape = "petal",
+		},
 	}
 
-	local api = { _kind = "None", _parts = {} :: { Frame }, _conn = nil :: RBXScriptConnection? }
+	local api = {
+		_kind = "None",
+		_parts = {} :: { Frame },
+		_conn = nil :: RBXScriptConnection?,
+		_scope = "Screen", -- Screen | UI
+		_screenParent = parent,
+		_uiParent = nil,
+	}
+
+	function api:SetParentTargets(screenParent: Instance?, uiParent: Instance?)
+		self._screenParent = screenParent or self._screenParent
+		self._uiParent = uiParent
+	end
+
+	function api:SetScope(scope: string)
+		scope = scope or "Screen"
+		self._scope = scope
+		local target = if scope == "UI" and self._uiParent then self._uiParent else self._screenParent
+		if target and layer.Parent ~= target then
+			layer.Parent = target
+		end
+	end
 
 	function api:Set(kind: string)
 		kind = kind or "None"
@@ -53,25 +101,27 @@ local function createWeather(parent: Instance)
 		if not preset then layer.Visible = false; return end
 		layer.Visible = true
 		local rng = Random.new()
-		local speeds, drifts = {}, {}
+		local speeds, drifts, spins = {}, {}, {}
 		for i = 1, preset.count do
 			local f = Instance.new("Frame")
 			f.BorderSizePixel = 0
 			f.BackgroundColor3 = preset.color
 			f.BackgroundTransparency = preset.t + rng:NextNumber(0, 0.2)
-			f.Size = UDim2.fromOffset(preset.sx, preset.sy)
-			f.Position = UDim2.fromScale(rng:NextNumber(0, 1), rng:NextNumber(-0.2, 1))
-			f.Rotation = if preset.rot ~= 0 then preset.rot else rng:NextNumber(-25, 25)
-			f.ZIndex = 6
+			local sx, sy = preset.size(rng)
+			f.Size = UDim2.fromOffset(sx, sy)
+			f.Position = UDim2.fromScale(rng:NextNumber(0, 1), rng:NextNumber(-0.15, 1))
+			f.Rotation = if preset.rot ~= 0 then preset.rot else rng:NextNumber(-40, 40)
+			f.ZIndex = 101
+			f.Active = false
 			f.Parent = layer
-			if preset.corner > 0 then
-				local c = Instance.new("UICorner")
-				c.CornerRadius = UDim.new(0, preset.corner)
-				c.Parent = f
-			end
+			local c = Instance.new("UICorner")
+			c.CornerRadius = UDim.new(0, preset.corner)
+			c.Parent = f
+			-- petal: slight diamond via rotation already
 			self._parts[i] = f
 			speeds[i] = rng:NextNumber(preset.spd[1], preset.spd[2])
 			drifts[i] = rng:NextNumber(preset.drift[1], preset.drift[2])
+			spins[i] = rng:NextNumber(-60, 60)
 		end
 		self._conn = RunService.RenderStepped:Connect(function(dt)
 			local abs = layer.AbsoluteSize
@@ -81,10 +131,17 @@ local function createWeather(parent: Instance)
 				local x = p.Position.X.Scale * abs.X + p.Position.X.Offset
 				local y = p.Position.Y.Scale * abs.Y + p.Position.Y.Offset
 				y += speeds[i] * dt
-				x += drifts[i] * dt
-				if kind == "Sakura" or kind == "Leaves" then p.Rotation += drifts[i] * dt * 0.35 end
-				if y > abs.Y + 20 then y = rng:NextNumber(-30, -4); x = rng:NextNumber(0, abs.X) end
-				if x < -20 then x = abs.X + 10 elseif x > abs.X + 20 then x = -10 end
+				x += drifts[i] * dt + math.sin((os.clock() + i) * 1.3) * (kind == "Snow" and 12 or 0) * dt
+				if kind == "Sakura" or kind == "Leaves" then
+					p.Rotation += spins[i] * dt
+				elseif kind == "Stars" then
+					p.BackgroundTransparency = 0.2 + 0.5 * (0.5 + 0.5 * math.sin(os.clock() * 3 + i))
+				end
+				if y > abs.Y + 24 then
+					y = rng:NextNumber(-40, -6)
+					x = rng:NextNumber(0, abs.X)
+				end
+				if x < -24 then x = abs.X + 12 elseif x > abs.X + 24 then x = -12 end
 				p.Position = UDim2.fromOffset(x, y)
 			end
 		end)
@@ -98,6 +155,7 @@ local function createWeather(parent: Instance)
 
 	return api
 end
+
 
 
 -- Soft 9-slice drop shadow, used behind the main window for real depth instead
@@ -1053,8 +1111,8 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	islandActivity.BackgroundColor3 = library.Theme.Secondary
 	islandActivity.BackgroundTransparency = 0.02
 	islandActivity.Visible = false
-	islandActivity.ZIndex = 59
-	islandActivity.Parent = island
+	islandActivity.ZIndex = 60
+	islandActivity.Parent = screenGui
 	Helpers.Corner(islandActivity, 12)
 	Helpers.Stroke(islandActivity, library.Theme.Border, 1)
 	Helpers.Padding(islandActivity, 10)
@@ -1162,12 +1220,16 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 
 	-- Island hover → show activity
 	self._Maid:GiveTask(islandHit.MouseEnter:Connect(function()
-		islandActivity.Visible = true
+		local absPos = island.AbsolutePosition
+		local absSize = island.AbsoluteSize
+		islandActivity.Position = UDim2.fromOffset(absPos.X + absSize.X * 0.5, absPos.Y + absSize.Y + 8)
+		islandActivity.AnchorPoint = Vector2.new(0.5, 0)
 		islandActivity.BackgroundColor3 = library.Theme.Secondary
 		actTitle.TextColor3 = library.Theme.Text
 		actStatus.TextColor3 = library.Theme.TextMuted
 		actStats.TextColor3 = library.Theme.Accent
 		actHint.TextColor3 = library.Theme.TextMuted
+		islandActivity.Visible = true
 	end))
 	-- note: size hover already connected; keep activity until leave
 	local oldLeave -- patched below via combined leave
@@ -1285,7 +1347,9 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	self._Maid:Give(island)
 	-- Weather layer on full ScreenGui so particles are always visible
 	self._Weather = createWeather(screenGui)
+	self._Weather:SetParentTargets(screenGui, main)
 	self._WeatherKind = "None"
+	self._WeatherScope = "Screen"
 	self._OpenStyle = "Island" -- or "Button"
 
 
@@ -1717,6 +1781,15 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	footerStroke.Transparency = 0.05
 	self._Footer = footer
 	self._FooterStroke = footerStroke
+	local footerAccent = Instance.new("Frame")
+	footerAccent.Name = "FooterAccent"
+	footerAccent.Size = UDim2.new(1, 0, 0, 2)
+	footerAccent.Position = UDim2.fromOffset(0, 0)
+	footerAccent.BackgroundColor3 = library.Theme.Accent
+	footerAccent.BorderSizePixel = 0
+	footerAccent.ZIndex = 2
+	footerAccent.Parent = footer
+	self._FooterAccent = footerAccent
 
 	local avatarImage = Instance.new("ImageLabel")
 	avatarImage.Name = "Avatar"
@@ -1952,12 +2025,15 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		if self._SearchResults then
 			self._SearchResults.BackgroundColor3 = library.Theme.Surface
 		end
-		local footerBg = library.Theme.ElementBackground or library.Theme.Secondary
+		local footerBg = library.Theme.ElementBackground or library.Theme.Surface or library.Theme.Secondary
 		footer.BackgroundColor3 = footerBg
 		footer.BackgroundTransparency = 0
 		if self._FooterStroke then
-			self._FooterStroke.Color = library.Theme.BorderStrong or library.Theme.Border
-			self._FooterStroke.Transparency = 0.05
+			self._FooterStroke.Color = library.Theme.Accent
+			self._FooterStroke.Transparency = 0.55
+		end
+		if self._FooterAccent then
+			self._FooterAccent.BackgroundColor3 = library.Theme.Accent
 		end
 		if footerName then
 			footerName.TextColor3 = library.Theme.Text
@@ -1966,12 +2042,12 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 			footerStatus.TextColor3 = library.Theme.Accent
 		end
 		for _, d in footer:GetDescendants() do
-			if d:IsA("UIStroke") then
+			if d:IsA("UIStroke") and d ~= self._FooterStroke then
 				d.Color = library.Theme.BorderStrong or library.Theme.Border
-			elseif d:IsA("TextLabel") and d ~= footerStatus then
+			elseif d:IsA("TextLabel") then
 				if d.Name == "Status" then
 					d.TextColor3 = library.Theme.Accent
-				else
+				elseif d.Name ~= "ActHint" then
 					d.TextColor3 = library.Theme.Text
 				end
 			end
@@ -2683,6 +2759,22 @@ function Window:_createOptionsTab()
 			self._WeatherKind = value
 			if self._Weather then
 				self._Weather:Set(value)
+			end
+		end,
+	})
+
+	visualSection:CreateDropdown({
+		Name = "Weather Scope",
+		Options = { "Screen", "UI" },
+		CurrentOption = self._WeatherScope or "Screen",
+		Flag = "Vaxorin.Visual.WeatherScope",
+		Save = true,
+		Callback = function(value)
+			if type(value) == "table" then value = value[1] end
+			value = tostring(value or "Screen")
+			self._WeatherScope = value
+			if self._Weather and self._Weather.SetScope then
+				self._Weather:SetScope(value)
 			end
 		end,
 	})
@@ -3419,57 +3511,40 @@ function Window:SetVisible(visible: boolean)
 
 	if visible then
 		if self.Main then
-			-- Main shell is used by Vaxorin and Classic; Minecraft uses its own ScreenGui.
 			local useMain = self._LayoutMode == "Vaxorin" or self._LayoutMode == "Classic"
 			self.Main.Visible = self._StartupComplete and useMain
 		end
-
-		if self._FloatingButton and self._FloatingButton.Visible then
-			local btn = self._FloatingButton
-			Tween.Play(btn, {
-				Size = UDim2.fromOffset(8, 8),
-				GroupTransparency = 1,
-			}, { Time = 0.14 })
-			task.delay(0.14, function()
-				if btn and btn.Parent then
-					btn.Visible = false
-					btn.GroupTransparency = 0
-					btn.Size = UDim2.fromOffset(168, 34)
-				end
-			end)
+		-- Hide open controls
+		if self._IslandActivity then self._IslandActivity.Visible = false end
+		local function hideControl(btn: Instance?)
+			if not btn or not btn.Parent then return end
+			btn.Visible = false
+			if btn:IsA("CanvasGroup") then
+				btn.GroupTransparency = 0
+			end
 		end
+		hideControl(self.Gui and self.Gui:FindFirstChild("Island"))
+		hideControl(self._ClassicOpen)
 	else
 		if self.Main then
 			self.Main.Visible = false
 		end
-
 		if self._StartupComplete then
 			local useIsland = (self._OpenStyle or "Island") ~= "Button"
+			local islandBtn = self.Gui and self.Gui:FindFirstChild("Island")
 			if self._ClassicOpen then self._ClassicOpen.Visible = false end
-			local islandBtn = self._FloatingButton
-			-- Prefer explicit island canvas if open style is Island
-			if self.Gui then
-				local found = self.Gui:FindFirstChild("Island")
-				if found then islandBtn = found end
-			end
-			if useIsland and islandBtn and islandBtn.Name == "Island" then
-				if self._ClassicOpen then self._ClassicOpen.Visible = false end
+			if islandBtn then islandBtn.Visible = false end
+			if useIsland and islandBtn then
 				self._FloatingButton = islandBtn
 				islandBtn.Visible = true
-				islandBtn.Size = UDim2.fromOffset(8, 8)
-				if islandBtn:IsA("CanvasGroup") then islandBtn.GroupTransparency = 1 end
-				Tween.Play(islandBtn, { Size = UDim2.fromOffset(178, 36), GroupTransparency = 0 }, { Time = 0.16 })
-				task.delay(0.16, function()
-					if islandBtn and islandBtn.Parent then
-						Tween.Play(islandBtn, { Size = UDim2.fromOffset(168, 34) }, { Time = 0.1 })
-					end
-				end)
+				islandBtn.Size = UDim2.fromOffset(168, 34)
+				if islandBtn:IsA("CanvasGroup") then
+					islandBtn.GroupTransparency = 0
+				end
 			elseif self._ClassicOpen then
-				if islandBtn and islandBtn.Name == "Island" then islandBtn.Visible = false end
 				self._FloatingButton = self._ClassicOpen
 				self._ClassicOpen.Visible = true
-				self._ClassicOpen.Size = UDim2.fromOffset(0, 0)
-				Tween.Play(self._ClassicOpen, { Size = UDim2.fromOffset(50, 50) }, { Time = 0.16 })
+				self._ClassicOpen.Size = UDim2.fromOffset(50, 50)
 			end
 		end
 	end
