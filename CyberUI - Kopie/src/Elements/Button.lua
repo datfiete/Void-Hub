@@ -41,6 +41,12 @@ function Button.new(section: any, data: ButtonOptions): ButtonHandle
 	local rowGlow = Helpers.Stroke(row, library.Theme.Accent, 2)
 	rowGlow.Transparency = 0.95
 	rowStroke.Transparency = 0.18
+	local pop = Instance.new("UIScale")
+	pop.Scale = 0.94
+	pop.Parent = row
+	task.defer(function()
+		Tween.Play(pop, { Scale = 1 }, { Time = 0.18, EasingStyle = Enum.EasingStyle.Back })
+	end)
 
 	self.RowGlow = rowGlow
 
@@ -55,6 +61,15 @@ function Button.new(section: any, data: ButtonOptions): ButtonHandle
 	end))
 
 	self._Maid:GiveTask(row.MouseButton1Click:Connect(function()
+		local s = row:FindFirstChildOfClass("UIScale")
+		if s then
+			Tween.Play(s, { Scale = 0.96 }, { Time = 0.06 })
+			task.delay(0.06, function()
+				if s and s.Parent then
+					Tween.Play(s, { Scale = 1 }, { Time = 0.12, EasingStyle = Enum.EasingStyle.Back })
+				end
+			end)
+		end
 		if data.Callback then
 			task.spawn(data.Callback)
 		end

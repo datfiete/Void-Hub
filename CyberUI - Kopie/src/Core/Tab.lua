@@ -5,6 +5,7 @@ local Section = require(script.Parent.Section)
 local Maid = require(script.Parent.Parent.Utils.Maid)
 local Helpers = require(script.Parent.Parent.Utils.Helpers)
 local Tween = require(script.Parent.Parent.Utils.Tween)
+local Tween = require(script.Parent.Parent.Utils.Tween)
 
 local Tab = {}
 Tab.__index = Tab
@@ -409,12 +410,12 @@ end
 function Tab:SetActive(active: boolean)
     local theme = self.Window.Library.Theme
     self._ActiveFill.BackgroundColor3 = theme.Accent
-    self._ActiveFill.BackgroundTransparency = if active then 0.84 else 1
+    Tween.Play(self._ActiveFill, { BackgroundTransparency = if active then 0.84 else 1 }, { Time = 0.18 })
     self._HoverFill.BackgroundColor3 = theme.SurfaceHover
     self._HoverFill.BackgroundTransparency = 1
 
     self._Indicator.BackgroundColor3 = theme.Accent
-    self._Indicator.BackgroundTransparency = if active then 0 else 1
+    Tween.Play(self._Indicator, { BackgroundTransparency = if active then 0 else 1 }, { Time = 0.15 })
     self._IndicatorGlow.BackgroundColor3 = theme.Accent
     self._IndicatorGlow.BackgroundTransparency = if active then 0.82 else 1
     self._ActiveGlow.Color = theme.Accent

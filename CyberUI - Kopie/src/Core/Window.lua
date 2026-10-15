@@ -29,50 +29,74 @@ local function createWeather(parent: Instance)
 	layer.BackgroundTransparency = 1
 	layer.Size = UDim2.fromScale(1, 1)
 	layer.ZIndex = 100
-	layer.ClipsDescendants = true
+	layer.ClipsDescendants = false
 	layer.Visible = false
 	layer.Active = false
 	layer.Parent = parent
 
-	-- Soft circular-ish blob via UICorner full round
+	-- Deep-Fishing style particles use soft glow sprites, not solid rectangles
+	local STAR = "rbxassetid://99851851"
+	local GLOW = "rbxassetid://6014261993"
+
 	local presets = {
 		Rain = {
-			count = 55,
-			color = Color3.fromRGB(170, 200, 230),
-			size = function(rng) return 1, rng:NextInteger(12, 20) end,
-			spd = { 220, 380 }, drift = { -12, 12 }, t = 0.3, corner = 0, rot = 15, shape = "rect",
+			count = 70,
+			vy = { 280, 460 }, vx = { -25, 10 },
+			size = { 1, 2, 14, 22 }, -- minW maxW minH maxH
+			color = Color3.fromRGB(180, 210, 240),
+			image = nil, -- thin frame streaks
+			rot = 12,
+			spin = 0,
+			trans = { 0.25, 0.55 },
 		},
 		Snow = {
-			count = 40,
-			color = Color3.fromRGB(245, 248, 255),
-			size = function(rng) local s = rng:NextInteger(3, 7) return s, s end,
-			spd = { 22, 55 }, drift = { -35, 35 }, t = 0.15, corner = 99, rot = 0, shape = "circle",
+			count = 48,
+			vy = { 28, 70 }, vx = { -40, 40 },
+			size = { 6, 14, 6, 14 },
+			color = Color3.fromRGB(255, 255, 255),
+			image = STAR,
+			rot = 0,
+			spin = 25,
+			trans = { 0.05, 0.35 },
 		},
 		Sakura = {
-			count = 32,
-			color = Color3.fromRGB(255, 150, 185),
-			size = function(rng) return rng:NextInteger(5, 9), rng:NextInteger(4, 7) end,
-			spd = { 28, 60 }, drift = { -55, 55 }, t = 0.12, corner = 3, rot = 0, shape = "petal",
+			count = 36,
+			vy = { 35, 75 }, vx = { -60, 60 },
+			size = { 8, 16, 8, 16 },
+			color = Color3.fromRGB(255, 150, 190),
+			image = STAR,
+			rot = 0,
+			spin = 80,
+			trans = { 0.05, 0.3 },
 		},
 		Stars = {
-			count = 45,
-			color = Color3.fromRGB(255, 255, 255),
-			size = function(rng) local s = rng:NextInteger(2, 4) return s, s end,
-			spd = { 3, 10 }, drift = { -6, 6 }, t = 0.25, corner = 99, rot = 0, shape = "circle",
+			count = 50,
+			vy = { 6, 18 }, vx = { -10, 10 },
+			size = { 4, 12, 4, 12 },
+			color = Color3.fromRGB(255, 245, 255),
+			image = STAR,
+			rot = 0,
+			spin = 10,
+			trans = { 0.1, 0.6 },
+			twinkle = true,
 		},
 		Leaves = {
-			count = 26,
-			color = Color3.fromRGB(200, 140, 55),
-			size = function(rng) return rng:NextInteger(6, 11), rng:NextInteger(4, 7) end,
-			spd = { 40, 85 }, drift = { -75, 75 }, t = 0.1, corner = 2, rot = 0, shape = "petal",
+			count = 28,
+			vy = { 45, 95 }, vx = { -90, 90 },
+			size = { 10, 18, 8, 14 },
+			color = Color3.fromRGB(210, 150, 60),
+			image = STAR,
+			rot = 0,
+			spin = 120,
+			trans = { 0.05, 0.25 },
 		},
 	}
 
 	local api = {
 		_kind = "None",
-		_parts = {} :: { Frame },
+		_items = {} :: { any },
 		_conn = nil :: RBXScriptConnection?,
-		_scope = "Screen", -- Screen | UI
+		_scope = "Screen",
 		_screenParent = parent,
 		_uiParent = nil,
 	}
@@ -89,73 +113,122 @@ local function createWeather(parent: Instance)
 		if target and layer.Parent ~= target then
 			layer.Parent = target
 		end
+		layer.ClipsDescendants = (scope == "UI")
 	end
 
 	function api:Set(kind: string)
 		kind = kind or "None"
-		if self._conn then self._conn:Disconnect(); self._conn = nil end
-		for _, p in self._parts do if p then p:Destroy() end end
-		table.clear(self._parts)
+		if self._conn then
+			self._conn:Disconnect()
+			self._conn = nil
+		end
+		for _, item in self._items do
+			if item.inst then item.inst:Destroy() end
+		end
+		table.clear(self._items)
 		self._kind = kind
 		local preset = presets[kind]
-		if not preset then layer.Visible = false; return end
+		if not preset then
+			layer.Visible = false
+			return
+		end
 		layer.Visible = true
 		local rng = Random.new()
-		local speeds, drifts, spins = {}, {}, {}
+
 		for i = 1, preset.count do
-			local f = Instance.new("Frame")
-			f.BorderSizePixel = 0
-			f.BackgroundColor3 = preset.color
-			f.BackgroundTransparency = preset.t + rng:NextNumber(0, 0.2)
-			local sx, sy = preset.size(rng)
-			f.Size = UDim2.fromOffset(sx, sy)
-			f.Position = UDim2.fromScale(rng:NextNumber(0, 1), rng:NextNumber(-0.15, 1))
-			f.Rotation = if preset.rot ~= 0 then preset.rot else rng:NextNumber(-40, 40)
-			f.ZIndex = 101
-			f.Active = false
-			f.Parent = layer
-			local c = Instance.new("UICorner")
-			c.CornerRadius = UDim.new(0, preset.corner)
-			c.Parent = f
-			-- petal: slight diamond via rotation already
-			self._parts[i] = f
-			speeds[i] = rng:NextNumber(preset.spd[1], preset.spd[2])
-			drifts[i] = rng:NextNumber(preset.drift[1], preset.drift[2])
-			spins[i] = rng:NextNumber(-60, 60)
-		end
-		self._conn = RunService.RenderStepped:Connect(function(dt)
+			local w = rng:NextInteger(preset.size[1], preset.size[2])
+			local h = rng:NextInteger(preset.size[3], preset.size[4])
+			local inst: GuiObject
+			if preset.image then
+				local img = Instance.new("ImageLabel")
+				img.BackgroundTransparency = 1
+				img.Image = preset.image
+				img.ImageColor3 = preset.color
+				img.ImageTransparency = rng:NextNumber(preset.trans[1], preset.trans[2])
+				img.ScaleType = Enum.ScaleType.Fit
+				inst = img
+			else
+				local f = Instance.new("Frame")
+				f.BorderSizePixel = 0
+				f.BackgroundColor3 = preset.color
+				f.BackgroundTransparency = rng:NextNumber(preset.trans[1], preset.trans[2])
+				inst = f
+			end
+			inst.Size = UDim2.fromOffset(w, h)
+			inst.AnchorPoint = Vector2.new(0.5, 0.5)
+			inst.ZIndex = 101
+			inst.Active = false
+			inst.Parent = layer
+
 			local abs = layer.AbsoluteSize
-			if abs.X < 2 or abs.Y < 2 then return end
-			for i, p in self._parts do
-				if not p or not p.Parent then continue end
-				local x = p.Position.X.Scale * abs.X + p.Position.X.Offset
-				local y = p.Position.Y.Scale * abs.Y + p.Position.Y.Offset
-				y += speeds[i] * dt
-				x += drifts[i] * dt + math.sin((os.clock() + i) * 1.3) * (kind == "Snow" and 12 or 0) * dt
-				if kind == "Sakura" or kind == "Leaves" then
-					p.Rotation += spins[i] * dt
-				elseif kind == "Stars" then
-					p.BackgroundTransparency = 0.2 + 0.5 * (0.5 + 0.5 * math.sin(os.clock() * 3 + i))
+			local startX = rng:NextNumber(0, math.max(abs.X, 200))
+			local startY = rng:NextNumber(-abs.Y * 0.3, math.max(abs.Y, 200))
+			inst.Position = UDim2.fromOffset(startX, startY)
+			inst.Rotation = preset.rot + rng:NextNumber(-20, 20)
+
+			self._items[i] = {
+				inst = inst,
+				x = startX,
+				y = startY,
+				vx = rng:NextNumber(preset.vx[1], preset.vx[2]),
+				vy = rng:NextNumber(preset.vy[1], preset.vy[2]),
+				spin = (if preset.spin ~= 0 then rng:NextNumber(-preset.spin, preset.spin) else 0),
+				baseT = if inst:IsA("ImageLabel") then inst.ImageTransparency else inst.BackgroundTransparency,
+				phase = rng:NextNumber(0, math.pi * 2),
+				twinkle = preset.twinkle == true,
+				isImage = inst:IsA("ImageLabel"),
+			}
+		end
+
+		self._conn = RunService.RenderStepped:Connect(function(dt)
+			dt = math.clamp(dt, 0, 0.05)
+			local abs = layer.AbsoluteSize
+			if abs.X < 4 or abs.Y < 4 then
+				return
+			end
+			local t = os.clock()
+			for _, item in self._items do
+				local inst = item.inst
+				if not inst or not inst.Parent then
+					continue
 				end
-				if y > abs.Y + 24 then
-					y = rng:NextNumber(-40, -6)
-					x = rng:NextNumber(0, abs.X)
+				-- continuous velocity — never "stop"
+				item.x += item.vx * dt + math.sin(t * 1.4 + item.phase) * 18 * dt
+				item.y += item.vy * dt
+				inst.Rotation += item.spin * dt
+
+				if item.twinkle then
+					local pulse = 0.15 + 0.45 * (0.5 + 0.5 * math.sin(t * 3.2 + item.phase))
+					if item.isImage then
+						(inst :: ImageLabel).ImageTransparency = pulse
+					end
 				end
-				if x < -24 then x = abs.X + 12 elseif x > abs.X + 24 then x = -12 end
-				p.Position = UDim2.fromOffset(x, y)
+
+				-- recycle past edges
+				if item.y > abs.Y + 40 then
+					item.y = rng:NextNumber(-50, -10)
+					item.x = rng:NextNumber(0, abs.X)
+				elseif item.x < -40 then
+					item.x = abs.X + 20
+				elseif item.x > abs.X + 40 then
+					item.x = -20
+				end
+
+				inst.Position = UDim2.fromOffset(item.x, item.y)
 			end
 		end)
 	end
 
 	function api:Destroy()
 		if self._conn then self._conn:Disconnect() end
-		for _, p in self._parts do if p then p:Destroy() end end
+		for _, item in self._items do
+			if item.inst then item.inst:Destroy() end
+		end
 		layer:Destroy()
 	end
 
 	return api
 end
-
 
 
 -- Soft 9-slice drop shadow, used behind the main window for real depth instead
@@ -1218,11 +1291,16 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		end
 	end
 
-	-- Island hover → show activity
-	self._Maid:GiveTask(islandHit.MouseEnter:Connect(function()
+	-- Island hover → separate info card (island itself stays the same size)
+	local activityScale = Instance.new("UIScale")
+	activityScale.Name = "Pop"
+	activityScale.Scale = 0.9
+	activityScale.Parent = islandActivity
+
+	local function showIslandActivity()
 		local absPos = island.AbsolutePosition
 		local absSize = island.AbsoluteSize
-		islandActivity.Position = UDim2.fromOffset(absPos.X + absSize.X * 0.5, absPos.Y + absSize.Y + 8)
+		islandActivity.Position = UDim2.fromOffset(absPos.X + absSize.X * 0.5, absPos.Y + absSize.Y + 10)
 		islandActivity.AnchorPoint = Vector2.new(0.5, 0)
 		islandActivity.BackgroundColor3 = library.Theme.Secondary
 		actTitle.TextColor3 = library.Theme.Text
@@ -1230,9 +1308,32 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		actStats.TextColor3 = library.Theme.Accent
 		actHint.TextColor3 = library.Theme.TextMuted
 		islandActivity.Visible = true
-	end))
-	-- note: size hover already connected; keep activity until leave
-	local oldLeave -- patched below via combined leave
+		activityScale.Scale = 0.88
+		Tween.Play(activityScale, { Scale = 1 }, { Time = 0.16, EasingStyle = Enum.EasingStyle.Back })
+		for _, bar in bars:GetChildren() do
+			if bar:IsA("Frame") then
+				Tween.Play(bar, { BackgroundColor3 = library.Theme.AccentAlt or library.Theme.Accent }, { Time = 0.12 })
+			end
+		end
+	end
+
+	local function hideIslandActivity()
+		if self._IslandActivity then
+			Tween.Play(activityScale, { Scale = 0.9 }, { Time = 0.1 })
+			task.delay(0.1, function()
+				if self._IslandActivity then
+					self._IslandActivity.Visible = false
+				end
+			end)
+		end
+		for _, bar in bars:GetChildren() do
+			if bar:IsA("Frame") then
+				Tween.Play(bar, { BackgroundColor3 = library.Theme.Accent }, { Time = 0.12 })
+			end
+		end
+	end
+
+	self._Maid:GiveTask(islandHit.MouseEnter:Connect(showIslandActivity))
 
 	self._Maid:GiveTask(classicBtn.MouseEnter:Connect(function()
 		Tween.Play(classicBtn, { BackgroundColor3 = library.Theme.SurfaceHover }, { Time = 0.12 })
@@ -1275,25 +1376,18 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	end))
 
 
-	self._Maid:GiveTask(islandHit.MouseEnter:Connect(function()
-		Tween.Play(island, { Size = UDim2.fromOffset(188, 36) }, { Time = 0.15 })
-		for _, bar in bars:GetChildren() do
-			if bar:IsA("Frame") then
-				Tween.Play(bar, { BackgroundColor3 = library.Theme.AccentAlt or library.Theme.Accent }, { Time = 0.12 })
-			end
-		end
-	end))
 	self._Maid:GiveTask(islandHit.MouseLeave:Connect(function()
-		Tween.Play(island, { Size = UDim2.fromOffset(168, 34) }, { Time = 0.15 })
-		for _, bar in bars:GetChildren() do
-			if bar:IsA("Frame") then
-				Tween.Play(bar, { BackgroundColor3 = library.Theme.Accent }, { Time = 0.12 })
-			end
-		end
-		if self._IslandActivity then
-			self._IslandActivity.Visible = false
-		end
+		task.delay(0.08, function()
+			if not islandActivity:IsDescendantOf(game) then return end
+			-- keep open if mouse moved onto the card
+		end)
+		hideIslandActivity()
 	end))
+	islandActivity.Active = true
+	self._Maid:GiveTask(islandActivity.MouseEnter:Connect(function()
+		islandActivity.Visible = true
+	end))
+	self._Maid:GiveTask(islandActivity.MouseLeave:Connect(hideIslandActivity))
 
 	-- Drag-vs-click distinction: only treat it as a "toggle" click if the pointer
 	-- barely moved. Previously any drag would also fire SetVisible(true) on release.
