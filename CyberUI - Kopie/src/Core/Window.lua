@@ -1493,11 +1493,12 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		placeActivityHost()
 		host.Size = UDim2.fromOffset(320, 0)
 		host.Visible = true
-		islandActivity.BackgroundColor3 = library.Theme.Secondary
-		actTitle.TextColor3 = library.Theme.Text
-		actStatus.TextColor3 = library.Theme.TextMuted
-		actStats.TextColor3 = library.Theme.Accent
-		actHint.TextColor3 = library.Theme.TextMuted
+		islandActivity.BackgroundColor3 = library.Theme.Secondary or Color3.fromRGB(18, 18, 22)
+		if actTitle then actTitle.TextColor3 = library.Theme.Text end
+		if actGame then actGame.TextColor3 = library.Theme.TextMuted end
+		if actHint then actHint.TextColor3 = library.Theme.TextMuted end
+		if actFpsVal then actFpsVal.TextColor3 = Color3.fromRGB(120, 255, 160) end
+		if actPingVal then actPingVal.TextColor3 = Color3.fromRGB(120, 255, 160) end
 		islandActivity.Position = UDim2.new(0.5, 0, 0, 0)
 		Tween.Play(host, { Size = UDim2.fromOffset(320, ACTIVITY_H) }, { Time = 0.22, EasingStyle = Enum.EasingStyle.Quint })
 		if activityFollowConn then activityFollowConn:Disconnect() end
