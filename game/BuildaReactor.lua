@@ -102,7 +102,6 @@ local ReactorSellButton = LocalPlayer.PlayerGui.Menus.SellEnergy.MainFrame.SellB
 local function GetDrill()
     for i, v in pairs(Slot1:GetChildren()) do
         if v.Name ~= "Part" and v.Name ~= "RootPart" then 
-            print("Found drill: " .. v.Name)
             return v
         end
     end
@@ -155,14 +154,12 @@ Farmsection:CreateToggle({
                 task.wait(1)
                 local drill2 = GetDrill()
                 if drill1 ~= drill2 then 
-                    print("Drill changed, waiting for next check...")
                 elseif drill1 == drill2 then
                     if drill1 then
                         local Prompt = findproximiotyprompot()
                         if Prompt then
                             local rarity = drill1:GetAttribute("Rarity")
                             if table.find(BuyRarity, rarity) then
-                                print("Buying drill: " .. drill1.Name .. " with rarity: " .. rarity)
                                 fireproximityprompt(Prompt, 0)
                             else
                                 fireproximityprompt(Leverprompt, 0)

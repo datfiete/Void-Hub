@@ -316,5 +316,4 @@ function Library:Destroy()
 	table.clear(self.Flags)
 end
 
-print("TEST 1")
 return Library
