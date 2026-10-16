@@ -120,21 +120,6 @@ function Dropdown.new(section: any, data: DropdownOptions): DropdownHandle
 	})
 	arrow.Rotation = 0
 
-	local listShadow = Instance.new("ImageLabel")
-	listShadow.Name = "ListShadow"
-	listShadow.BackgroundTransparency = 1
-	listShadow.Image = "rbxassetid://6014261993"
-	listShadow.ImageColor3 = Color3.new(0, 0, 0)
-	listShadow.ImageTransparency = 0.55
-	listShadow.ScaleType = Enum.ScaleType.Slice
-	listShadow.SliceCenter = Rect.new(10, 10, 118, 118)
-	listShadow.Size = UDim2.new(1, 18, 0, 0)
-	listShadow.Position = UDim2.new(0.5, 0, 0, 2)
-	listShadow.AnchorPoint = Vector2.new(0.5, 0)
-	listShadow.Visible = false
-	listShadow.ZIndex = 4
-	listShadow.Parent = container
-
 	local list = Helpers.CreateFrame({
 		Name = "List",
 		Size = UDim2.new(1, 0, 0, 0),
@@ -147,8 +132,28 @@ function Dropdown.new(section: any, data: DropdownOptions): DropdownHandle
 	Helpers.Corner(list, Theme.CornerRadiusSmall)
 	local listStroke = Helpers.Stroke(list, library.Theme.Border, 1.2)
 	listStroke.Transparency = 0.15
+	-- Soft outer glow via second stroke (no separate layout-breaking shadow)
+	local listGlow = Helpers.Stroke(list, library.Theme.Accent, 2)
+	listGlow.Transparency = 0.92
+	listGlow.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 	Helpers.Padding(list, 6)
 	Helpers.ListLayout(list, 4)
+
+	-- Decorative shadow sits ON the list (not in container UIListLayout)
+	local listShadow = Instance.new("ImageLabel")
+	listShadow.Name = "ListShadow"
+	listShadow.BackgroundTransparency = 1
+	listShadow.Image = "rbxassetid://6014261993"
+	listShadow.ImageColor3 = Color3.new(0, 0, 0)
+	listShadow.ImageTransparency = 0.7
+	listShadow.ScaleType = Enum.ScaleType.Slice
+	listShadow.SliceCenter = Rect.new(10, 10, 118, 118)
+	listShadow.Size = UDim2.new(1, 20, 1, 20)
+	listShadow.Position = UDim2.new(0.5, 0, 0.5, 4)
+	listShadow.AnchorPoint = Vector2.new(0.5, 0.5)
+	listShadow.ZIndex = 0
+	listShadow.Visible = false
+	listShadow.Parent = list
 
 	local listScale = Instance.new("UIScale")
 	listScale.Name = "OpenScale"
@@ -161,6 +166,7 @@ function Dropdown.new(section: any, data: DropdownOptions): DropdownHandle
 	self.List = list
 	self.Arrow = arrow
 	self._ListStroke = listStroke
+	self._ListGlow = listGlow
 	self._ListShadow = listShadow
 	self._ListScale = listScale
 
@@ -249,12 +255,7 @@ function Dropdown.new(section: any, data: DropdownOptions): DropdownHandle
 		if open then
 			list.Visible = true
 			listShadow.Visible = true
-			listScale.Scale = 0.94
-			task.defer(function()
-				if not self._Open then return end
-				local h = math.max(list.AbsoluteSize.Y, 36)
-				listShadow.Size = UDim2.new(1, 18, 0, h + 14)
-			end)
+			listScale.Scale = 0.96
 			Tween.Play(listScale, { Scale = 1 }, {
 				Time = 0.16,
 				EasingStyle = Enum.EasingStyle.Back,
@@ -266,6 +267,9 @@ function Dropdown.new(section: any, data: DropdownOptions): DropdownHandle
 				EasingDirection = Enum.EasingDirection.Out,
 			})
 			Tween.Play(listStroke, { Color = theme.Accent, Transparency = 0.35 }, { Time = 0.15 })
+			if listGlow then
+				Tween.Play(listGlow, { Color = theme.Accent, Transparency = 0.75 }, { Time = 0.15 })
+			end
 			Tween.Play(arrow, { TextColor3 = theme.Accent }, { Time = 0.15 })
 		else
 			Tween.Play(arrow, { Rotation = 0 }, {
@@ -274,8 +278,11 @@ function Dropdown.new(section: any, data: DropdownOptions): DropdownHandle
 				EasingDirection = Enum.EasingDirection.Out,
 			})
 			Tween.Play(arrow, { TextColor3 = theme.TextMuted }, { Time = 0.15 })
-			Tween.Play(listScale, { Scale = 0.96 }, { Time = 0.1 })
+			Tween.Play(listScale, { Scale = 0.98 }, { Time = 0.1 })
 			Tween.Play(listStroke, { Color = theme.Border, Transparency = 0.15 }, { Time = 0.12 })
+			if listGlow then
+				Tween.Play(listGlow, { Transparency = 0.92 }, { Time = 0.12 })
+			end
 			task.delay(0.1, function()
 				if not self._Open then
 					list.Visible = false

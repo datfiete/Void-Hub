@@ -8,7 +8,6 @@ local function isInTable(value, tbl)
     return false
 end
 
-
 local Players = game:GetService("Players")
 local Player = Players.LocalPlayer
 local Character = Player.Character or Player.CharacterAdded:Wait()
