@@ -78,20 +78,11 @@ local CurrentPriceText = game:GetService("Players").LocalPlayer.PlayerGui.Menus.
 local Price = nil
 local OwnedReactorCells = tonumber(LocalPlayer.PlayerGui.HUD.EnergyCellLabel.TextLabel.ContentText)
 
-local function CheckcurrentPrice()
-    CurrentPriceText = game:GetService("Players").LocalPlayer.PlayerGui.Menus.SellEnergy.MainFrame.CurrentPriceLabel.ContentText
-    if CurrentPriceText then 
-        Price = tonumber(CurrentPriceText:match("%d+"))
-    end
-end
-
-task.spawn(function()
-    CheckcurrentPrice()
-    task.wait(20)
-end)
-
 local function CheckcurrentCellsAmount()
-    OwnedReactorCells = tonumber(game:GetService("Players").LocalPlayer.PlayerGui.Menus.SellEnergy.MainFrame.CurrentPriceLabel.ContentText)
+    local label = game:GetService("Players").LocalPlayer
+        .PlayerGui.Menus.SellEnergy.MainFrame.CurrentPriceLabel
+
+    OwnedReactorCells = tonumber(label.ContentText:match("%$(%d+)"))
 end
 
 for i, v in pairs(Plots:GetChildren()) do
@@ -236,10 +227,23 @@ Farmsection:CreateToggle({
     end,
 })
 
-Farmsection:CreateParagraph({
-    Title = "Current Energy sell Price",
-    Content = Price,
+local priceParagraph = Farmsection:CreateParagraph({
+	Title = "Current Energy sell Price",
+	Content = tostring(Price),
 })
+
+local function CheckcurrentPrice()
+    CurrentPriceText = game:GetService("Players").LocalPlayer.PlayerGui.Menus.SellEnergy.MainFrame.CurrentPriceLabel.ContentText
+    if CurrentPriceText then 
+        Price = tonumber(CurrentPriceText:match("%d+"))
+        priceParagraph:Set(tostring(Price))
+    end
+end
+
+task.spawn(function()
+    CheckcurrentPrice()
+    task.wait(20)
+end)
 
 Farmsection:CreateSlider({
     Name = "Auto Sell Energy",
@@ -265,12 +269,13 @@ Farmsection:CreateToggle({
             while AutoSellReactor do
                 CheckcurrentPrice()
                 CheckcurrentCellsAmount()
-                if OwnedReactorCells < 0 then 
+                if OwnedReactorCells > 0 then 
                     if Price >= SellEnergyPrice then
                         firesignal(ReactorSellButton.Activated)
                     end
                     task.wait(1)
                 end
+                task.wait(1)
             end
         end)
     end,
