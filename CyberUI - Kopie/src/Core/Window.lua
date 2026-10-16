@@ -1894,6 +1894,18 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		if dragInputType ~= nil and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
 			dragging = false
 			dragInputType = nil
+			-- Remember where the user left the window
+			self._MainBasePos = main.Position
+			if self.Library and self.Library.SetSession then
+				pcall(function()
+					self.Library:SetSession("WindowPos", {
+						XS = main.Position.X.Scale,
+						XO = main.Position.X.Offset,
+						YS = main.Position.Y.Scale,
+						YO = main.Position.Y.Offset,
+					})
+				end)
+			end
 		end
 	end))
 
@@ -3977,40 +3989,33 @@ function Window:SetVisible(visible: boolean)
 
 	if visible then
 		hideOpenControls()
-		local useMain = self._LayoutMode == "Vaxorin" or self._LayoutMode == "Classic"
 		if self.Main and self._StartupComplete then
-			if useMain or true then
-				self.Main.Visible = true
-				-- Ensure scale exists
-				if not self._MainScale or not self._MainScale.Parent then
-					local s = Instance.new("UIScale")
-					s.Name = "OpenScale"
-					s.Scale = 1
-					s.Parent = self.Main
-					self._MainScale = s
-				end
-				-- Store base position once
-				if not self._MainBasePos then
-					self._MainBasePos = self.Main.Position
-				end
-				local base = self._MainBasePos
-				-- Start smaller + slightly lower, spring into place
-				self._MainScale.Scale = 0.86
-				self.Main.Position = UDim2.new(
-					base.X.Scale, base.X.Offset,
-					base.Y.Scale, base.Y.Offset + 18
-				)
-				Tween.Play(self._MainScale, { Scale = 1 }, {
-					Time = 0.28,
-					EasingStyle = Enum.EasingStyle.Back,
-					EasingDirection = Enum.EasingDirection.Out,
-				})
-				Tween.Play(self.Main, { Position = base }, {
-					Time = 0.28,
-					EasingStyle = Enum.EasingStyle.Quint,
-					EasingDirection = Enum.EasingDirection.Out,
-				})
+			self.Main.Visible = true
+			if not self._MainScale or not self._MainScale.Parent then
+				local s = Instance.new("UIScale")
+				s.Name = "OpenScale"
+				s.Scale = 1
+				s.Parent = self.Main
+				self._MainScale = s
 			end
+			-- Prefer last dragged position (never force center)
+			local base = self._MainBasePos or self.Main.Position
+			self._MainBasePos = base
+			self._MainScale.Scale = 0.86
+			self.Main.Position = UDim2.new(
+				base.X.Scale, base.X.Offset,
+				base.Y.Scale, base.Y.Offset + 18
+			)
+			Tween.Play(self._MainScale, { Scale = 1 }, {
+				Time = 0.28,
+				EasingStyle = Enum.EasingStyle.Back,
+				EasingDirection = Enum.EasingDirection.Out,
+			})
+			Tween.Play(self.Main, { Position = base }, {
+				Time = 0.28,
+				EasingStyle = Enum.EasingStyle.Quint,
+				EasingDirection = Enum.EasingDirection.Out,
+			})
 		end
 		if self._Dim then
 			self._Dim.Visible = true
@@ -4023,9 +4028,8 @@ function Window:SetVisible(visible: boolean)
 			Tween.Play(self._Dim, { BackgroundTransparency = 1 }, { Time = 0.2 })
 		end
 		if self.Main and self.Main.Visible then
-			if not self._MainBasePos then
-				self._MainBasePos = self.Main.Position
-			end
+			-- Snapshot current place BEFORE close anim so reopen keeps it
+			self._MainBasePos = self.Main.Position
 			local base = self._MainBasePos
 			if self._MainScale then
 				Tween.Play(self._MainScale, { Scale = 0.9 }, {
@@ -4041,6 +4045,7 @@ function Window:SetVisible(visible: boolean)
 				if self.Main and not self._Visible then
 					self.Main.Visible = false
 					if self._MainScale then self._MainScale.Scale = 1 end
+					-- Restore exact saved spot (not center)
 					if self._MainBasePos then
 						self.Main.Position = self._MainBasePos
 					end
