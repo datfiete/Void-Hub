@@ -3056,8 +3056,41 @@ function Window:_createHomeTab()
 	if not self._ActiveTab then
 		self:_selectTab(homeTab)
 	end
+	if self._OptionsTab then
+		self:_ensureOptionsLast()
+	end
 
 	return homeTab
+end
+
+
+function Window:_ensureOptionsLast()
+	if not self._OptionsTab or not self._Tabs then
+		return
+	end
+	local tabs = self._Tabs
+	local idx = nil
+	for i, t in ipairs(tabs) do
+		if t == self._OptionsTab then
+			idx = i
+			break
+		end
+	end
+	if idx then
+		table.remove(tabs, idx)
+	end
+	table.insert(tabs, self._OptionsTab)
+	-- LayoutOrder on tab buttons if present
+	for i, t in ipairs(tabs) do
+		if t and t.Button then
+			t.Button.LayoutOrder = i
+		end
+	end
+	if self._LayoutVariants and self._LayoutVariants.SyncTabs then
+		pcall(function()
+			self._LayoutVariants:SyncTabs()
+		end)
+	end
 end
 
 function Window:CreateTab(name: string)
@@ -3067,6 +3100,8 @@ function Window:CreateTab(name: string)
 
 	if not self._OptionsTab then
 		self:_createOptionsTab()
+	else
+		self:_ensureOptionsLast()
 	end
 
 	local savedTab = nil
@@ -3090,7 +3125,8 @@ function Window:_createOptionsTab()
 
 	local optionsTab = Tab.new(self, "Options")
 	self._OptionsTab = optionsTab
-	table.insert(self._Tabs, optionsTab)
+	table.insert(self._Tabs, optionsTab) -- always at end
+	self:_ensureOptionsLast()
 	if self._LayoutVariants and self._LayoutVariants.SyncTabs then self._LayoutVariants:SyncTabs() end
 
 	self.Library.Theme.Style = self.Library:_getSavedFlag("Vaxorin.Theme.Style", self.Library.Theme.Style, true)
@@ -3942,39 +3978,72 @@ function Window:SetVisible(visible: boolean)
 	if visible then
 		hideOpenControls()
 		local useMain = self._LayoutMode == "Vaxorin" or self._LayoutMode == "Classic"
-		if self.Main and self._StartupComplete and useMain then
-			self.Main.Visible = true
-			if self._MainScale then
-				self._MainScale.Scale = 0.92
-				Tween.Play(self._MainScale, { Scale = 1 }, { Time = 0.22, EasingStyle = Enum.EasingStyle.Quint })
-			end
-			-- fade main in via Group if CanvasGroup else skip
-			pcall(function()
-				if self.Main:IsA("CanvasGroup") then
-					self.Main.GroupTransparency = 0.2
-					Tween.Play(self.Main, { GroupTransparency = 0 }, { Time = 0.2 })
+		if self.Main and self._StartupComplete then
+			if useMain or true then
+				self.Main.Visible = true
+				-- Ensure scale exists
+				if not self._MainScale or not self._MainScale.Parent then
+					local s = Instance.new("UIScale")
+					s.Name = "OpenScale"
+					s.Scale = 1
+					s.Parent = self.Main
+					self._MainScale = s
 				end
-			end)
-		elseif self.Main and self._StartupComplete then
-			self.Main.Visible = true
+				-- Store base position once
+				if not self._MainBasePos then
+					self._MainBasePos = self.Main.Position
+				end
+				local base = self._MainBasePos
+				-- Start smaller + slightly lower, spring into place
+				self._MainScale.Scale = 0.86
+				self.Main.Position = UDim2.new(
+					base.X.Scale, base.X.Offset,
+					base.Y.Scale, base.Y.Offset + 18
+				)
+				Tween.Play(self._MainScale, { Scale = 1 }, {
+					Time = 0.28,
+					EasingStyle = Enum.EasingStyle.Back,
+					EasingDirection = Enum.EasingDirection.Out,
+				})
+				Tween.Play(self.Main, { Position = base }, {
+					Time = 0.28,
+					EasingStyle = Enum.EasingStyle.Quint,
+					EasingDirection = Enum.EasingDirection.Out,
+				})
+			end
 		end
 		if self._Dim then
 			self._Dim.Visible = true
-			Tween.Play(self._Dim, { BackgroundTransparency = 0.45 }, { Time = 0.22 })
+			local amount = math.clamp(self._DimAmount or 0.45, 0, 1)
+			self._Dim.BackgroundTransparency = 1
+			Tween.Play(self._Dim, { BackgroundTransparency = 1 - amount }, { Time = 0.25 })
 		end
 	else
-		-- close animation then hide
 		if self._Dim then
-			Tween.Play(self._Dim, { BackgroundTransparency = 1 }, { Time = 0.18 })
+			Tween.Play(self._Dim, { BackgroundTransparency = 1 }, { Time = 0.2 })
 		end
 		if self.Main and self.Main.Visible then
-			if self._MainScale then
-				Tween.Play(self._MainScale, { Scale = 0.94 }, { Time = 0.14 })
+			if not self._MainBasePos then
+				self._MainBasePos = self.Main.Position
 			end
-			task.delay(0.14, function()
+			local base = self._MainBasePos
+			if self._MainScale then
+				Tween.Play(self._MainScale, { Scale = 0.9 }, {
+					Time = 0.16,
+					EasingStyle = Enum.EasingStyle.Quint,
+					EasingDirection = Enum.EasingDirection.In,
+				})
+			end
+			Tween.Play(self.Main, {
+				Position = UDim2.new(base.X.Scale, base.X.Offset, base.Y.Scale, base.Y.Offset + 14),
+			}, { Time = 0.16, EasingStyle = Enum.EasingStyle.Quint, EasingDirection = Enum.EasingDirection.In })
+			task.delay(0.17, function()
 				if self.Main and not self._Visible then
 					self.Main.Visible = false
 					if self._MainScale then self._MainScale.Scale = 1 end
+					if self._MainBasePos then
+						self.Main.Position = self._MainBasePos
+					end
 				end
 				showOpenControls()
 			end)
