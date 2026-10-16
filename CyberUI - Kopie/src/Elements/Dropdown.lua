@@ -108,14 +108,17 @@ function Dropdown.new(section: any, data: DropdownOptions): DropdownHandle
 		Parent = header,
 	})
 
+	-- Chevron: center anchor so rotation does not orbit oddly
 	local arrow = Helpers.CreateLabel({
 		Name = "Arrow",
-		Size = UDim2.fromOffset(18, 18),
-		Position = UDim2.new(1, -12, 0.5, 0),
-		AnchorPoint = Vector2.new(1, 0.5),
+		Size = UDim2.fromOffset(16, 16),
+		Position = UDim2.new(1, -18, 0.5, 0),
+		AnchorPoint = Vector2.new(0.5, 0.5),
 		Text = "▼",
-		TextSize = 11,
+		TextSize = 10,
 		TextColor3 = library.Theme.TextMuted,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextYAlignment = Enum.TextYAlignment.Center,
 		Parent = header,
 	})
 	arrow.Rotation = 0
@@ -132,28 +135,13 @@ function Dropdown.new(section: any, data: DropdownOptions): DropdownHandle
 	Helpers.Corner(list, Theme.CornerRadiusSmall)
 	local listStroke = Helpers.Stroke(list, library.Theme.Border, 1.2)
 	listStroke.Transparency = 0.15
-	-- Soft outer glow via second stroke (no separate layout-breaking shadow)
 	local listGlow = Helpers.Stroke(list, library.Theme.Accent, 2)
 	listGlow.Transparency = 0.92
 	listGlow.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 	Helpers.Padding(list, 6)
-	Helpers.ListLayout(list, 4)
-
-	-- Decorative shadow sits ON the list (not in container UIListLayout)
-	local listShadow = Instance.new("ImageLabel")
-	listShadow.Name = "ListShadow"
-	listShadow.BackgroundTransparency = 1
-	listShadow.Image = "rbxassetid://6014261993"
-	listShadow.ImageColor3 = Color3.new(0, 0, 0)
-	listShadow.ImageTransparency = 0.7
-	listShadow.ScaleType = Enum.ScaleType.Slice
-	listShadow.SliceCenter = Rect.new(10, 10, 118, 118)
-	listShadow.Size = UDim2.new(1, 20, 1, 20)
-	listShadow.Position = UDim2.new(0.5, 0, 0.5, 4)
-	listShadow.AnchorPoint = Vector2.new(0.5, 0.5)
-	listShadow.ZIndex = 0
-	listShadow.Visible = false
-	listShadow.Parent = list
+	local listLayout = Helpers.ListLayout(list, 4)
+	-- Only option buttons participate in layout (ignore any non-button chrome)
+	listLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
 	local listScale = Instance.new("UIScale")
 	listScale.Name = "OpenScale"
@@ -167,7 +155,7 @@ function Dropdown.new(section: any, data: DropdownOptions): DropdownHandle
 	self.Arrow = arrow
 	self._ListStroke = listStroke
 	self._ListGlow = listGlow
-	self._ListShadow = listShadow
+	self._ListShadow = nil
 	self._ListScale = listScale
 
 	function self:_clearOptions()
@@ -205,6 +193,7 @@ function Dropdown.new(section: any, data: DropdownOptions): DropdownHandle
 				Parent = list,
 			})
 			Helpers.Corner(button, Theme.CornerRadiusSmall)
+			button.LayoutOrder = #self._OptionMaids
 			optionMaid:Give(button)
 
 			optionMaid:GiveTask(button.MouseEnter:Connect(function()
@@ -254,39 +243,38 @@ function Dropdown.new(section: any, data: DropdownOptions): DropdownHandle
 		local theme = library.Theme
 		if open then
 			list.Visible = true
-			listShadow.Visible = true
-			listScale.Scale = 0.96
+			listScale.Scale = 0.97
 			Tween.Play(listScale, { Scale = 1 }, {
+				Time = 0.14,
+				EasingStyle = Enum.EasingStyle.Quint,
+				EasingDirection = Enum.EasingDirection.Out,
+			})
+			-- One tween for rotation + color (center-pivoted chevron)
+			Tween.Play(arrow, {
+				Rotation = 180,
+				TextColor3 = theme.Accent,
+			}, {
 				Time = 0.16,
-				EasingStyle = Enum.EasingStyle.Back,
-				EasingDirection = Enum.EasingDirection.Out,
-			})
-			Tween.Play(arrow, { Rotation = 180 }, {
-				Time = 0.18,
 				EasingStyle = Enum.EasingStyle.Quint,
 				EasingDirection = Enum.EasingDirection.Out,
 			})
-			Tween.Play(listStroke, { Color = theme.Accent, Transparency = 0.35 }, { Time = 0.15 })
-			if listGlow then
-				Tween.Play(listGlow, { Color = theme.Accent, Transparency = 0.75 }, { Time = 0.15 })
-			end
-			Tween.Play(arrow, { TextColor3 = theme.Accent }, { Time = 0.15 })
+			Tween.Play(listStroke, { Color = theme.Accent, Transparency = 0.35 }, { Time = 0.14 })
+			Tween.Play(listGlow, { Color = theme.Accent, Transparency = 0.78 }, { Time = 0.14 })
 		else
-			Tween.Play(arrow, { Rotation = 0 }, {
-				Time = 0.15,
+			Tween.Play(arrow, {
+				Rotation = 0,
+				TextColor3 = theme.TextMuted,
+			}, {
+				Time = 0.14,
 				EasingStyle = Enum.EasingStyle.Quint,
 				EasingDirection = Enum.EasingDirection.Out,
 			})
-			Tween.Play(arrow, { TextColor3 = theme.TextMuted }, { Time = 0.15 })
-			Tween.Play(listScale, { Scale = 0.98 }, { Time = 0.1 })
+			Tween.Play(listScale, { Scale = 0.98 }, { Time = 0.08 })
 			Tween.Play(listStroke, { Color = theme.Border, Transparency = 0.15 }, { Time = 0.12 })
-			if listGlow then
-				Tween.Play(listGlow, { Transparency = 0.92 }, { Time = 0.12 })
-			end
-			task.delay(0.1, function()
+			Tween.Play(listGlow, { Transparency = 0.92 }, { Time = 0.12 })
+			task.delay(0.09, function()
 				if not self._Open then
 					list.Visible = false
-					listShadow.Visible = false
 					listScale.Scale = 1
 				end
 			end)
