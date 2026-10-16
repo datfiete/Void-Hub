@@ -110,14 +110,30 @@ function Dropdown.new(section: any, data: DropdownOptions): DropdownHandle
 
 	local arrow = Helpers.CreateLabel({
 		Name = "Arrow",
-		Size = UDim2.fromOffset(16, 16),
+		Size = UDim2.fromOffset(18, 18),
 		Position = UDim2.new(1, -12, 0.5, 0),
 		AnchorPoint = Vector2.new(1, 0.5),
 		Text = "▼",
-		TextSize = 12,
+		TextSize = 11,
 		TextColor3 = library.Theme.TextMuted,
 		Parent = header,
 	})
+	arrow.Rotation = 0
+
+	local listShadow = Instance.new("ImageLabel")
+	listShadow.Name = "ListShadow"
+	listShadow.BackgroundTransparency = 1
+	listShadow.Image = "rbxassetid://6014261993"
+	listShadow.ImageColor3 = Color3.new(0, 0, 0)
+	listShadow.ImageTransparency = 0.55
+	listShadow.ScaleType = Enum.ScaleType.Slice
+	listShadow.SliceCenter = Rect.new(10, 10, 118, 118)
+	listShadow.Size = UDim2.new(1, 18, 0, 0)
+	listShadow.Position = UDim2.new(0.5, 0, 0, 2)
+	listShadow.AnchorPoint = Vector2.new(0.5, 0)
+	listShadow.Visible = false
+	listShadow.ZIndex = 4
+	listShadow.Parent = container
 
 	local list = Helpers.CreateFrame({
 		Name = "List",
@@ -125,18 +141,28 @@ function Dropdown.new(section: any, data: DropdownOptions): DropdownHandle
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundColor3 = library.Theme.ElementBackground or library.Theme.Background,
 		Visible = false,
+		ZIndex = 5,
 		Parent = container,
 	})
 	Helpers.Corner(list, Theme.CornerRadiusSmall)
-	Helpers.Stroke(list, library.Theme.Border, 1)
+	local listStroke = Helpers.Stroke(list, library.Theme.Border, 1.2)
+	listStroke.Transparency = 0.15
 	Helpers.Padding(list, 6)
 	Helpers.ListLayout(list, 4)
+
+	local listScale = Instance.new("UIScale")
+	listScale.Name = "OpenScale"
+	listScale.Scale = 1
+	listScale.Parent = list
 
 	self.Instance = container
 	self.Header = header
 	self.SelectedLabel = selectedLabel
 	self.List = list
 	self.Arrow = arrow
+	self._ListStroke = listStroke
+	self._ListShadow = listShadow
+	self._ListScale = listScale
 
 	function self:_clearOptions()
 		for _, optionMaid in self._OptionMaids do
@@ -219,8 +245,45 @@ function Dropdown.new(section: any, data: DropdownOptions): DropdownHandle
 
 	function self:SetOpen(open: boolean)
 		self._Open = open
-		list.Visible = open
-		arrow.Text = if open then "▲" else "▼"
+		local theme = library.Theme
+		if open then
+			list.Visible = true
+			listShadow.Visible = true
+			listScale.Scale = 0.94
+			task.defer(function()
+				if not self._Open then return end
+				local h = math.max(list.AbsoluteSize.Y, 36)
+				listShadow.Size = UDim2.new(1, 18, 0, h + 14)
+			end)
+			Tween.Play(listScale, { Scale = 1 }, {
+				Time = 0.16,
+				EasingStyle = Enum.EasingStyle.Back,
+				EasingDirection = Enum.EasingDirection.Out,
+			})
+			Tween.Play(arrow, { Rotation = 180 }, {
+				Time = 0.18,
+				EasingStyle = Enum.EasingStyle.Quint,
+				EasingDirection = Enum.EasingDirection.Out,
+			})
+			Tween.Play(listStroke, { Color = theme.Accent, Transparency = 0.35 }, { Time = 0.15 })
+			Tween.Play(arrow, { TextColor3 = theme.Accent }, { Time = 0.15 })
+		else
+			Tween.Play(arrow, { Rotation = 0 }, {
+				Time = 0.15,
+				EasingStyle = Enum.EasingStyle.Quint,
+				EasingDirection = Enum.EasingDirection.Out,
+			})
+			Tween.Play(arrow, { TextColor3 = theme.TextMuted }, { Time = 0.15 })
+			Tween.Play(listScale, { Scale = 0.96 }, { Time = 0.1 })
+			Tween.Play(listStroke, { Color = theme.Border, Transparency = 0.15 }, { Time = 0.12 })
+			task.delay(0.1, function()
+				if not self._Open then
+					list.Visible = false
+					listShadow.Visible = false
+					listScale.Scale = 1
+				end
+			end)
+		end
 	end
 
 	function self:_commit(value: string, fireCallback: boolean?)
@@ -277,10 +340,22 @@ function Dropdown:RefreshTheme()
 	self.List.BackgroundColor3 = bg
 	local headerStroke = self.Header:FindFirstChildOfClass("UIStroke")
 	if headerStroke then headerStroke.Color = theme.Border end
-	local listStroke = self.List:FindFirstChildOfClass("UIStroke")
-	if listStroke then listStroke.Color = theme.Border end
+	if self._ListStroke then
+		if self._Open then
+			self._ListStroke.Color = theme.Accent
+			self._ListStroke.Transparency = 0.35
+		else
+			self._ListStroke.Color = theme.Border
+			self._ListStroke.Transparency = 0.15
+		end
+	else
+		local listStroke = self.List:FindFirstChildOfClass("UIStroke")
+		if listStroke then listStroke.Color = theme.Border end
+	end
 	self.SelectedLabel.TextColor3 = theme.Accent
-	self.Arrow.TextColor3 = theme.TextMuted
+	if self.Arrow then
+		self.Arrow.TextColor3 = if self._Open then theme.Accent else theme.TextMuted
+	end
 	if self.Label then self.Label.TextColor3 = theme.Text end
 	self:_buildOptions()
 end
