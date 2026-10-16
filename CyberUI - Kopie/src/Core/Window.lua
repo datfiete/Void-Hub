@@ -1186,62 +1186,212 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	islandActivityHost.Visible = false
 	islandActivityHost.ZIndex = 59
 	islandActivityHost.AnchorPoint = Vector2.new(0.5, 0)
-	islandActivityHost.Size = UDim2.fromOffset(230, 0)
+	islandActivityHost.Size = UDim2.fromOffset(320, 0)
 	islandActivityHost.Parent = screenGui
 	self._IslandActivityHost = islandActivityHost
 
 	local islandActivity = Instance.new("Frame")
 	islandActivity.Name = "Activity"
-	islandActivity.Size = UDim2.fromOffset(220, 96)
+	islandActivity.Size = UDim2.fromOffset(300, 148)
 	islandActivity.Position = UDim2.new(0.5, 0, 0, 0)
 	islandActivity.AnchorPoint = Vector2.new(0.5, 0)
-	islandActivity.BackgroundColor3 = library.Theme.Secondary
+	islandActivity.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
 	islandActivity.BackgroundTransparency = 0.02
 	islandActivity.Visible = true
 	islandActivity.ZIndex = 60
 	islandActivity.Parent = islandActivityHost
-	Helpers.Corner(islandActivity, 12)
+	Helpers.Corner(islandActivity, 14)
 	Helpers.Stroke(islandActivity, library.Theme.Border, 1)
-	Helpers.Padding(islandActivity, 10)
+	Helpers.Padding(islandActivity, 12)
 
-	local actLayout = Instance.new("UIListLayout")
-	actLayout.FillDirection = Enum.FillDirection.Vertical
-	actLayout.Padding = UDim.new(0, 4)
-	actLayout.Parent = islandActivity
+	-- Header row: avatar + name + session
+	local actAvatar = Instance.new("ImageLabel")
+	actAvatar.Name = "Avatar"
+	actAvatar.Size = UDim2.fromOffset(32, 32)
+	actAvatar.Position = UDim2.fromOffset(0, 0)
+	actAvatar.BackgroundColor3 = library.Theme.ElementBackground
+	actAvatar.BorderSizePixel = 0
+	actAvatar.Image = ""
+	actAvatar.ZIndex = 61
+	actAvatar.Parent = islandActivity
+	Helpers.Corner(actAvatar, 16)
+	local lp = Players.LocalPlayer
+	pcall(function()
+		if lp then
+			actAvatar.Image = Players:GetUserThumbnailAsync(
+				lp.UserId,
+				Enum.ThumbnailType.HeadShot,
+				Enum.ThumbnailSize.Size48x48
+			)
+		end
+	end)
 
 	local actTitle = Helpers.CreateLabel({
 		Name = "ActTitle",
-		Size = UDim2.new(1, 0, 0, 16),
-		Text = "Vaxorin",
+		Size = UDim2.new(1, -100, 0, 16),
+		Position = UDim2.fromOffset(40, 0),
+		Text = (lp and (lp.DisplayName or lp.Name)) or tostring(localPlayer),
 		Font = Theme.FontBold,
 		TextSize = 13,
 		TextColor3 = library.Theme.Text,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Parent = islandActivity,
 	})
-	local actStatus = Helpers.CreateLabel({
-		Name = "ActStatus",
-		Size = UDim2.new(1, 0, 0, 14),
-		Text = "Ready",
+	actTitle.ZIndex = 61
+
+	local actGame = Helpers.CreateLabel({
+		Name = "ActGame",
+		Size = UDim2.new(1, -100, 0, 14),
+		Position = UDim2.fromOffset(40, 16),
+		Text = "Vaxorin",
 		Font = Theme.Font,
-		TextSize = 11,
+		TextSize = 10,
 		TextColor3 = library.Theme.TextMuted,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Parent = islandActivity,
 	})
-	local actStats = Helpers.CreateLabel({
-		Name = "ActStats",
-		Size = UDim2.new(1, 0, 0, 14),
-		Text = "FPS —  ·  Ping —",
-		Font = Theme.Font,
+	actGame.ZIndex = 61
+	pcall(function()
+		local info = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId)
+		if info and info.Name then actGame.Text = info.Name end
+	end)
+
+	local actSession = Helpers.CreateLabel({
+		Name = "ActSession",
+		Size = UDim2.fromOffset(64, 16),
+		Position = UDim2.new(1, 0, 0, 0),
+		AnchorPoint = Vector2.new(1, 0),
+		Text = "0m 0s",
+		Font = Theme.FontBold,
 		TextSize = 11,
-		TextColor3 = library.Theme.Accent,
+		TextColor3 = library.Theme.Text,
+		TextXAlignment = Enum.TextXAlignment.Right,
+		Parent = islandActivity,
+	})
+	actSession.ZIndex = 61
+
+	local actSessionLbl = Helpers.CreateLabel({
+		Name = "ActSessionLbl",
+		Size = UDim2.fromOffset(64, 12),
+		Position = UDim2.new(1, 0, 0, 16),
+		AnchorPoint = Vector2.new(1, 0),
+		Text = "session",
+		Font = Theme.Font,
+		TextSize = 9,
+		TextColor3 = library.Theme.TextMuted,
+		TextXAlignment = Enum.TextXAlignment.Right,
+		Parent = islandActivity,
+	})
+	actSessionLbl.ZIndex = 61
+
+	-- FPS / Ping row
+	local actFpsVal = Helpers.CreateLabel({
+		Name = "ActFps",
+		Size = UDim2.fromOffset(90, 18),
+		Position = UDim2.fromOffset(0, 42),
+		Text = "— fps",
+		Font = Theme.FontBold,
+		TextSize = 14,
+		TextColor3 = Color3.fromRGB(120, 255, 160),
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Parent = islandActivity,
 	})
+	actFpsVal.ZIndex = 61
+	local actFpsLbl = Helpers.CreateLabel({
+		Name = "ActFpsLbl",
+		Size = UDim2.fromOffset(90, 12),
+		Position = UDim2.fromOffset(0, 58),
+		Text = "FRAME RATE",
+		Font = Theme.Font,
+		TextSize = 8,
+		TextColor3 = library.Theme.TextMuted,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = islandActivity,
+	})
+	actFpsLbl.ZIndex = 61
+
+	local actPingVal = Helpers.CreateLabel({
+		Name = "ActPing",
+		Size = UDim2.fromOffset(90, 18),
+		Position = UDim2.fromOffset(110, 42),
+		Text = "— ms",
+		Font = Theme.FontBold,
+		TextSize = 14,
+		TextColor3 = Color3.fromRGB(120, 255, 160),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = islandActivity,
+	})
+	actPingVal.ZIndex = 61
+	local actPingLbl = Helpers.CreateLabel({
+		Name = "ActPingLbl",
+		Size = UDim2.fromOffset(90, 12),
+		Position = UDim2.fromOffset(110, 58),
+		Text = "PING",
+		Font = Theme.Font,
+		TextSize = 8,
+		TextColor3 = library.Theme.TextMuted,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = islandActivity,
+	})
+	actPingLbl.ZIndex = 61
+
+	-- Status chips row
+	local chips = Helpers.CreateFrame({
+		Name = "Chips",
+		Size = UDim2.new(1, 0, 0, 20),
+		Position = UDim2.fromOffset(0, 76),
+		BackgroundTransparency = 1,
+		Parent = islandActivity,
+	})
+	chips.ZIndex = 61
+	local chipsLayout = Instance.new("UIListLayout")
+	chipsLayout.FillDirection = Enum.FillDirection.Horizontal
+	chipsLayout.Padding = UDim.new(0, 6)
+	chipsLayout.Parent = chips
+
+	local function makeChip(name: string, text: string): TextLabel
+		local chip = Instance.new("TextLabel")
+		chip.Name = name
+		chip.AutomaticSize = Enum.AutomaticSize.X
+		chip.Size = UDim2.fromOffset(0, 18)
+		chip.BackgroundColor3 = library.Theme.ElementBackground or Color3.fromRGB(30, 30, 36)
+		chip.BackgroundTransparency = 0.1
+		chip.BorderSizePixel = 0
+		chip.Font = Theme.Font
+		chip.TextSize = 10
+		chip.TextColor3 = library.Theme.Text
+		chip.Text = text
+		chip.ZIndex = 62
+		chip.Parent = chips
+		Helpers.Corner(chip, 6)
+		local pad = Instance.new("UIPadding")
+		pad.PaddingLeft = UDim.new(0, 8)
+		pad.PaddingRight = UDim.new(0, 8)
+		pad.Parent = chip
+		return chip
+	end
+	local chipPlayers = makeChip("Players", "Players 0")
+	local chipRunning = makeChip("Running", "Ready")
+	local chipTab = makeChip("Tab", "Tab Home")
+
+	local actDesc = Helpers.CreateLabel({
+		Name = "ActDesc",
+		Size = UDim2.new(1, 0, 0, 14),
+		Position = UDim2.fromOffset(0, 100),
+		Text = "Vaxorin · CyberUI",
+		Font = Theme.Font,
+		TextSize = 10,
+		TextColor3 = library.Theme.TextMuted,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		Parent = islandActivity,
+	})
+	actDesc.ZIndex = 61
+
 	local actHint = Helpers.CreateLabel({
 		Name = "ActHint",
 		Size = UDim2.new(1, 0, 0, 14),
+		Position = UDim2.fromOffset(0, 118),
 		Text = "Click or press RCtrl to open",
 		Font = Theme.Font,
 		TextSize = 10,
@@ -1249,9 +1399,19 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Parent = islandActivity,
 	})
+	actHint.ZIndex = 61
+
 	self._IslandActivity = islandActivity
-	self._IslandActStatus = actStatus
-	self._IslandActStats = actStats
+	self._IslandActStatus = chipRunning
+	self._IslandActStats = actFpsVal
+	self._IslandActFps = actFpsVal
+	self._IslandActPing = actPingVal
+	self._IslandActSession = actSession
+	self._IslandActPlayers = chipPlayers
+	self._IslandActTab = chipTab
+	self._IslandActGame = actGame
+	self._IslandActAvatar = actAvatar
+	self._IslandSessionStart = os.clock()
 
 	-- Classic circular open button (legacy)
 	local classicBtn = Instance.new("ImageButton")
@@ -1311,7 +1471,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	activityScale.Scale = 0.9
 	activityScale.Parent = islandActivity
 
-	local ACTIVITY_H = 100
+	local ACTIVITY_H = 160
 	local activityFollowConn = nil :: RBXScriptConnection?
 
 	local function placeActivityHost()
@@ -1331,7 +1491,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	local function showIslandActivity()
 		local host = self._IslandActivityHost or islandActivityHost
 		placeActivityHost()
-		host.Size = UDim2.fromOffset(230, 0)
+		host.Size = UDim2.fromOffset(320, 0)
 		host.Visible = true
 		islandActivity.BackgroundColor3 = library.Theme.Secondary
 		actTitle.TextColor3 = library.Theme.Text
@@ -1339,7 +1499,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		actStats.TextColor3 = library.Theme.Accent
 		actHint.TextColor3 = library.Theme.TextMuted
 		islandActivity.Position = UDim2.new(0.5, 0, 0, 0)
-		Tween.Play(host, { Size = UDim2.fromOffset(230, ACTIVITY_H) }, { Time = 0.22, EasingStyle = Enum.EasingStyle.Quint })
+		Tween.Play(host, { Size = UDim2.fromOffset(320, ACTIVITY_H) }, { Time = 0.22, EasingStyle = Enum.EasingStyle.Quint })
 		if activityFollowConn then activityFollowConn:Disconnect() end
 		activityFollowConn = game:GetService("RunService").RenderStepped:Connect(function()
 			if host.Visible then
@@ -1363,7 +1523,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 			activityFollowConn:Disconnect()
 			activityFollowConn = nil
 		end
-		Tween.Play(host, { Size = UDim2.fromOffset(230, 0) }, { Time = 0.16, EasingStyle = Enum.EasingStyle.Quint })
+		Tween.Play(host, { Size = UDim2.fromOffset(320, 0) }, { Time = 0.16, EasingStyle = Enum.EasingStyle.Quint })
 		task.delay(0.16, function()
 			if host then host.Visible = false end
 		end)
@@ -1425,8 +1585,28 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 					end)
 				end
 				self._LivePing = ping
-				if self._IslandActStats then
-					self._IslandActStats.Text = string.format("FPS %d  ·  Ping %dms", self._LiveFps or 0, self._LivePing or 0)
+				local fps = self._LiveFps or 0
+				local ping = self._LivePing or 0
+				if self._IslandActFps then
+					self._IslandActFps.Text = string.format("%d fps", fps)
+				elseif self._IslandActStats then
+					self._IslandActStats.Text = string.format("%d fps", fps)
+				end
+				if self._IslandActPing then
+					self._IslandActPing.Text = string.format("%d ms", ping)
+				end
+				if self._IslandActSession and self._IslandSessionStart then
+					local sec = math.floor(os.clock() - self._IslandSessionStart)
+					local m = math.floor(sec / 60)
+					local s = sec % 60
+					self._IslandActSession.Text = string.format("%dm %02ds", m, s)
+				end
+				if self._IslandActPlayers then
+					self._IslandActPlayers.Text = string.format("Players %d/%d", #Players:GetPlayers(), Players.MaxPlayers)
+				end
+				if self._IslandActTab and self._ActiveTab then
+					local n = self._ActiveTab.Name or self._ActiveTab._Name or "Home"
+					self._IslandActTab.Text = "Tab " .. tostring(n)
 				end
 				if self._IslandActStatus then
 					local st = "Ready"
@@ -2618,6 +2798,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 			end
 		end))
 	end
+	self:_createHomeTab()
 	self:SetLayout(restoredLayout)
 	return self :: any
 end
@@ -2716,148 +2897,156 @@ function Window:_createHomeTab()
 	local Stats = game:GetService("Stats")
 	local localPlayer = Players.LocalPlayer
 
+	-- Insert Home as first tab
 	local homeTab = Tab.new(self, "Home")
 	self._HomeTab = homeTab
-	table.insert(self._Tabs, homeTab)
+	table.insert(self._Tabs, 1, homeTab)
 	if self._LayoutVariants and self._LayoutVariants.SyncTabs then
 		self._LayoutVariants:SyncTabs()
 	end
 
-	-- Welcome card
-	local welcome = homeTab:CreateSection({
-		Name = "Welcome",
-		Description = "Account overview",
-	})
 	local displayName = localPlayer.DisplayName or localPlayer.Name
 	local userName = localPlayer.Name
+
+	local welcome = homeTab:CreateSection({
+		Name = "Welcome",
+		Description = "Welcome back",
+	})
 	welcome:CreateParagraph({
 		Title = "WELCOME BACK",
 		Content = displayName .. "\n@" .. userName,
 	})
-	welcome:CreateStat({
-		Label = "UserId",
-		Value = tostring(localPlayer.UserId),
-		Delta = "Local",
+	local avatarUrl = ""
+	pcall(function()
+		avatarUrl = Players:GetUserThumbnailAsync(
+			localPlayer.UserId,
+			Enum.ThumbnailType.HeadShot,
+			Enum.ThumbnailSize.Size150x150
+		)
+	end)
+	if avatarUrl ~= "" then
+		welcome:CreateParagraph({
+			Title = "Avatar",
+			Content = "Loaded for " .. displayName,
+		})
+	end
+	welcome:CreateButton({
+		Name = "Copy Username",
+		Callback = function()
+			if setclipboard then pcall(setclipboard, userName) end
+			self:Notify({ Title = "Username", Content = "Copied @" .. userName, Type = "Success", Duration = 2 })
+		end,
 	})
 
-	-- Performance
 	local perf = homeTab:CreateSection({
 		Name = "Performance",
 		Description = "Live client stats",
 	})
-	local fpsStat = perf:CreateStat({
-		Label = "FPS",
-		Value = "—",
-		Delta = "Live",
+	local fpsStat = perf:CreateStat({ Label = "FPS", Value = "—", Delta = "Live" })
+	local pingStat = perf:CreateStat({ Label = "PING", Value = "—", Delta = "ms" })
+	local playersStat = perf:CreateStat({
+		Label = "PLAYERS",
+		Value = string.format("%d/%d", #Players:GetPlayers(), Players.MaxPlayers),
+		Delta = "Server",
 	})
-	local pingStat = perf:CreateStat({
-		Label = "Ping",
-		Value = "—",
-		Delta = "ms",
-	})
-	local sessionStat = perf:CreateStat({
-		Label = "Session",
-		Value = "0m 0s",
-		Delta = "Uptime",
-	})
+	local sessionStat = perf:CreateStat({ Label = "SESSION", Value = "0s", Delta = "Uptime" })
 
-	-- Game info
 	local gameSec = homeTab:CreateSection({
 		Name = "Game",
 		Description = "Current place",
 	})
 	local gameName = "Unknown"
+	local creatorName = ""
 	pcall(function()
 		local info = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId)
-		if info and info.Name then
-			gameName = info.Name
+		if info then
+			gameName = info.Name or gameName
+			creatorName = info.Creator and info.Creator.Name or ""
 		end
 	end)
 	gameSec:CreateParagraph({
 		Title = gameName,
 		Content = string.format(
-			"PlaceId: %s\nGameId: %s\nPlayers: %d",
+			"%s%s\nPlaceId: %s  ·  Job truncated\nPlayers: %d/%d",
+			creatorName ~= "" and ("by " .. creatorName .. "\n") or "",
+			"",
 			tostring(game.PlaceId),
-			tostring(game.GameId),
-			#Players:GetPlayers()
+			#Players:GetPlayers(),
+			Players.MaxPlayers
 		),
 	})
-	local playersStat = gameSec:CreateStat({
-		Label = "Players",
-		Value = tostring(#Players:GetPlayers()),
-		Delta = "Server",
-	})
 
-	-- Links
-	local links = homeTab:CreateSection({
-		Name = "Links",
-		Description = "Quick actions",
+	local actions = homeTab:CreateSection({
+		Name = "Quick Actions",
+		Description = "Server utilities",
 	})
-	local discord = (self._DiscordLink) or "https://discord.gg/9jZTsy7Wtb"
-	links:CreateButton({
-		Name = "Copy Discord invite",
-		Callback = function()
-			if setclipboard then
-				pcall(setclipboard, discord)
-			end
-			self:Notify({ Title = "Discord", Content = "Invite copied", Type = "Success", Duration = 2 })
-		end,
-	})
-	links:CreateButton({
-		Name = "Copy JobId",
-		Callback = function()
-			if setclipboard then
-				pcall(setclipboard, game.JobId)
-			end
-			self:Notify({ Title = "JobId", Content = "Copied", Type = "Info", Duration = 2 })
-		end,
-	})
-	links:CreateButton({
-		Name = "Rejoin server",
+	actions:CreateButton({
+		Name = "Rejoin",
 		Callback = function()
 			pcall(function()
 				game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, game.JobId, localPlayer)
 			end)
 		end,
 	})
+	actions:CreateButton({
+		Name = "Hop (same place)",
+		Callback = function()
+			pcall(function()
+				game:GetService("TeleportService"):Teleport(game.PlaceId, localPlayer)
+			end)
+		end,
+	})
+	actions:CreateButton({
+		Name = "Copy Job ID",
+		Callback = function()
+			if setclipboard then pcall(setclipboard, game.JobId) end
+			self:Notify({ Title = "JobId", Content = "Copied", Type = "Info", Duration = 2 })
+		end,
+	})
+	actions:CreateButton({
+		Name = "Copy Place ID",
+		Callback = function()
+			if setclipboard then pcall(setclipboard, tostring(game.PlaceId)) end
+			self:Notify({ Title = "PlaceId", Content = "Copied", Type = "Info", Duration = 2 })
+		end,
+	})
 
-	-- Live FPS / Ping / session
-	local frames = 0
-	local lastFpsUpdate = os.clock()
+	local sessionStart = os.clock()
+	local frames, last = 0, os.clock()
 	local fpsValue = 0
 	self._Maid:GiveTask(game:GetService("RunService").RenderStepped:Connect(function()
 		frames += 1
 		local now = os.clock()
-		if now - lastFpsUpdate >= 0.5 then
-			fpsValue = math.floor(frames / (now - lastFpsUpdate) + 0.5)
+		if now - last >= 0.5 then
+			fpsValue = math.floor(frames / (now - last) + 0.5)
 			frames = 0
-			lastFpsUpdate = now
+			last = now
 		end
 	end))
-
 	self._Maid:GiveTask(task.spawn(function()
 		while self.Gui and self.Gui.Parent do
-			local pingMs = 0
+			local ping = 0
 			pcall(function()
 				local item = Stats.Network.ServerStatsItem["Data Ping"]
-				if item then
-					pingMs = math.floor((item:GetValue() or 0) + 0.5)
-				end
+				if item then ping = math.floor((item:GetValue() or 0) + 0.5) end
 			end)
-			if fpsStat and fpsStat.Set then
-				fpsStat:Set(tostring(fpsValue))
+			if ping == 0 then
+				pcall(function()
+					if localPlayer.GetNetworkPing then
+						ping = math.floor(localPlayer:GetNetworkPing() * 1000 + 0.5)
+					end
+				end)
 			end
-			if pingStat and pingStat.Set then
-				pingStat:Set(tostring(pingMs) .. "ms")
-			end
-			if sessionStat and sessionStat.Set and self._StartupTime then
-				local up = os.clock() - self._StartupTime
-				local m = math.floor(up / 60)
-				local s = math.floor(up % 60)
-				sessionStat:Set(string.format("%dm %ds", m, s))
-			end
+			if fpsStat and fpsStat.Set then fpsStat:Set(tostring(fpsValue)) end
+			if pingStat and pingStat.Set then pingStat:Set(tostring(ping) .. "ms") end
 			if playersStat and playersStat.Set then
-				playersStat:Set(tostring(#Players:GetPlayers()))
+				playersStat:Set(string.format("%d/%d", #Players:GetPlayers(), Players.MaxPlayers))
+			end
+			if sessionStat and sessionStat.Set then
+				local sec = math.floor(os.clock() - sessionStart)
+				local m = math.floor(sec / 60)
+				local s = sec % 60
+				sessionStat:Set(string.format("%dm %02ds", m, s))
 			end
 			task.wait(0.5)
 		end
