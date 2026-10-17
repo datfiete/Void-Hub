@@ -182,6 +182,36 @@ function Library:LoadProfile(name: string): boolean
 		return false
 	end
 
+	-- Diff vs current in-memory flags
+	local changed = {}
+	local changeCount = 0
+	for flag, value in pairs(flags) do
+		local cur = self.Flags[flag]
+		local same = false
+		if typeof(cur) == "Color3" and typeof(value) == "Color3" then
+			same = cur.R == value.R and cur.G == value.G and cur.B == value.B
+		elseif type(cur) == "table" and type(value) == "table" then
+			same = #cur == #value
+			if same then
+				for i = 1, #cur do
+					if cur[i] ~= value[i] then same = false; break end
+				end
+			end
+		else
+			same = cur == value
+		end
+		if not same then
+			changeCount += 1
+			if #changed < 6 then
+				local a = tostring(cur)
+				local b = tostring(value)
+				if #a > 18 then a = string.sub(a, 1, 16) .. "…" end
+				if #b > 18 then b = string.sub(b, 1, 16) .. "…" end
+				table.insert(changed, `{flag}: {a} → {b}`)
+			end
+		end
+	end
+
 	-- apply into memory + disk without spamming full save each flag
 	local prevAuto = self._AutoSave
 	self._AutoSave = false
@@ -196,6 +226,35 @@ function Library:LoadProfile(name: string): boolean
 		end
 	end
 	self._AutoSave = prevAuto
+
+	-- Notify user about what changed
+	if changeCount > 0 then
+		local body = table.concat(changed, "\n")
+		if changeCount > #changed then
+			body ..= `\n… +{changeCount - #changed} more`
+		end
+		pcall(function()
+			if self.Notify then
+				self:Notify({
+					Title = `Profile "{name}" · {changeCount} changes`,
+					Content = body,
+					Type = "Info",
+					Duration = 5,
+				})
+			end
+		end)
+	else
+		pcall(function()
+			if self.Notify then
+				self:Notify({
+					Title = `Profile "{name}"`,
+					Content = "Already up to date",
+					Type = "Success",
+					Duration = 2,
+				})
+			end
+		end)
+	end
 
 	if profile.Layout then
 		self:SetSession("Layout", profile.Layout)
@@ -316,5 +375,60 @@ function Library:Destroy()
 	table.clear(self.Flags)
 end
 
+
+
+-- ============================================
+-- SCRIPT HEALTH + FAVORITES
+-- ============================================
+
+function Library:ReportError(source: string, message: string)
+	self._Health = self._Health or { errors = {}, dirty = false }
+	local entry = {
+		Time = os.clock(),
+		Source = tostring(source or "?"),
+		Message = tostring(message or ""),
+	}
+	table.insert(self._Health.errors, 1, entry)
+	while #self._Health.errors > 30 do
+		table.remove(self._Health.errors)
+	end
+end
+
+function Library:GetHealth(): { errors: { any }, dirty: boolean }
+	self._Health = self._Health or { errors = {}, dirty = false }
+	return self._Health
+end
+
+function Library:MarkConfigDirty(dirty: boolean?)
+	self._Health = self._Health or { errors = {}, dirty = false }
+	self._Health.dirty = if dirty == nil then true else dirty
+end
+
+function Library:ToggleFavorite(flag: string): boolean
+	flag = tostring(flag or "")
+	if flag == "" then return false end
+	self._Favorites = self._Favorites or {}
+	if self._Favorites[flag] then
+		self._Favorites[flag] = nil
+		return false
+	end
+	self._Favorites[flag] = true
+	return true
+end
+
+function Library:IsFavorite(flag: string): boolean
+	self._Favorites = self._Favorites or {}
+	return self._Favorites[tostring(flag)] == true
+end
+
+function Library:GetFavorites(): { string }
+	self._Favorites = self._Favorites or {}
+	local list = {}
+	for flag, on in pairs(self._Favorites) do
+		if on then table.insert(list, flag) end
+	end
+	table.sort(list)
+	return list
+end
 
 return Library

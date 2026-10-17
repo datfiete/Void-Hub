@@ -134,7 +134,8 @@ function Toggle.new(section: any, data: ToggleOptions): ToggleHandle
 			task.spawn(function()
 				local ok, err = pcall(data.Callback, value)
 				if not ok then
-					warn("[Vaxorin] Toggle callback error:", err)
+					pcall(function() local lib = self._Section.Tab.Window.Library; if lib and lib.ReportError then lib:ReportError("Toggle", err) end end)
+				warn("[Vaxorin] Toggle callback error:", err)
 				end
 			end)
 		end
