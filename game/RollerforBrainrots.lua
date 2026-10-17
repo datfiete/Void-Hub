@@ -1,10 +1,9 @@
-local CyberUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/datfiete/Void-Hub/main/CyberUI/load.lua"))()
+local CyberUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/datfiete/Void-Hub/refs/heads/main/CyberUI%20-%20Kopie/load.lua"))()
 
 local window = CyberUI:CreateWindow({
     Name = "Roller for Brainrots script",
     Title = "Roller for Brainrots",
     Subtitle = "by fietewoozle",
-    Size = Vector2.new(700, 500),
     Center = true,
     ToggleKey = Enum.KeyCode.RightControl,
 })
