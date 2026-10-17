@@ -36,6 +36,7 @@ local MODULE_PATHS = {
 	"Elements/Status",
 	"Elements/Notice",
 	"Elements/Stat",
+	"Elements/Chart",
 	"Elements/Divider",
 	"Elements/IconButton",
 

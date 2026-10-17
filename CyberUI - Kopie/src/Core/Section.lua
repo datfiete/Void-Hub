@@ -18,6 +18,7 @@ local Progress = require(script.Parent.Parent.Elements.Progress)
 local Status = require(script.Parent.Parent.Elements.Status)
 local Notice = require(script.Parent.Parent.Elements.Notice)
 local Stat = require(script.Parent.Parent.Elements.Stat)
+local Chart = require(script.Parent.Parent.Elements.Chart)
 local Divider = require(script.Parent.Parent.Elements.Divider)
 local IconButton = require(script.Parent.Parent.Elements.IconButton)
 
@@ -40,6 +41,7 @@ export type SectionHandle = {
     CreateStatus: (self: SectionHandle, data: any) -> any,
     CreateNotice: (self: SectionHandle, data: any) -> any,
     CreateStat: (self: SectionHandle, data: any) -> any,
+    CreateChart: (self: SectionHandle, data: any) -> any,
     CreateDivider: (self: SectionHandle, data: any?) -> any,
     CreateIconButton: (self: SectionHandle, data: any?) -> any,
     Destroy: (self: SectionHandle) -> (),
@@ -242,6 +244,7 @@ function Section:CreateProgress(data: any) return self:_track(Progress.new(self,
 function Section:CreateStatus(data: any) return self:_track(Status.new(self, data or {})) end
 function Section:CreateNotice(data: any) return self:_track(Notice.new(self, data or {})) end
 function Section:CreateStat(data: any) return self:_track(Stat.new(self, data or {})) end
+function Section:CreateChart(data: any) return self:_track(Chart.new(self, data or {})) end
 function Section:CreateDivider(data: any?) return self:_track(Divider.new(self, data or {})) end
 function Section:CreateIconButton(data: any?) return self:_track(IconButton.new(self, data or {})) end
 function Section:CreateLabel(data: any) return self:CreateParagraph(data) end

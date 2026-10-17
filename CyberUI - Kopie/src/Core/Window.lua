@@ -2967,7 +2967,6 @@ function Window:_createHomeTab()
 	local displayName = localPlayer.DisplayName or localPlayer.Name
 	local userName = localPlayer.Name
 
-	-- Column order (odd=left, even=right): Welcome | Performance, Server | Favorites, Health spans next left
 	local welcomeSec = homeTab:CreateSection({
 		Name = "Welcome",
 		Description = "Your account",
@@ -2988,64 +2987,19 @@ function Window:_createHomeTab()
 		Name = "Performance",
 		Description = "FPS · Ping · Session",
 	})
-
-	local BAR_COUNT = 18
-	local function makeSideChart(parent: Instance, titleText: string, layoutOrder: number)
-		local wrap = Helpers.CreateFrame({
-			Name = titleText .. "Chart",
-			Size = UDim2.new(1, 0, 0, 78),
-			BackgroundTransparency = 1,
-			Parent = parent,
-		})
-		wrap.LayoutOrder = layoutOrder
-
-		local title = Helpers.CreateLabel({
-			Size = UDim2.new(1, 0, 0, 12),
-			Text = titleText,
-			Font = Theme.Font,
-			TextSize = 10,
-			TextColor3 = theme.TextMuted,
-			TextXAlignment = Enum.TextXAlignment.Left,
-			Parent = wrap,
-		})
-		local valueLbl = Helpers.CreateLabel({
-			Size = UDim2.new(1, 0, 0, 24),
-			Position = UDim2.fromOffset(0, 14),
-			Text = "—",
-			Font = Theme.FontBold,
-			TextSize = 22,
-			TextColor3 = Color3.fromRGB(120, 255, 160),
-			TextXAlignment = Enum.TextXAlignment.Left,
-			Parent = wrap,
-		})
-		local barsHold = Helpers.CreateFrame({
-			Size = UDim2.new(1, 0, 0, 30),
-			Position = UDim2.fromOffset(0, 42),
-			BackgroundTransparency = 1,
-			Parent = wrap,
-		})
-		local lay = Instance.new("UIListLayout")
-		lay.FillDirection = Enum.FillDirection.Horizontal
-		lay.VerticalAlignment = Enum.VerticalAlignment.Bottom
-		lay.Padding = UDim.new(0, 2)
-		lay.Parent = barsHold
-		local bars = {}
-		for i = 1, BAR_COUNT do
-			local bar = Instance.new("Frame")
-			bar.Size = UDim2.new(0, 6, 0, 4)
-			bar.BorderSizePixel = 0
-			bar.BackgroundColor3 = theme.Accent
-			bar.BackgroundTransparency = 0.4
-			bar.Parent = barsHold
-			Helpers.Corner(bar, 2)
-			bars[i] = bar
-		end
-		return valueLbl, bars
-	end
-
-	-- Two chart blocks stacked cleanly inside Performance (section is right column)
-	local fpsValueLbl, fpsBars = makeSideChart(perfSec.Inner, "FPS", 1)
-	local pingValueLbl, pingBars = makeSideChart(perfSec.Inner, "PING", 2)
+	local fpsChart = perfSec:CreateChart({
+		Label = "FPS",
+		Bars = 20,
+		Max = 60,
+		Color = Color3.fromRGB(120, 255, 160),
+	})
+	local pingChart = perfSec:CreateChart({
+		Label = "PING",
+		Bars = 20,
+		Max = 120,
+		Color = Color3.fromRGB(100, 190, 255),
+		Suffix = " ms",
+	})
 	local metaLbl = Helpers.CreateLabel({
 		Name = "Meta",
 		Size = UDim2.new(1, 0, 0, 16),
@@ -3056,7 +3010,6 @@ function Window:_createHomeTab()
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Parent = perfSec.Inner,
 	})
-	metaLbl.LayoutOrder = 3
 
 	local gameSec = homeTab:CreateSection({
 		Name = "Server",
@@ -3107,65 +3060,24 @@ function Window:_createHomeTab()
 		end,
 	})
 
-	-- Favorites: live toggles for pinned flags
+	-- Favorites: dedicated holder so rebuild never duplicates section-tracked toggles
 	local favSec = homeTab:CreateSection({
 		Name = "Favorites",
 		Description = "Star toggles · control them here",
 	})
-	local favEmpty = favSec:CreateParagraph({
+	local favHint = favSec:CreateParagraph({
 		Title = "Pinned",
 		Content = "Tap ★ on any toggle to pin it here.",
 	})
-	local favRows: { [string]: any } = {}
-	local favKey = ""
-
-	local function clearFavRows()
-		for flag, row in pairs(favRows) do
-			if row and row.Destroy then
-				pcall(function()
-					row:Destroy()
-				end)
-			elseif row and row.Instance and row.Instance.Parent then
-				row.Instance:Destroy()
-			end
-			favRows[flag] = nil
-		end
-	end
-
-	local function makeFavRow(flag: string)
-		local value = library.Flags and library.Flags[flag]
-		if type(value) ~= "boolean" then
-			-- still show row but only for boolean-like; coerce
-			value = value and true or false
-		end
-		local toggle = favSec:CreateToggle({
-			Name = tostring(flag),
-			CurrentValue = value == true,
-			Flag = nil, -- avoid double-bind / star on star
-			Save = false,
-			FireOnLoad = false,
-			Callback = function(on)
-				-- write flag + drive original control
-				if library._setFlag then
-					library:_setFlag(flag, on, true)
-				else
-					library.Flags[flag] = on
-				end
-				local control = library._FlagControls and library._FlagControls[flag]
-				if control and control.Set then
-					pcall(function()
-						control:Set(on, true)
-					end)
-				end
-			end,
-		})
-		-- hide star if somehow present
-		if toggle and toggle.Star then
-			toggle.Star.Visible = false
-		end
-		favRows[flag] = toggle
-		return toggle
-	end
+	local favHolder = Helpers.CreateFrame({
+		Name = "FavHolder",
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		Parent = favSec.Inner,
+	})
+	Helpers.ListLayout(favHolder, 6)
+	local favBuiltKey = ""
 
 	local function rebuildFavorites()
 		if not library.GetFavorites then
@@ -3173,34 +3085,112 @@ function Window:_createHomeTab()
 		end
 		local favs = library:GetFavorites()
 		local key = table.concat(favs, "\0")
-		if key == favKey then
-			-- just sync values
-			for flag, row in pairs(favRows) do
-				local v = library.Flags and library.Flags[flag]
-				if row and row.Set and type(v) == "boolean" then
-					pcall(function()
-						row:Set(v, true)
-					end)
+		if key == favBuiltKey then
+			-- sync switch visuals only
+			for _, child in favHolder:GetChildren() do
+				if child:IsA("Frame") and child:GetAttribute("Flag") then
+					local flag = child:GetAttribute("Flag")
+					local on = library.Flags and library.Flags[flag] == true
+					local sw = child:FindFirstChild("Switch")
+					local knob = sw and sw:FindFirstChild("Knob")
+					if sw and knob then
+						sw.BackgroundColor3 = if on then library.Theme.Accent else library.Theme.Border
+						knob.Position = if on then UDim2.new(1, -19, 0.5, 0) else UDim2.new(0, 3, 0.5, 0)
+					end
 				end
 			end
 			return
 		end
-		favKey = key
-		clearFavRows()
-		if favEmpty and favEmpty.Instance then
-			favEmpty.Instance.Visible = (#favs == 0)
+		favBuiltKey = key
+
+		for _, child in favHolder:GetChildren() do
+			if child:IsA("Frame") or child:IsA("TextButton") then
+				child:Destroy()
+			end
 		end
+
 		if #favs == 0 then
-			if favEmpty and favEmpty.Set then
-				favEmpty:Set("Tap ★ on any toggle to pin it here.")
+			if favHint then
+				if favHint.Instance then favHint.Instance.Visible = true end
+				if favHint.Set then favHint:Set("Tap ★ on any toggle to pin it here.") end
 			end
 			return
 		end
-		if favEmpty and favEmpty.Set then
-			favEmpty:Set(#favs .. " pinned")
+		if favHint then
+			if favHint.Instance then favHint.Instance.Visible = true end
+			if favHint.Set then favHint:Set(#favs .. " pinned · toggle below") end
 		end
+
 		for _, flag in ipairs(favs) do
-			makeFavRow(flag)
+			local on = library.Flags and library.Flags[flag] == true
+			local row = Helpers.CreateFrame({
+				Name = "Fav_" .. tostring(flag):gsub("[^%w]", "_"),
+				Size = UDim2.new(1, 0, 0, Theme.ElementHeight or 40),
+				BackgroundColor3 = library.Theme.ElementBackground or library.Theme.Background,
+				BackgroundTransparency = 0.05,
+				Parent = favHolder,
+			})
+			row:SetAttribute("Flag", flag)
+			Helpers.Corner(row, Theme.CornerRadiusSmall or 8)
+
+			Helpers.CreateLabel({
+				Size = UDim2.new(1, -56, 1, 0),
+				Position = UDim2.fromOffset(12, 0),
+				Text = tostring(flag),
+				Font = Theme.Font,
+				TextSize = 13,
+				TextColor3 = library.Theme.Text,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextTruncate = Enum.TextTruncate.AtEnd,
+				Parent = row,
+			})
+
+			local switch = Helpers.CreateFrame({
+				Name = "Switch",
+				Size = UDim2.fromOffset(42, 22),
+				Position = UDim2.new(1, -12, 0.5, 0),
+				AnchorPoint = Vector2.new(1, 0.5),
+				BackgroundColor3 = if on then library.Theme.Accent else library.Theme.Border,
+				Parent = row,
+			})
+			Helpers.Corner(switch, 999)
+			local knob = Helpers.CreateFrame({
+				Name = "Knob",
+				Size = UDim2.fromOffset(16, 16),
+				Position = if on then UDim2.new(1, -19, 0.5, 0) else UDim2.new(0, 3, 0.5, 0),
+				AnchorPoint = Vector2.new(0, 0.5),
+				BackgroundColor3 = library.Theme.Text,
+				Parent = switch,
+			})
+			Helpers.Corner(knob, 999)
+
+			local hit = Helpers.CreateButton({
+				Name = "Hit",
+				Size = UDim2.fromScale(1, 1),
+				Text = "",
+				BackgroundTransparency = 1,
+				ZIndex = 3,
+				Parent = row,
+			})
+			hit.MouseButton1Click:Connect(function()
+				local cur = library.Flags and library.Flags[flag] == true
+				local nextV = not cur
+				if library._setFlag then
+					library:_setFlag(flag, nextV, true)
+				elseif library.Flags then
+					library.Flags[flag] = nextV
+				end
+				local control = library._FlagControls and library._FlagControls[flag]
+				if control and control.Set then
+					pcall(function()
+						control:Set(nextV, true)
+					end)
+				end
+				switch.BackgroundColor3 = if nextV then library.Theme.Accent else library.Theme.Border
+				Tween.Play(knob, {
+					Position = if nextV then UDim2.new(1, -19, 0.5, 0) else UDim2.new(0, 3, 0.5, 0),
+				}, { Time = 0.12 })
+			end)
 		end
 	end
 
@@ -3213,13 +3203,10 @@ function Window:_createHomeTab()
 		Content = "Healthy · no recent errors",
 	})
 
-	-- Ensure columns: 2-col when we have multiple sections (default Tab behavior)
 	if homeTab._UpdateColumns then
 		homeTab._UpdateColumns()
 	end
 
-	local fpsHistory = table.create(BAR_COUNT, 0)
-	local pingHistory = table.create(BAR_COUNT, 0)
 	local sessionStart = os.clock()
 	local frames, last = 0, os.clock()
 	local fpsValue = 0
@@ -3233,26 +3220,6 @@ function Window:_createHomeTab()
 			last = now
 		end
 	end))
-
-	local function pushHistory(hist, value)
-		table.remove(hist, 1)
-		table.insert(hist, value)
-	end
-
-	local function paintBars(bars, hist, maxRef, color)
-		local maxV = maxRef
-		for _, v in hist do
-			if v > maxV then maxV = v end
-		end
-		if maxV < 1 then maxV = 1 end
-		for i, bar in bars do
-			local v = hist[i] or 0
-			local h = math.clamp(math.floor((v / maxV) * 28 + 0.5), 3, 30)
-			bar.Size = UDim2.new(0, 6, 0, h)
-			bar.BackgroundColor3 = color
-			bar.BackgroundTransparency = 0.12 + (1 - v / maxV) * 0.5
-		end
-	end
 
 	self._Maid:GiveTask(task.spawn(function()
 		while self.Gui and self.Gui.Parent do
@@ -3269,13 +3236,13 @@ function Window:_createHomeTab()
 				end)
 			end
 
-			pushHistory(fpsHistory, fpsValue)
-			pushHistory(pingHistory, ping)
-			paintBars(fpsBars, fpsHistory, 60, Color3.fromRGB(120, 255, 160))
-			paintBars(pingBars, pingHistory, 120, Color3.fromRGB(100, 190, 255))
+			if fpsChart and fpsChart.Push then
+				fpsChart:Push(fpsValue)
+			end
+			if pingChart and pingChart.Push then
+				pingChart:Push(ping)
+			end
 
-			if fpsValueLbl then fpsValueLbl.Text = tostring(fpsValue) end
-			if pingValueLbl then pingValueLbl.Text = tostring(ping) .. " ms" end
 			local sec = math.floor(os.clock() - sessionStart)
 			if metaLbl then
 				metaLbl.Text = string.format(

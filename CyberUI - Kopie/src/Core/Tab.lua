@@ -499,6 +499,7 @@ function Tab:CreateWorldRadar(data: any?) return self:_getDefaultSection():Creat
 function Tab:CreateIconButton(data: any?) return self:_getDefaultSection():CreateIconButton(data) end
 function Tab:CreateDivider(data: any?) return self:_getDefaultSection():CreateDivider(data) end
 function Tab:CreateStat(data: any?) return self:_getDefaultSection():CreateStat(data) end
+function Tab:CreateChart(data: any?) return self:_getDefaultSection():CreateChart(data) end
 function Tab:CreateNotice(data: any?) return self:_getDefaultSection():CreateNotice(data) end
 function Tab:CreateCard(data: any?) return self:_getDefaultSection():CreateCard(data) end
 function Tab:CreateBadge(data: any?) return self:_getDefaultSection():CreateBadge(data) end
