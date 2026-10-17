@@ -2958,7 +2958,7 @@ function Window:_createHomeTab()
 	end
 
 	if homeTab._PageTitle then
-		homeTab._PageTitle.Text = "Dashboard"
+		homeTab._PageTitle.Text = "Welcome back"
 	end
 	if homeTab._PageEyebrow then
 		homeTab._PageEyebrow.Text = "HOME"
@@ -2967,43 +2967,41 @@ function Window:_createHomeTab()
 	local displayName = localPlayer.DisplayName or localPlayer.Name
 	local userName = localPlayer.Name
 
-	-- All content goes through Sections (column system). No direct Page children.
+	-- Column order (odd=left, even=right): Welcome | Performance, Server | Favorites, Health spans next left
 	local welcomeSec = homeTab:CreateSection({
 		Name = "Welcome",
-		Description = "Signed in as @" .. userName,
+		Description = "Your account",
 	})
 	welcomeSec:CreateParagraph({
 		Title = "WELCOME BACK",
 		Content = displayName .. "\n@" .. userName,
 	})
-	local avatarUrl = ""
-	pcall(function()
-		avatarUrl = Players:GetUserThumbnailAsync(
-			localPlayer.UserId,
-			Enum.ThumbnailType.HeadShot,
-			Enum.ThumbnailSize.Size100x100
-		)
-	end)
-	if avatarUrl ~= "" then
-		-- avatar shown via footer; keep welcome clean
-	end
+	welcomeSec:CreateButton({
+		Name = "Copy Username",
+		Callback = function()
+			if setclipboard then pcall(setclipboard, userName) end
+			self:Notify({ Title = "Username", Content = "@" .. userName, Type = "Success", Duration = 2 })
+		end,
+	})
 
 	local perfSec = homeTab:CreateSection({
 		Name = "Performance",
-		Description = "Live client stats",
+		Description = "FPS · Ping · Session",
 	})
-	-- Custom bar chart lives inside section.Inner (list layout)
-	local BAR_COUNT = 20
-	local function makeChart(parent: Instance, label: string): (TextLabel, { Frame })
+
+	local BAR_COUNT = 18
+	local function makeSideChart(parent: Instance, titleText: string, layoutOrder: number)
 		local wrap = Helpers.CreateFrame({
-			Name = label .. "Chart",
-			Size = UDim2.new(1, 0, 0, 64),
+			Name = titleText .. "Chart",
+			Size = UDim2.new(1, 0, 0, 78),
 			BackgroundTransparency = 1,
 			Parent = parent,
 		})
+		wrap.LayoutOrder = layoutOrder
+
 		local title = Helpers.CreateLabel({
-			Size = UDim2.new(0.5, 0, 0, 14),
-			Text = label,
+			Size = UDim2.new(1, 0, 0, 12),
+			Text = titleText,
 			Font = Theme.Font,
 			TextSize = 10,
 			TextColor3 = theme.TextMuted,
@@ -3011,18 +3009,18 @@ function Window:_createHomeTab()
 			Parent = wrap,
 		})
 		local valueLbl = Helpers.CreateLabel({
-			Size = UDim2.new(0.5, 0, 0, 22),
+			Size = UDim2.new(1, 0, 0, 24),
 			Position = UDim2.fromOffset(0, 14),
 			Text = "—",
 			Font = Theme.FontBold,
-			TextSize = 20,
+			TextSize = 22,
 			TextColor3 = Color3.fromRGB(120, 255, 160),
 			TextXAlignment = Enum.TextXAlignment.Left,
 			Parent = wrap,
 		})
 		local barsHold = Helpers.CreateFrame({
-			Size = UDim2.new(1, 0, 0, 28),
-			Position = UDim2.fromOffset(0, 38),
+			Size = UDim2.new(1, 0, 0, 30),
+			Position = UDim2.fromOffset(0, 42),
 			BackgroundTransparency = 1,
 			Parent = wrap,
 		})
@@ -3034,7 +3032,7 @@ function Window:_createHomeTab()
 		local bars = {}
 		for i = 1, BAR_COUNT do
 			local bar = Instance.new("Frame")
-			bar.Size = UDim2.new(0, 7, 0, 4)
+			bar.Size = UDim2.new(0, 6, 0, 4)
 			bar.BorderSizePixel = 0
 			bar.BackgroundColor3 = theme.Accent
 			bar.BackgroundTransparency = 0.4
@@ -3045,31 +3043,12 @@ function Window:_createHomeTab()
 		return valueLbl, bars
 	end
 
-	local fpsValueLbl, fpsBars = makeChart(welcomeSec.Inner or welcomeSec.Instance, "FPS")
-	-- Prefer Performance section inner
-	if perfSec.Inner then
-		fpsValueLbl.Parent = perfSec.Inner
-		fpsBars[1].Parent.Parent = perfSec.Inner
-	end
-	-- Remake cleanly parented to perfSec.Inner only
-	for _, c in (perfSec.Inner or perfSec.Instance):GetChildren() do
-		if c.Name == "FPSChart" or c.Name == "PINGChart" then
-			c:Destroy()
-		end
-	end
-	-- Destroy the misplaced one from welcome
-	for _, c in (welcomeSec.Inner or welcomeSec.Instance):GetChildren() do
-		if c.Name == "FPSChart" then
-			c:Destroy()
-		end
-	end
-
-	fpsValueLbl, fpsBars = makeChart(perfSec.Inner, "FPS")
-	local pingValueLbl, pingBars = makeChart(perfSec.Inner, "PING")
-
+	-- Two chart blocks stacked cleanly inside Performance (section is right column)
+	local fpsValueLbl, fpsBars = makeSideChart(perfSec.Inner, "FPS", 1)
+	local pingValueLbl, pingBars = makeSideChart(perfSec.Inner, "PING", 2)
 	local metaLbl = Helpers.CreateLabel({
 		Name = "Meta",
-		Size = UDim2.new(1, 0, 0, 18),
+		Size = UDim2.new(1, 0, 0, 16),
 		Text = "0/0 players · 0s session",
 		Font = Theme.Font,
 		TextSize = 11,
@@ -3077,10 +3056,11 @@ function Window:_createHomeTab()
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Parent = perfSec.Inner,
 	})
+	metaLbl.LayoutOrder = 3
 
 	local gameSec = homeTab:CreateSection({
 		Name = "Server",
-		Description = "Current place",
+		Description = "Place actions",
 	})
 	local gameName = "Unknown"
 	local creatorName = ""
@@ -3127,14 +3107,102 @@ function Window:_createHomeTab()
 		end,
 	})
 
+	-- Favorites: live toggles for pinned flags
 	local favSec = homeTab:CreateSection({
 		Name = "Favorites",
-		Description = "Star any toggle to pin it here",
+		Description = "Star toggles · control them here",
 	})
-	local favParagraph = favSec:CreateParagraph({
+	local favEmpty = favSec:CreateParagraph({
 		Title = "Pinned",
-		Content = "Tap the ★ on a toggle to favorite it.",
+		Content = "Tap ★ on any toggle to pin it here.",
 	})
+	local favRows: { [string]: any } = {}
+	local favKey = ""
+
+	local function clearFavRows()
+		for flag, row in pairs(favRows) do
+			if row and row.Destroy then
+				pcall(function()
+					row:Destroy()
+				end)
+			elseif row and row.Instance and row.Instance.Parent then
+				row.Instance:Destroy()
+			end
+			favRows[flag] = nil
+		end
+	end
+
+	local function makeFavRow(flag: string)
+		local value = library.Flags and library.Flags[flag]
+		if type(value) ~= "boolean" then
+			-- still show row but only for boolean-like; coerce
+			value = value and true or false
+		end
+		local toggle = favSec:CreateToggle({
+			Name = tostring(flag),
+			CurrentValue = value == true,
+			Flag = nil, -- avoid double-bind / star on star
+			Save = false,
+			FireOnLoad = false,
+			Callback = function(on)
+				-- write flag + drive original control
+				if library._setFlag then
+					library:_setFlag(flag, on, true)
+				else
+					library.Flags[flag] = on
+				end
+				local control = library._FlagControls and library._FlagControls[flag]
+				if control and control.Set then
+					pcall(function()
+						control:Set(on, true)
+					end)
+				end
+			end,
+		})
+		-- hide star if somehow present
+		if toggle and toggle.Star then
+			toggle.Star.Visible = false
+		end
+		favRows[flag] = toggle
+		return toggle
+	end
+
+	local function rebuildFavorites()
+		if not library.GetFavorites then
+			return
+		end
+		local favs = library:GetFavorites()
+		local key = table.concat(favs, "\0")
+		if key == favKey then
+			-- just sync values
+			for flag, row in pairs(favRows) do
+				local v = library.Flags and library.Flags[flag]
+				if row and row.Set and type(v) == "boolean" then
+					pcall(function()
+						row:Set(v, true)
+					end)
+				end
+			end
+			return
+		end
+		favKey = key
+		clearFavRows()
+		if favEmpty and favEmpty.Instance then
+			favEmpty.Instance.Visible = (#favs == 0)
+		end
+		if #favs == 0 then
+			if favEmpty and favEmpty.Set then
+				favEmpty:Set("Tap ★ on any toggle to pin it here.")
+			end
+			return
+		end
+		if favEmpty and favEmpty.Set then
+			favEmpty:Set(#favs .. " pinned")
+		end
+		for _, flag in ipairs(favs) do
+			makeFavRow(flag)
+		end
+	end
 
 	local healthSec = homeTab:CreateSection({
 		Name = "Script Health",
@@ -3145,22 +3213,9 @@ function Window:_createHomeTab()
 		Content = "Healthy · no recent errors",
 	})
 
-	-- Force single-column on Home (cleaner dashboard)
+	-- Ensure columns: 2-col when we have multiple sections (default Tab behavior)
 	if homeTab._UpdateColumns then
-		task.defer(function()
-			if homeTab._RightColumn then
-				homeTab._RightColumn.Visible = false
-			end
-			if homeTab._LeftColumn then
-				homeTab._LeftColumn.Size = UDim2.new(1, 0, 0, 0)
-			end
-			for _, section in ipairs(homeTab._Sections or {}) do
-				if section and section.Container and homeTab._LeftColumn then
-					section.Container.Parent = homeTab._LeftColumn
-					section.Container.Size = UDim2.new(1, 0, 0, 0)
-				end
-			end
-		end)
+		homeTab._UpdateColumns()
 	end
 
 	local fpsHistory = table.create(BAR_COUNT, 0)
@@ -3192,10 +3247,10 @@ function Window:_createHomeTab()
 		if maxV < 1 then maxV = 1 end
 		for i, bar in bars do
 			local v = hist[i] or 0
-			local h = math.clamp(math.floor((v / maxV) * 26 + 0.5), 3, 28)
-			bar.Size = UDim2.new(0, 7, 0, h)
+			local h = math.clamp(math.floor((v / maxV) * 28 + 0.5), 3, 30)
+			bar.Size = UDim2.new(0, 6, 0, h)
 			bar.BackgroundColor3 = color
-			bar.BackgroundTransparency = 0.15 + (1 - v / maxV) * 0.5
+			bar.BackgroundTransparency = 0.12 + (1 - v / maxV) * 0.5
 		end
 	end
 
@@ -3232,19 +3287,7 @@ function Window:_createHomeTab()
 				)
 			end
 
-			if library.GetFavorites and favParagraph and favParagraph.Set then
-				local favs = library:GetFavorites()
-				if #favs == 0 then
-					favParagraph:Set("Tap the ★ on a toggle to pin it here.")
-				else
-					local lines = {}
-					for _, f in favs do
-						local val = library.Flags and library.Flags[f]
-						table.insert(lines, `★  {f}  =  {tostring(val)}`)
-					end
-					favParagraph:Set(table.concat(lines, "\n"))
-				end
-			end
+			rebuildFavorites()
 
 			if library.GetHealth and healthParagraph and healthParagraph.Set then
 				local h = library:GetHealth()
