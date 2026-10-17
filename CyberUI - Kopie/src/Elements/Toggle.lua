@@ -57,13 +57,50 @@ function Toggle.new(section: any, data: ToggleOptions): ToggleHandle
 		Tween.Play(pop, { Scale = 1 }, { Time = 0.18, EasingStyle = Enum.EasingStyle.Back })
 	end)
 
+	local hasFlag = type(data.Flag) == "string" and data.Flag ~= ""
 	local label = Helpers.CreateLabel({
 		Name = "Label",
-		Size = UDim2.new(1, -56, 1, 0),
+		Size = UDim2.new(1, if hasFlag then -88 else -56, 1, 0),
 		Position = UDim2.new(0, 12, 0, 0),
 		Text = data.Name,
 		Parent = row,
 	})
+
+	local starBtn = nil
+	if hasFlag then
+		starBtn = Instance.new("TextButton")
+		starBtn.Name = "FavStar"
+		starBtn.Size = UDim2.fromOffset(22, 22)
+		starBtn.Position = UDim2.new(1, -62, 0.5, 0)
+		starBtn.AnchorPoint = Vector2.new(1, 0.5)
+		starBtn.BackgroundTransparency = 1
+		starBtn.Text = "★"
+		starBtn.Font = Theme.FontBold
+		starBtn.TextSize = 14
+		starBtn.AutoButtonColor = false
+		starBtn.ZIndex = 4
+		starBtn.Parent = row
+		local favOn = library.IsFavorite and library:IsFavorite(data.Flag)
+		starBtn.TextColor3 = if favOn then Color3.fromRGB(255, 200, 60) else (library.Theme.TextMuted or Color3.fromRGB(120, 120, 130))
+		starBtn.TextTransparency = if favOn then 0 else 0.35
+		starBtn.MouseButton1Click:Connect(function()
+			if not library.ToggleFavorite then return end
+			local on = library:ToggleFavorite(data.Flag)
+			starBtn.TextColor3 = if on then Color3.fromRGB(255, 200, 60) else (library.Theme.TextMuted or Color3.fromRGB(120, 120, 130))
+			starBtn.TextTransparency = if on then 0 else 0.35
+			pcall(function()
+				local win = section.Tab and section.Tab.Window
+				if win and win.Notify then
+					win:Notify({
+						Title = if on then "Favorited" else "Unfavorited",
+						Content = tostring(data.Name or data.Flag),
+						Type = "Info",
+						Duration = 1.5,
+					})
+				end
+			end)
+		end)
+	end
 
 	local switch = Helpers.CreateFrame({
 		Name = "Switch",
@@ -103,6 +140,7 @@ function Toggle.new(section: any, data: ToggleOptions): ToggleHandle
 	self.Switch = switch
 	self.Knob = knob
 	self.SwitchGlow = switchGlow
+	self.Star = starBtn
 
 	function self:_applyVisual(value: boolean, animate: boolean?)
 		local onColor = library.Theme.Accent

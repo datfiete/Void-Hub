@@ -2957,224 +2957,131 @@ function Window:_createHomeTab()
 		self._LayoutVariants:SyncTabs()
 	end
 
-	-- Hide default page chrome title clutter for a dashboard feel
 	if homeTab._PageTitle then
-		homeTab._PageTitle.Text = "Welcome back"
+		homeTab._PageTitle.Text = "Dashboard"
 	end
 	if homeTab._PageEyebrow then
 		homeTab._PageEyebrow.Text = "HOME"
 	end
 
-	local page = homeTab.Page
 	local displayName = localPlayer.DisplayName or localPlayer.Name
 	local userName = localPlayer.Name
 
-	local function card(name: string, height: number?): Frame
-		local f = Helpers.CreateFrame({
-			Name = name,
-			Size = UDim2.new(1, -8, 0, height or 0),
-			AutomaticSize = if height then Enum.AutomaticSize.None else Enum.AutomaticSize.Y,
-			BackgroundColor3 = theme.ElementBackground or theme.Secondary,
-			BackgroundTransparency = 0.05,
-			Parent = page,
-		})
-		Helpers.Corner(f, Theme.CornerRadiusSmall or 10)
-		Helpers.Stroke(f, theme.Border, 1).Transparency = 0.25
-		Helpers.Padding(f, 14, 12)
-		return f
-	end
-
-	-- ========== WELCOME CARD ==========
-	local welcomeCard = card("WelcomeCard", 120)
-	local welcomeLabel = Helpers.CreateLabel({
-		Name = "Eyebrow",
-		Size = UDim2.new(1, -100, 0, 14),
-		Text = "WELCOME BACK",
-		Font = Theme.Font,
-		TextSize = 10,
-		TextColor3 = theme.TextMuted,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		Parent = welcomeCard,
+	-- All content goes through Sections (column system). No direct Page children.
+	local welcomeSec = homeTab:CreateSection({
+		Name = "Welcome",
+		Description = "Signed in as @" .. userName,
 	})
-	local nameLabel = Helpers.CreateLabel({
-		Name = "DisplayName",
-		Size = UDim2.new(1, -100, 0, 26),
-		Position = UDim2.fromOffset(0, 18),
-		Text = displayName,
-		Font = Theme.FontBold,
-		TextSize = 22,
-		TextColor3 = theme.Text,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		Parent = welcomeCard,
+	welcomeSec:CreateParagraph({
+		Title = "WELCOME BACK",
+		Content = displayName .. "\n@" .. userName,
 	})
-	local userLabel = Helpers.CreateLabel({
-		Name = "Username",
-		Size = UDim2.new(1, -100, 0, 16),
-		Position = UDim2.fromOffset(0, 46),
-		Text = "@" .. userName,
-		Font = Theme.Font,
-		TextSize = 12,
-		TextColor3 = theme.TextMuted,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		Parent = welcomeCard,
-	})
-
-	-- mini badges row
-	local badgeRow = Helpers.CreateFrame({
-		Name = "Badges",
-		Size = UDim2.new(1, -100, 0, 24),
-		Position = UDim2.fromOffset(0, 72),
-		BackgroundTransparency = 1,
-		Parent = welcomeCard,
-	})
-	local badgeLayout = Instance.new("UIListLayout")
-	badgeLayout.FillDirection = Enum.FillDirection.Horizontal
-	badgeLayout.Padding = UDim.new(0, 6)
-	badgeLayout.Parent = badgeRow
-
-	local function miniBadge(text: string)
-		local b = Helpers.CreateFrame({
-			Name = "B",
-			Size = UDim2.fromOffset(0, 22),
-			AutomaticSize = Enum.AutomaticSize.X,
-			BackgroundColor3 = theme.Background,
-			BackgroundTransparency = 0.2,
-			Parent = badgeRow,
-		})
-		Helpers.Corner(b, 6)
-		Helpers.Stroke(b, theme.Border, 1).Transparency = 0.3
-		Helpers.Padding(b, 8, 2)
-		Helpers.CreateLabel({
-			Size = UDim2.new(0, 0, 1, 0),
-			AutomaticSize = Enum.AutomaticSize.X,
-			Text = text,
-			Font = Theme.Font,
-			TextSize = 10,
-			TextColor3 = theme.Text,
-			Parent = b,
-		})
-	end
-	miniBadge("Vaxorin")
-	miniBadge(displayName)
+	local avatarUrl = ""
 	pcall(function()
-		miniBadge("Id " .. tostring(localPlayer.UserId))
-	end)
-
-	local avatar = Instance.new("ImageLabel")
-	avatar.Name = "Avatar"
-	avatar.Size = UDim2.fromOffset(84, 84)
-	avatar.Position = UDim2.new(1, -4, 0.5, 0)
-	avatar.AnchorPoint = Vector2.new(1, 0.5)
-	avatar.BackgroundColor3 = theme.Background
-	avatar.BorderSizePixel = 0
-	avatar.ScaleType = Enum.ScaleType.Crop
-	avatar.Parent = welcomeCard
-	Helpers.Corner(avatar, 12)
-	Helpers.Stroke(avatar, theme.Border, 1)
-	pcall(function()
-		avatar.Image = Players:GetUserThumbnailAsync(
+		avatarUrl = Players:GetUserThumbnailAsync(
 			localPlayer.UserId,
 			Enum.ThumbnailType.HeadShot,
-			Enum.ThumbnailSize.Size150x150
+			Enum.ThumbnailSize.Size100x100
 		)
 	end)
+	if avatarUrl ~= "" then
+		-- avatar shown via footer; keep welcome clean
+	end
 
-	-- ========== PERFORMANCE CARD (FPS / Ping bars) ==========
-	local perfCard = card("PerfCard", 130)
-	local fpsTitle = Helpers.CreateLabel({
-		Size = UDim2.new(0.5, -8, 0, 14),
-		Text = "FPS",
-		Font = Theme.Font,
-		TextSize = 11,
-		TextColor3 = theme.TextMuted,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		Parent = perfCard,
+	local perfSec = homeTab:CreateSection({
+		Name = "Performance",
+		Description = "Live client stats",
 	})
-	local pingTitle = Helpers.CreateLabel({
-		Size = UDim2.new(0.5, -8, 0, 14),
-		Position = UDim2.new(0.5, 8, 0, 0),
-		Text = "PING",
-		Font = Theme.Font,
-		TextSize = 11,
-		TextColor3 = theme.TextMuted,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		Parent = perfCard,
-	})
-	local fpsValueLbl = Helpers.CreateLabel({
-		Size = UDim2.new(0.5, -8, 0, 28),
-		Position = UDim2.fromOffset(0, 16),
-		Text = "—",
-		Font = Theme.FontBold,
-		TextSize = 26,
-		TextColor3 = Color3.fromRGB(120, 255, 160),
-		TextXAlignment = Enum.TextXAlignment.Left,
-		Parent = perfCard,
-	})
-	local pingValueLbl = Helpers.CreateLabel({
-		Size = UDim2.new(0.5, -8, 0, 28),
-		Position = UDim2.new(0.5, 8, 0, 16),
-		Text = "—",
-		Font = Theme.FontBold,
-		TextSize = 26,
-		TextColor3 = Color3.fromRGB(120, 255, 160),
-		TextXAlignment = Enum.TextXAlignment.Left,
-		Parent = perfCard,
-	})
-
-	local BAR_COUNT = 24
-	local function makeBars(parent: Instance, xScale: number, xOffset: number): { Frame }
-		local holder = Helpers.CreateFrame({
-			Name = "Bars",
-			Size = UDim2.new(0.5, -12, 0, 36),
-			Position = UDim2.new(xScale, xOffset, 0, 52),
+	-- Custom bar chart lives inside section.Inner (list layout)
+	local BAR_COUNT = 20
+	local function makeChart(parent: Instance, label: string): (TextLabel, { Frame })
+		local wrap = Helpers.CreateFrame({
+			Name = label .. "Chart",
+			Size = UDim2.new(1, 0, 0, 64),
 			BackgroundTransparency = 1,
 			Parent = parent,
+		})
+		local title = Helpers.CreateLabel({
+			Size = UDim2.new(0.5, 0, 0, 14),
+			Text = label,
+			Font = Theme.Font,
+			TextSize = 10,
+			TextColor3 = theme.TextMuted,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Parent = wrap,
+		})
+		local valueLbl = Helpers.CreateLabel({
+			Size = UDim2.new(0.5, 0, 0, 22),
+			Position = UDim2.fromOffset(0, 14),
+			Text = "—",
+			Font = Theme.FontBold,
+			TextSize = 20,
+			TextColor3 = Color3.fromRGB(120, 255, 160),
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Parent = wrap,
+		})
+		local barsHold = Helpers.CreateFrame({
+			Size = UDim2.new(1, 0, 0, 28),
+			Position = UDim2.fromOffset(0, 38),
+			BackgroundTransparency = 1,
+			Parent = wrap,
 		})
 		local lay = Instance.new("UIListLayout")
 		lay.FillDirection = Enum.FillDirection.Horizontal
 		lay.VerticalAlignment = Enum.VerticalAlignment.Bottom
 		lay.Padding = UDim.new(0, 2)
-		lay.Parent = holder
+		lay.Parent = barsHold
 		local bars = {}
 		for i = 1, BAR_COUNT do
 			local bar = Instance.new("Frame")
-			bar.Name = "B" .. i
-			bar.Size = UDim2.new(0, 6, 0, 4)
+			bar.Size = UDim2.new(0, 7, 0, 4)
 			bar.BorderSizePixel = 0
 			bar.BackgroundColor3 = theme.Accent
-			bar.BackgroundTransparency = 0.35
-			bar.Parent = holder
+			bar.BackgroundTransparency = 0.4
+			bar.Parent = barsHold
 			Helpers.Corner(bar, 2)
 			bars[i] = bar
 		end
-		return bars
+		return valueLbl, bars
 	end
-	local fpsBars = makeBars(perfCard, 0, 0)
-	local pingBars = makeBars(perfCard, 0.5, 8)
 
-	local playersLbl = Helpers.CreateLabel({
-		Size = UDim2.new(0.5, -8, 0, 16),
-		Position = UDim2.fromOffset(0, 96),
-		Text = "0/0  PLAYERS",
+	local fpsValueLbl, fpsBars = makeChart(welcomeSec.Inner or welcomeSec.Instance, "FPS")
+	-- Prefer Performance section inner
+	if perfSec.Inner then
+		fpsValueLbl.Parent = perfSec.Inner
+		fpsBars[1].Parent.Parent = perfSec.Inner
+	end
+	-- Remake cleanly parented to perfSec.Inner only
+	for _, c in (perfSec.Inner or perfSec.Instance):GetChildren() do
+		if c.Name == "FPSChart" or c.Name == "PINGChart" then
+			c:Destroy()
+		end
+	end
+	-- Destroy the misplaced one from welcome
+	for _, c in (welcomeSec.Inner or welcomeSec.Instance):GetChildren() do
+		if c.Name == "FPSChart" then
+			c:Destroy()
+		end
+	end
+
+	fpsValueLbl, fpsBars = makeChart(perfSec.Inner, "FPS")
+	local pingValueLbl, pingBars = makeChart(perfSec.Inner, "PING")
+
+	local metaLbl = Helpers.CreateLabel({
+		Name = "Meta",
+		Size = UDim2.new(1, 0, 0, 18),
+		Text = "0/0 players · 0s session",
 		Font = Theme.Font,
 		TextSize = 11,
 		TextColor3 = theme.TextMuted,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Parent = perfCard,
-	})
-	local sessionLbl = Helpers.CreateLabel({
-		Size = UDim2.new(0.5, -8, 0, 16),
-		Position = UDim2.new(0.5, 8, 0, 96),
-		Text = "0s  SESSION",
-		Font = Theme.Font,
-		TextSize = 11,
-		TextColor3 = theme.TextMuted,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		Parent = perfCard,
+		Parent = perfSec.Inner,
 	})
 
-	-- ========== GAME CARD ==========
-	local gameCard = card("GameCard", 0)
+	local gameSec = homeTab:CreateSection({
+		Name = "Server",
+		Description = "Current place",
+	})
 	local gameName = "Unknown"
 	local creatorName = ""
 	pcall(function()
@@ -3184,105 +3091,78 @@ function Window:_createHomeTab()
 			creatorName = (info.Creator and info.Creator.Name) or ""
 		end
 	end)
-	Helpers.CreateLabel({
-		Size = UDim2.new(1, 0, 0, 18),
-		Text = gameName,
-		Font = Theme.FontBold,
-		TextSize = 14,
-		TextColor3 = theme.Text,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextTruncate = Enum.TextTruncate.AtEnd,
-		Parent = gameCard,
+	gameSec:CreateParagraph({
+		Title = gameName,
+		Content = (creatorName ~= "" and ("by " .. creatorName) or "In-game")
+			.. string.format("\nPlace %s", tostring(game.PlaceId)),
 	})
-	Helpers.CreateLabel({
-		Size = UDim2.new(1, 0, 0, 16),
-		Position = UDim2.fromOffset(0, 20),
-		Text = (creatorName ~= "" and ("by " .. creatorName .. "  ·  ") or "")
-			.. string.format("%d/%d players", #Players:GetPlayers(), Players.MaxPlayers),
-		Font = Theme.Font,
-		TextSize = 11,
-		TextColor3 = theme.TextMuted,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		Parent = gameCard,
+	gameSec:CreateButton({
+		Name = "Rejoin",
+		Callback = function()
+			pcall(function()
+				game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, game.JobId, localPlayer)
+			end)
+		end,
+	})
+	gameSec:CreateButton({
+		Name = "Server Hop",
+		Callback = function()
+			pcall(function()
+				game:GetService("TeleportService"):Teleport(game.PlaceId, localPlayer)
+			end)
+		end,
+	})
+	gameSec:CreateButton({
+		Name = "Copy Job ID",
+		Callback = function()
+			if setclipboard then pcall(setclipboard, game.JobId) end
+			self:Notify({ Title = "JobId", Content = "Copied", Type = "Info", Duration = 2 })
+		end,
+	})
+	gameSec:CreateButton({
+		Name = "Copy Place ID",
+		Callback = function()
+			if setclipboard then pcall(setclipboard, tostring(game.PlaceId)) end
+			self:Notify({ Title = "PlaceId", Content = "Copied", Type = "Info", Duration = 2 })
+		end,
 	})
 
-	local actionsRow = Helpers.CreateFrame({
-		Name = "Actions",
-		Size = UDim2.new(1, 0, 0, 40),
-		Position = UDim2.fromOffset(0, 48),
-		BackgroundTransparency = 1,
-		Parent = gameCard,
-	})
-	local actLay = Instance.new("UIListLayout")
-	actLay.FillDirection = Enum.FillDirection.Horizontal
-	actLay.Padding = UDim.new(0, 8)
-	actLay.Parent = actionsRow
-
-	local function actionBtn(text: string, cb: () -> ())
-		local btn = Instance.new("TextButton")
-		btn.Size = UDim2.new(0.25, -6, 0, 36)
-		btn.BackgroundColor3 = theme.Background
-		btn.BackgroundTransparency = 0.15
-		btn.Text = text
-		btn.Font = Theme.FontBold
-		btn.TextSize = 11
-		btn.TextColor3 = theme.Text
-		btn.AutoButtonColor = false
-		btn.Parent = actionsRow
-		Helpers.Corner(btn, 8)
-		Helpers.Stroke(btn, theme.Border, 1).Transparency = 0.35
-		btn.MouseButton1Click:Connect(function()
-			pcall(cb)
-		end)
-		btn.MouseEnter:Connect(function()
-			Tween.Play(btn, { BackgroundColor3 = theme.SurfaceHover or theme.Secondary }, { Time = 0.12 })
-		end)
-		btn.MouseLeave:Connect(function()
-			Tween.Play(btn, { BackgroundColor3 = theme.Background }, { Time = 0.12 })
-		end)
-	end
-	actionBtn("Rejoin", function()
-		game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, game.JobId, localPlayer)
-	end)
-	actionBtn("Hop", function()
-		game:GetService("TeleportService"):Teleport(game.PlaceId, localPlayer)
-	end)
-	actionBtn("Job ID", function()
-		if setclipboard then pcall(setclipboard, game.JobId) end
-		self:Notify({ Title = "JobId", Content = "Copied", Type = "Info", Duration = 2 })
-	end)
-	actionBtn("Place ID", function()
-		if setclipboard then pcall(setclipboard, tostring(game.PlaceId)) end
-		self:Notify({ Title = "PlaceId", Content = "Copied", Type = "Info", Duration = 2 })
-	end)
-
-	-- spacer so AutomaticSize includes actions
-	local spacer = Instance.new("Frame")
-	spacer.BackgroundTransparency = 1
-	spacer.Size = UDim2.new(1, 0, 0, 92)
-	spacer.Parent = gameCard
-
-	-- ========== FAVORITES ==========
-	local favSection = homeTab:CreateSection({
+	local favSec = homeTab:CreateSection({
 		Name = "Favorites",
-		Description = "Pinned flags (library:ToggleFavorite)",
+		Description = "Star any toggle to pin it here",
 	})
-	local favParagraph = favSection:CreateParagraph({
+	local favParagraph = favSec:CreateParagraph({
 		Title = "Pinned",
-		Content = "No favorites yet. Call Vaxorin:ToggleFavorite(\"Flag.Name\") from your script.",
+		Content = "Tap the ★ on a toggle to favorite it.",
 	})
 
-	-- ========== SCRIPT HEALTH ==========
-	local healthSection = homeTab:CreateSection({
+	local healthSec = homeTab:CreateSection({
 		Name = "Script Health",
-		Description = "Recent errors & config state",
+		Description = "Errors & config",
 	})
-	local healthParagraph = healthSection:CreateParagraph({
+	local healthParagraph = healthSec:CreateParagraph({
 		Title = "Status",
 		Content = "Healthy · no recent errors",
 	})
 
-	-- Live loops: FPS history, ping, favorites, health
+	-- Force single-column on Home (cleaner dashboard)
+	if homeTab._UpdateColumns then
+		task.defer(function()
+			if homeTab._RightColumn then
+				homeTab._RightColumn.Visible = false
+			end
+			if homeTab._LeftColumn then
+				homeTab._LeftColumn.Size = UDim2.new(1, 0, 0, 0)
+			end
+			for _, section in ipairs(homeTab._Sections or {}) do
+				if section and section.Container and homeTab._LeftColumn then
+					section.Container.Parent = homeTab._LeftColumn
+					section.Container.Size = UDim2.new(1, 0, 0, 0)
+				end
+			end
+		end)
+	end
+
 	local fpsHistory = table.create(BAR_COUNT, 0)
 	local pingHistory = table.create(BAR_COUNT, 0)
 	local sessionStart = os.clock()
@@ -3299,12 +3179,12 @@ function Window:_createHomeTab()
 		end
 	end))
 
-	local function pushHistory(hist: { number }, value: number)
+	local function pushHistory(hist, value)
 		table.remove(hist, 1)
 		table.insert(hist, value)
 	end
 
-	local function paintBars(bars: { Frame }, hist: { number }, maxRef: number, goodColor: Color3)
+	local function paintBars(bars, hist, maxRef, color)
 		local maxV = maxRef
 		for _, v in hist do
 			if v > maxV then maxV = v end
@@ -3312,10 +3192,10 @@ function Window:_createHomeTab()
 		if maxV < 1 then maxV = 1 end
 		for i, bar in bars do
 			local v = hist[i] or 0
-			local h = math.clamp(math.floor((v / maxV) * 34 + 0.5), 3, 36)
-			bar.Size = UDim2.new(0, 6, 0, h)
-			bar.BackgroundColor3 = goodColor
-			bar.BackgroundTransparency = 0.15 + (1 - v / maxV) * 0.45
+			local h = math.clamp(math.floor((v / maxV) * 26 + 0.5), 3, 28)
+			bar.Size = UDim2.new(0, 7, 0, h)
+			bar.BackgroundColor3 = color
+			bar.BackgroundTransparency = 0.15 + (1 - v / maxV) * 0.5
 		end
 	end
 
@@ -3337,30 +3217,35 @@ function Window:_createHomeTab()
 			pushHistory(fpsHistory, fpsValue)
 			pushHistory(pingHistory, ping)
 			paintBars(fpsBars, fpsHistory, 60, Color3.fromRGB(120, 255, 160))
-			paintBars(pingBars, pingHistory, 120, Color3.fromRGB(120, 200, 255))
+			paintBars(pingBars, pingHistory, 120, Color3.fromRGB(100, 190, 255))
 
-			fpsValueLbl.Text = tostring(fpsValue)
-			pingValueLbl.Text = tostring(ping) .. "ms"
-			playersLbl.Text = string.format("%d/%d  PLAYERS", #Players:GetPlayers(), Players.MaxPlayers)
+			if fpsValueLbl then fpsValueLbl.Text = tostring(fpsValue) end
+			if pingValueLbl then pingValueLbl.Text = tostring(ping) .. " ms" end
 			local sec = math.floor(os.clock() - sessionStart)
-			sessionLbl.Text = string.format("%dm %02ds  SESSION", math.floor(sec / 60), sec % 60)
+			if metaLbl then
+				metaLbl.Text = string.format(
+					"%d/%d players · %dm %02ds session",
+					#Players:GetPlayers(),
+					Players.MaxPlayers,
+					math.floor(sec / 60),
+					sec % 60
+				)
+			end
 
-			-- Favorites list
 			if library.GetFavorites and favParagraph and favParagraph.Set then
 				local favs = library:GetFavorites()
 				if #favs == 0 then
-					favParagraph:Set("No favorites yet. Use Vaxorin:ToggleFavorite(\"Your.Flag\").")
+					favParagraph:Set("Tap the ★ on a toggle to pin it here.")
 				else
 					local lines = {}
 					for _, f in favs do
 						local val = library.Flags and library.Flags[f]
-						table.insert(lines, `{f}  =  {tostring(val)}`)
+						table.insert(lines, `★  {f}  =  {tostring(val)}`)
 					end
-					favParagraph:Set(table.concat(lines, "\\n"))
+					favParagraph:Set(table.concat(lines, "\n"))
 				end
 			end
 
-			-- Health
 			if library.GetHealth and healthParagraph and healthParagraph.Set then
 				local h = library:GetHealth()
 				local errs = h.errors or {}
@@ -3369,10 +3254,9 @@ function Window:_createHomeTab()
 				else
 					local lines = {}
 					for i = 1, math.min(4, #errs) do
-						local e = errs[i]
-						table.insert(lines, `{e.Source}: {e.Message}`)
+						table.insert(lines, `{errs[i].Source}: {errs[i].Message}`)
 					end
-					healthParagraph:Set(table.concat(lines, "\\n"))
+					healthParagraph:Set(table.concat(lines, "\n"))
 				end
 			end
 
