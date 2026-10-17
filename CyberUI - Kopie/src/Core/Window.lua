@@ -987,7 +987,9 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		{ Text = VERSION, Color = library.Theme.AccentAlt },
 	}
 
+	self._TopBadges = {}
 	for i, badge in badgeData do
+		local followTheme = badge.Color == nil
 		local color = badge.Color or library.Theme.Accent
 		local pill = Helpers.CreateFrame({
 			Name = "Badge" .. i,
@@ -998,10 +1000,13 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 			Parent = badgeHolder,
 		})
 		pill.ZIndex = 32
+		pill:SetAttribute("FollowTheme", followTheme)
 		Helpers.Corner(pill, 7)
 		local badgeStroke = Helpers.Stroke(pill, color, 1)
+		badgeStroke.Name = "BadgeStroke"
 		badgeStroke.Transparency = 0.08
 		local badgeGlow = Helpers.Stroke(pill, color, 2)
+		badgeGlow.Name = "BadgeGlow"
 		badgeGlow.Transparency = 0.88
 		Helpers.Padding(pill, 9, 4)
 		local badgeLabel = Helpers.CreateLabel({
@@ -1016,6 +1021,14 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 			Parent = pill,
 		})
 		badgeLabel.ZIndex = 33
+		table.insert(self._TopBadges, {
+			Pill = pill,
+			Label = badgeLabel,
+			Stroke = badgeStroke,
+			Glow = badgeGlow,
+			FollowTheme = followTheme,
+			FixedColor = badge.Color,
+		})
 	end
 
 	local minimizeButton, closeButton
@@ -2507,12 +2520,37 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 			end
 		end
 
-		for _, child in badgeHolder:GetChildren() do
-			if child:IsA("Frame") and child.Name:match("^Badge") then
-				local label = child:FindFirstChild("Label")
-				local color = child.BackgroundColor3
-				if label then
-					label.TextColor3 = color
+		-- Top-bar badges: follow Accent (unless a fixed Color was passed in CreateWindow)
+		if self._TopBadges then
+			for i, ref in self._TopBadges do
+				local color = if ref.FollowTheme then library.Theme.Accent else (ref.FixedColor or library.Theme.Accent)
+				-- second badge can use AccentAlt when following theme
+				if ref.FollowTheme and i == 2 and library.Theme.AccentAlt then
+					color = library.Theme.AccentAlt
+				end
+				Tween.Play(ref.Pill, { BackgroundColor3 = color }, { Time = 0.22 })
+				Tween.Play(ref.Label, { TextColor3 = color }, { Time = 0.22 })
+				if ref.Stroke then
+					Tween.Play(ref.Stroke, { Color = color }, { Time = 0.22 })
+				end
+				if ref.Glow then
+					Tween.Play(ref.Glow, { Color = color }, { Time = 0.22 })
+				end
+			end
+		else
+			for _, child in badgeHolder:GetChildren() do
+				if child:IsA("Frame") and child.Name:match("^Badge") then
+					local label = child:FindFirstChild("Label")
+					local color = library.Theme.Accent
+					Tween.Play(child, { BackgroundColor3 = color }, { Time = 0.22 })
+					if label then
+						Tween.Play(label, { TextColor3 = color }, { Time = 0.22 })
+					end
+					for _, d in child:GetChildren() do
+						if d:IsA("UIStroke") then
+							Tween.Play(d, { Color = color }, { Time = 0.22 })
+						end
+					end
 				end
 			end
 		end
