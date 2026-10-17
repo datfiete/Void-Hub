@@ -9,8 +9,17 @@ local Input = require(script.Parent.Parent.Elements.Input)
 local Keybind = require(script.Parent.Parent.Elements.Keybind)
 local ColorPicker = require(script.Parent.Parent.Elements.ColorPicker)
 local Paragraph = require(script.Parent.Parent.Elements.Paragraph)
+local WorldRadar = require(script.Parent.WorldRadar)
 local Maid = require(script.Parent.Parent.Utils.Maid)
 local Helpers = require(script.Parent.Parent.Utils.Helpers)
+local Card = require(script.Parent.Parent.Elements.Card)
+local Badge = require(script.Parent.Parent.Elements.Badge)
+local Progress = require(script.Parent.Parent.Elements.Progress)
+local Status = require(script.Parent.Parent.Elements.Status)
+local Notice = require(script.Parent.Parent.Elements.Notice)
+local Stat = require(script.Parent.Parent.Elements.Stat)
+local Divider = require(script.Parent.Parent.Elements.Divider)
+local IconButton = require(script.Parent.Parent.Elements.IconButton)
 
 local Section = {}
 Section.__index = Section
@@ -24,13 +33,23 @@ export type SectionHandle = {
     CreateKeybind: (self: SectionHandle, data: any) -> any,
     CreateColorPicker: (self: SectionHandle, data: any) -> any,
     CreateParagraph: (self: SectionHandle, data: any) -> any,
+    CreateWorldRadar: (self: SectionHandle, data: any?) -> any,
+    CreateCard: (self: SectionHandle, data: any) -> any,
+    CreateBadge: (self: SectionHandle, data: any) -> any,
+    CreateProgress: (self: SectionHandle, data: any) -> any,
+    CreateStatus: (self: SectionHandle, data: any) -> any,
+    CreateNotice: (self: SectionHandle, data: any) -> any,
+    CreateStat: (self: SectionHandle, data: any) -> any,
+    CreateDivider: (self: SectionHandle, data: any?) -> any,
+    CreateIconButton: (self: SectionHandle, data: any?) -> any,
     Destroy: (self: SectionHandle) -> (),
 }
 
-function Section.new(tab: any, name: string?): SectionHandle
+function Section.new(tab: any, name: string?, description: string?): SectionHandle
     local self = setmetatable({
         Tab = tab,
         _Name = name,
+        _Description = description,
         _Maid = Maid.new(),
         _Elements = {} :: { any },
     }, Section)
@@ -56,11 +75,13 @@ function Section.new(tab: any, name: string?): SectionHandle
     Helpers.Corner(inner, Theme.CornerRadius)
     local innerStroke = Helpers.Stroke(inner, theme.Border, 1)
     innerStroke.Transparency = 0.16
+    self._InnerStroke = innerStroke
     -- Subtle accent light without inserting a GuiObject into the section's
     -- UIListLayout. Image-based glow children would be measured as layout
     -- items and create the giant empty boxes seen in earlier builds.
     local innerGlow = Helpers.Stroke(inner, theme.Accent, 2)
     innerGlow.Transparency = 0.90
+    self._InnerGlow = innerGlow
     Helpers.Padding(inner, 16, 16)
 
     local layout = Helpers.ListLayout(inner, 10)
@@ -106,7 +127,7 @@ function Section.new(tab: any, name: string?): SectionHandle
             Name = "HeaderDescription",
             Size = UDim2.new(1, -20, 0, 18),
             Position = UDim2.fromOffset(14, 25),
-            Text = "Configure " .. string.lower(name),
+            Text = description or ("Configure " .. string.lower(name)),
             Font = Theme.Font,
             TextSize = 12,
             TextColor3 = theme.TextMuted,
@@ -138,6 +159,7 @@ function Section.new(tab: any, name: string?): SectionHandle
     self.Header = header
     self._HeaderLabel = headerLabel
     self._HeaderDescription = headerDescription
+    self._Description = description
     self._HeaderAccent = headerAccent
     self._InnerGlow = innerGlow
     self._Maid:Give(container)
@@ -145,12 +167,21 @@ function Section.new(tab: any, name: string?): SectionHandle
     return self :: any
 end
 
+function Section:SetDescription(description: string)
+    self._Description = description
+    if self._HeaderDescription then
+        self._HeaderDescription.Text = description or ""
+    end
+end
+
 function Section:RefreshTheme()
     local theme = self.Tab.Window.Library.Theme
     self.Inner.BackgroundColor3 = theme.Surface
-    local stroke = self.Inner:FindFirstChildOfClass("UIStroke")
-    if stroke then
-        stroke.Color = theme.Border
+    if self._InnerStroke then
+        self._InnerStroke.Color = theme.Border
+    end
+    if self._InnerGlow then
+        self._InnerGlow.Color = theme.Accent
     end
     if self._HeaderLabel then
         self._HeaderLabel.TextColor3 = theme.Text
@@ -161,15 +192,19 @@ function Section:RefreshTheme()
     if self._HeaderAccent then
         self._HeaderAccent.BackgroundColor3 = theme.Accent
     end
-    if self._InnerGlow then
-        self._InnerGlow.Color = theme.Accent
-    end
     for _, element in self._Elements do
         if element.RefreshTheme then
-            element:RefreshTheme()
+            pcall(function()
+                element:RefreshTheme()
+            end)
         end
         if element._VaxorinGlow then
-            element._VaxorinGlow.Color = theme.Accent
+            local g = element._VaxorinGlow
+            if g:IsA("ImageLabel") then
+                g.ImageColor3 = theme.Accent
+            elseif g:IsA("UIStroke") then
+                g.Color = theme.Accent
+            end
         end
     end
 end
@@ -199,6 +234,16 @@ function Section:CreateInput(data: any) return self:_track(Input.new(self, data)
 function Section:CreateKeybind(data: any) return self:_track(Keybind.new(self, data)) end
 function Section:CreateColorPicker(data: any) return self:_track(ColorPicker.new(self, data)) end
 function Section:CreateParagraph(data: any) return self:_track(Paragraph.new(self, data)) end
+function Section:CreateWorldRadar(data: any?) return self:_track(WorldRadar.new(self, data or {})) end
+
+function Section:CreateCard(data: any) return self:_track(Card.new(self, data or {})) end
+function Section:CreateBadge(data: any) return self:_track(Badge.new(self, data or {})) end
+function Section:CreateProgress(data: any) return self:_track(Progress.new(self, data or {})) end
+function Section:CreateStatus(data: any) return self:_track(Status.new(self, data or {})) end
+function Section:CreateNotice(data: any) return self:_track(Notice.new(self, data or {})) end
+function Section:CreateStat(data: any) return self:_track(Stat.new(self, data or {})) end
+function Section:CreateDivider(data: any?) return self:_track(Divider.new(self, data or {})) end
+function Section:CreateIconButton(data: any?) return self:_track(IconButton.new(self, data or {})) end
 function Section:CreateLabel(data: any) return self:CreateParagraph(data) end
 function Section:CreateInfo(data: any) return self:CreateParagraph(data) end
 

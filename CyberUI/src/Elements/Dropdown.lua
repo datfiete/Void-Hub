@@ -30,6 +30,10 @@ function Dropdown.new(section: any, data: DropdownOptions): DropdownHandle
 	local multiple = data.MultipleOptions == true
 	local initial = data.CurrentOption or data.Default or options[1] or ""
 	local library = section.Tab.Window.Library
+	local savedRaw = nil
+	if data.Flag and library:_shouldSaveFlag(data.Flag, data.Save) and library.Config then
+		savedRaw = library.Config:Get(`Flags.{data.Flag}`)
+	end
 	initial = library:_getSavedFlag(data.Flag, initial, data.Save)
 
 	local initialValue
@@ -104,16 +108,20 @@ function Dropdown.new(section: any, data: DropdownOptions): DropdownHandle
 		Parent = header,
 	})
 
+	-- Chevron: center anchor so rotation does not orbit oddly
 	local arrow = Helpers.CreateLabel({
 		Name = "Arrow",
 		Size = UDim2.fromOffset(16, 16),
-		Position = UDim2.new(1, -12, 0.5, 0),
-		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -18, 0.5, 0),
+		AnchorPoint = Vector2.new(0.5, 0.5),
 		Text = "▼",
-		TextSize = 12,
+		TextSize = 10,
 		TextColor3 = library.Theme.TextMuted,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextYAlignment = Enum.TextYAlignment.Center,
 		Parent = header,
 	})
+	arrow.Rotation = 0
 
 	local list = Helpers.CreateFrame({
 		Name = "List",
@@ -121,18 +129,34 @@ function Dropdown.new(section: any, data: DropdownOptions): DropdownHandle
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundColor3 = library.Theme.ElementBackground or library.Theme.Background,
 		Visible = false,
+		ZIndex = 5,
 		Parent = container,
 	})
 	Helpers.Corner(list, Theme.CornerRadiusSmall)
-	Helpers.Stroke(list, library.Theme.Border, 1)
+	local listStroke = Helpers.Stroke(list, library.Theme.Border, 1.2)
+	listStroke.Transparency = 0.15
+	local listGlow = Helpers.Stroke(list, library.Theme.Accent, 2)
+	listGlow.Transparency = 0.92
+	listGlow.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 	Helpers.Padding(list, 6)
-	Helpers.ListLayout(list, 4)
+	local listLayout = Helpers.ListLayout(list, 4)
+	-- Only option buttons participate in layout (ignore any non-button chrome)
+	listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+
+	local listScale = Instance.new("UIScale")
+	listScale.Name = "OpenScale"
+	listScale.Scale = 1
+	listScale.Parent = list
 
 	self.Instance = container
 	self.Header = header
 	self.SelectedLabel = selectedLabel
 	self.List = list
 	self.Arrow = arrow
+	self._ListStroke = listStroke
+	self._ListGlow = listGlow
+	self._ListShadow = nil
+	self._ListScale = listScale
 
 	function self:_clearOptions()
 		for _, optionMaid in self._OptionMaids do
@@ -169,6 +193,7 @@ function Dropdown.new(section: any, data: DropdownOptions): DropdownHandle
 				Parent = list,
 			})
 			Helpers.Corner(button, Theme.CornerRadiusSmall)
+			button.LayoutOrder = #self._OptionMaids
 			optionMaid:Give(button)
 
 			optionMaid:GiveTask(button.MouseEnter:Connect(function()
@@ -197,8 +222,13 @@ function Dropdown.new(section: any, data: DropdownOptions): DropdownHandle
 					self:_buildOptions()
 					library:_setFlag(data.Flag, selectedValues, data.Save)
 					self._Changed:Fire(selectedValues)
-					if data.Callback then
-						task.spawn(data.Callback, selectedValues)
+					if type(data.Callback) == "function" then
+						task.spawn(function()
+							local ok, err = pcall(data.Callback, selectedValues)
+							if not ok then
+								warn("[Vaxorin] Dropdown callback error:", err)
+							end
+						end)
 					end
 				else
 					self:_commit(option)
@@ -210,8 +240,45 @@ function Dropdown.new(section: any, data: DropdownOptions): DropdownHandle
 
 	function self:SetOpen(open: boolean)
 		self._Open = open
-		list.Visible = open
-		arrow.Text = if open then "▲" else "▼"
+		local theme = library.Theme
+		if open then
+			list.Visible = true
+			listScale.Scale = 0.97
+			Tween.Play(listScale, { Scale = 1 }, {
+				Time = 0.14,
+				EasingStyle = Enum.EasingStyle.Quint,
+				EasingDirection = Enum.EasingDirection.Out,
+			})
+			-- One tween for rotation + color (center-pivoted chevron)
+			Tween.Play(arrow, {
+				Rotation = 180,
+				TextColor3 = theme.Accent,
+			}, {
+				Time = 0.16,
+				EasingStyle = Enum.EasingStyle.Quint,
+				EasingDirection = Enum.EasingDirection.Out,
+			})
+			Tween.Play(listStroke, { Color = theme.Accent, Transparency = 0.35 }, { Time = 0.14 })
+			Tween.Play(listGlow, { Color = theme.Accent, Transparency = 0.78 }, { Time = 0.14 })
+		else
+			Tween.Play(arrow, {
+				Rotation = 0,
+				TextColor3 = theme.TextMuted,
+			}, {
+				Time = 0.14,
+				EasingStyle = Enum.EasingStyle.Quint,
+				EasingDirection = Enum.EasingDirection.Out,
+			})
+			Tween.Play(listScale, { Scale = 0.98 }, { Time = 0.08 })
+			Tween.Play(listStroke, { Color = theme.Border, Transparency = 0.15 }, { Time = 0.12 })
+			Tween.Play(listGlow, { Transparency = 0.92 }, { Time = 0.12 })
+			task.delay(0.09, function()
+				if not self._Open then
+					list.Visible = false
+					listScale.Scale = 1
+				end
+			end)
+		end
 	end
 
 	function self:_commit(value: string, fireCallback: boolean?)
@@ -225,8 +292,13 @@ function Dropdown.new(section: any, data: DropdownOptions): DropdownHandle
 		self._Changed:Fire(value)
 		self:_buildOptions()
 
-		if fireCallback ~= false and data.Callback then
-			task.spawn(data.Callback, value)
+		if fireCallback ~= false and type(data.Callback) == "function" then
+			task.spawn(function()
+				local ok, err = pcall(data.Callback, value)
+				if not ok then
+					warn("[Vaxorin] Dropdown callback error:", err)
+				end
+			end)
 		end
 	end
 
@@ -237,25 +309,53 @@ function Dropdown.new(section: any, data: DropdownOptions): DropdownHandle
 
 	if data.Flag then
 		library:_setFlag(data.Flag, self._Value, data.Save)
+		if library._bindFlagControl then library:_bindFlagControl(data.Flag, self) end
 	end
 
 	self:_updateSelectedLabel()
 	self:_buildOptions()
+
+	if type(data.Callback) == "function" and data.FireOnLoad ~= false and savedRaw ~= nil then
+		task.defer(function()
+			local ok, err = pcall(data.Callback, self._Value)
+			if not ok then
+				warn("[Vaxorin] Dropdown FireOnLoad error:", err)
+			end
+		end)
+	end
 
 	return self :: any
 end
 
 function Dropdown:RefreshTheme()
 	local theme = self._Section.Tab.Window.Library.Theme
-	self.Header.BackgroundColor3 = theme.Background
+	local bg = theme.ElementBackground or theme.Background
+	self.Header.BackgroundColor3 = bg
 	self.Header.TextColor3 = theme.Text
-	self.List.BackgroundColor3 = theme.Background
+	self.List.BackgroundColor3 = bg
+	local headerStroke = self.Header:FindFirstChildOfClass("UIStroke")
+	if headerStroke then headerStroke.Color = theme.Border end
+	if self._ListStroke then
+		if self._Open then
+			self._ListStroke.Color = theme.Accent
+			self._ListStroke.Transparency = 0.35
+		else
+			self._ListStroke.Color = theme.Border
+			self._ListStroke.Transparency = 0.15
+		end
+	else
+		local listStroke = self.List:FindFirstChildOfClass("UIStroke")
+		if listStroke then listStroke.Color = theme.Border end
+	end
 	self.SelectedLabel.TextColor3 = theme.Accent
-	self.Arrow.TextColor3 = theme.TextMuted
+	if self.Arrow then
+		self.Arrow.TextColor3 = if self._Open then theme.Accent else theme.TextMuted
+	end
+	if self.Label then self.Label.TextColor3 = theme.Text end
 	self:_buildOptions()
 end
 
-function Dropdown:Set(value: string | { string })
+function Dropdown:Set(value: string | { string }, fireCallback: boolean?)
 	if self._Multiple then
 		if type(value) == "table" then
 			self._Value = value
@@ -267,7 +367,7 @@ function Dropdown:Set(value: string | { string })
 		return
 	end
 
-	self:_commit(value, false)
+	self:_commit(value, fireCallback == true)
 end
 
 function Dropdown:Get(): string | { string }

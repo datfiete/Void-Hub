@@ -41,6 +41,8 @@ function Paragraph.new(section: any, data: ParagraphOptions): ParagraphHandle
 	Helpers.Corner(row, Theme.CornerRadiusSmall)
 	local rowStroke = Helpers.Stroke(row, library.Theme.Border, 1)
 	local rowGlow = Helpers.Stroke(row, library.Theme.Accent, 2)
+	self._RowStroke = rowStroke
+	self._RowGlow = rowGlow
 	rowGlow.Transparency = 0.95
 	rowStroke.Transparency = 0.18
 	Helpers.Padding(row, 12)
@@ -79,9 +81,25 @@ end
 
 function Paragraph:RefreshTheme()
 	local theme = self._Section.Tab.Window.Library.Theme
-	self.Instance.BackgroundColor3 = theme.ElementBackground or theme.Background
-	self.TitleLabel.TextColor3 = theme.Text
-	self.ContentLabel.TextColor3 = theme.TextMuted
+	local Tween = require(script.Parent.Parent.Utils.Tween)
+	Tween.Play(self.Instance, { BackgroundColor3 = theme.ElementBackground or theme.Background }, { Time = 0.22 })
+	Tween.Play(self.TitleLabel, { TextColor3 = theme.Text }, { Time = 0.22 })
+	Tween.Play(self.ContentLabel, { TextColor3 = theme.TextMuted }, { Time = 0.22 })
+	if self._RowStroke then
+		Tween.Play(self._RowStroke, { Color = theme.Border }, { Time = 0.22 })
+	end
+	if self._RowGlow then
+		Tween.Play(self._RowGlow, { Color = theme.Accent }, { Time = 0.22 })
+	end
+	for _, d in self.Instance:GetDescendants() do
+		if d:IsA("UIStroke") then
+			if d.Transparency > 0.5 then
+				Tween.Play(d, { Color = theme.Accent }, { Time = 0.22 })
+			else
+				Tween.Play(d, { Color = theme.Border }, { Time = 0.22 })
+			end
+		end
+	end
 end
 
 function Paragraph:Set(content: string)

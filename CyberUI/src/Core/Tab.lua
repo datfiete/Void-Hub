@@ -5,24 +5,12 @@ local Section = require(script.Parent.Section)
 local Maid = require(script.Parent.Parent.Utils.Maid)
 local Helpers = require(script.Parent.Parent.Utils.Helpers)
 local Tween = require(script.Parent.Parent.Utils.Tween)
+local Tween = require(script.Parent.Parent.Utils.Tween)
 
 local Tab = {}
 Tab.__index = Tab
 
-local iconMap = {
-    ["main"] = "M",
-    ["home"] = "M",
-    ["player"] = "P",
-    ["combat"] = "C",
-    ["visuals"] = "V",
-    ["world"] = "W",
-    ["misc"] = "X",
-    ["settings"] = "S",
-    ["options"] = "O",
-    ["farm"] = "F",
-    ["aim assist"] = "A",
-}
-
+local Icons = require(script.Parent.Parent.Assets.Icons)
 
 local function cleanDisplayName(name: string): string
     local cleaned = name
@@ -38,11 +26,77 @@ local function cleanDisplayName(name: string): string
     return cleaned ~= "" and cleaned or name
 end
 
-local function getIcon(name: string): string
-    local visible = cleanDisplayName(name)
-    local key = string.lower(visible):gsub("^[%s%p]+", ""):gsub("[%s%p]+$", "")
-    return iconMap[key] or string.upper(string.sub(visible, 1, 1))
+local function normalizeIconKey(raw: string): string
+    local key = string.lower(raw)
+    key = key:gsub("^%s+", ""):gsub("%s+$", "")
+    key = key:gsub("%%", " percent")
+    key = key:gsub("[%s%-]+", "_")
+    key = key:gsub("[^%w_]", "")
+    key = key:gsub("_+", "_")
+    key = key:gsub("^_", ""):gsub("_$", "")
+    return key
 end
+
+local function getIconAsset(name: string): string?
+    local visible = cleanDisplayName(name)
+
+    -- Direct category/key syntax is supported before normalization so the
+    -- separator is not stripped: "Navigation.home", "ESP.box", etc.
+    local rawCategory, rawIconName = visible:match("^%s*([%w_]+)%s*%.%s*([%w_]+)%s*$")
+    local category = rawCategory and normalizeIconKey(rawCategory) or nil
+    local iconName = rawIconName and normalizeIconKey(rawIconName) or nil
+    local key = normalizeIconKey(visible)
+    if category and iconName then
+        local group = Icons[category] or Icons[string.upper(category:sub(1, 1)) .. category:sub(2)]
+        -- Also try exact case-sensitive category names used in Icons.lua
+        if not group then
+            for groupName, candidate in pairs(Icons) do
+                if type(candidate) == "table" and string.lower(groupName) == category then
+                    group = candidate
+                    break
+                end
+            end
+        end
+        if group and group[iconName] then
+            return group[iconName]
+        end
+    end
+
+    -- Navigation tabs use the Navigation icon group first.
+    if Icons.Navigation and Icons.Navigation[key] then
+        return Icons.Navigation[key]
+    end
+
+    -- ESP feature names (box, skeleton, tracer, …) resolve from the ESP group.
+    if Icons.ESP and Icons.ESP[key] then
+        return Icons.ESP[key]
+    end
+
+    -- Some UI element names intentionally share the closest available icon.
+    local espAliases = {
+        health_percent = "health",
+        head_marker = "head",
+        status = "team",
+        custom_text = "name",
+        state = "class",
+    }
+    if Icons.ESP then
+        local alias = espAliases[key]
+        if alias and Icons.ESP[alias] then
+            return Icons.ESP[alias]
+        end
+    end
+
+    -- Fallback: any category that contains the key.
+    for _, group in pairs(Icons) do
+        if type(group) == "table" and group[key] then
+            return group[key]
+        end
+    end
+
+    return nil
+end
+
 
 export type TabHandle = {
     CreateSection: (self: TabHandle, name: string?) -> any,
@@ -65,10 +119,10 @@ function Tab.new(window: any, name: string): TabHandle
     -- Compact navigation item: a quiet surface with a short accent rail when active.
     local button = Helpers.CreateButton({
         Name = name,
-        Size = UDim2.new(1, 0, 0, 44),
+        Size = UDim2.new(1, 0, 0, 46),
         Text = "",
-        BackgroundColor3 = theme.Surface,
-        BackgroundTransparency = 1,
+        BackgroundColor3 = theme.ElementBackground,
+        BackgroundTransparency = 0.18,
         AutoButtonColor = false,
         Parent = window.TabList,
     })
@@ -122,7 +176,7 @@ function Tab.new(window: any, name: string): TabHandle
 
     local indicator = Instance.new("Frame")
     indicator.Name = "ActiveIndicator"
-    indicator.Size = UDim2.new(0, 2, 0, 22)
+    indicator.Size = UDim2.new(0, 3, 0, 28)
     indicator.Position = UDim2.new(0, 0, 0.5, 0)
     indicator.AnchorPoint = Vector2.new(0, 0.5)
     indicator.BackgroundColor3 = theme.Accent
@@ -132,27 +186,28 @@ function Tab.new(window: any, name: string): TabHandle
     indicator.Parent = button
     Helpers.Corner(indicator, 2)
 
-    local icon = Instance.new("TextLabel")
+    local icon = Instance.new("ImageLabel")
     icon.Name = "Icon"
-    icon.Size = UDim2.fromOffset(24, 40)
-    icon.Position = UDim2.fromOffset(11, 0)
+    icon.Size = UDim2.fromOffset(20, 20)
+    icon.Position = UDim2.new(0, 14, 0.5, 0)
+    icon.AnchorPoint = Vector2.new(0, 0.5)
     icon.BackgroundTransparency = 1
-    icon.Text = getIcon(name)
-    icon.Font = Theme.FontBold
-    icon.TextSize = 16
-    icon.TextColor3 = theme.TextMuted
-    icon.TextXAlignment = Enum.TextXAlignment.Center
+    icon.BorderSizePixel = 0
+    icon.Image = getIconAsset(name) or ""
+    icon.ImageColor3 = theme.TextMuted
+    icon.ImageTransparency = if icon.Image == "" then 1 else 0
+    icon.ScaleType = Enum.ScaleType.Fit
     icon.ZIndex = 4
     icon.Parent = button
 
     local label = Instance.new("TextLabel")
     label.Name = "Label"
-    label.Size = UDim2.new(1, -50, 1, 0)
-    label.Position = UDim2.fromOffset(47, 0)
+    label.Size = UDim2.new(1, -54, 1, 0)
+    label.Position = UDim2.fromOffset(46, 0)
     label.BackgroundTransparency = 1
     label.Text = cleanDisplayName(name)
     label.Font = Theme.Font
-    label.TextSize = 12
+    label.TextSize = 13
     label.TextColor3 = theme.TextMuted
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.TextTruncate = Enum.TextTruncate.AtEnd
@@ -161,23 +216,29 @@ function Tab.new(window: any, name: string): TabHandle
 
     button.MouseEnter:Connect(function()
         if window._ActiveTab ~= self then
-            Tween.Play(hoverFill, { BackgroundTransparency = 0.82 }, { Time = 0.12 })
-            Tween.Play(icon, { TextColor3 = theme.Text }, { Time = 0.12 })
-            Tween.Play(label, { TextColor3 = theme.Text }, { Time = 0.12 })
+            local t = window.Library.Theme
+            Tween.Play(hoverFill, { BackgroundTransparency = 0.82, BackgroundColor3 = t.SurfaceHover }, { Time = 0.12 })
+            Tween.Play(icon, { ImageColor3 = t.Text, ImageTransparency = 0 }, { Time = 0.12 })
+            Tween.Play(label, { TextColor3 = t.Text }, { Time = 0.12 })
         end
     end)
 
     button.MouseLeave:Connect(function()
         if window._ActiveTab ~= self then
+            local t = window.Library.Theme
             Tween.Play(hoverFill, { BackgroundTransparency = 1 }, { Time = 0.14 })
-            Tween.Play(icon, { TextColor3 = theme.TextMuted }, { Time = 0.12 })
-            Tween.Play(label, { TextColor3 = theme.TextMuted }, { Time = 0.12 })
+            Tween.Play(icon, { ImageColor3 = t.TextMuted, ImageTransparency = if icon.Image == "" then 1 else 0 }, { Time = 0.12 })
+            Tween.Play(label, { TextColor3 = t.TextMuted }, { Time = 0.12 })
         end
     end)
 
     local page = Instance.new("ScrollingFrame")
     page.Name = name
     page.Visible = false
+    page.Active = true
+    page.ScrollingEnabled = true
+    page.ScrollingDirection = Enum.ScrollingDirection.Y
+    page.ElasticBehavior = Enum.ElasticBehavior.WhenScrollable
     page.Size = UDim2.fromScale(1, 1)
     page.Position = UDim2.fromOffset(0, 0)
     page.BackgroundTransparency = 1
@@ -192,14 +253,57 @@ function Tab.new(window: any, name: string): TabHandle
 
     local pagePadding = Helpers.Padding(page, 0)
 
-    local pageTopInset = 44
+    local pageTopInset = 88
     local pageSideInset = 18
     local pageRightReserve = 22
+
+    local pageHeader = Helpers.CreateFrame({
+        Name = "PageHeader",
+        Size = UDim2.new(1, -(pageSideInset + pageRightReserve), 0, 62),
+        Position = UDim2.fromOffset(pageSideInset, 14),
+        BackgroundTransparency = 1,
+        Parent = page,
+    })
+
+    local pageEyebrow = Helpers.CreateLabel({
+        Name = "Eyebrow",
+        Size = UDim2.new(1, 0, 0, 16),
+        Position = UDim2.fromOffset(0, 0),
+        Text = "CONTROL MODULE",
+        Font = Theme.FontBold,
+        TextSize = 9,
+        TextColor3 = theme.Accent,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = pageHeader,
+    })
+
+    local pageTitle = Helpers.CreateLabel({
+        Name = "PageTitle",
+        Size = UDim2.new(1, 0, 0, 34),
+        Position = UDim2.fromOffset(0, 14),
+        Text = cleanDisplayName(name),
+        Font = Theme.FontBold,
+        TextSize = 24,
+        TextColor3 = theme.Text,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextTruncate = Enum.TextTruncate.AtEnd,
+        Parent = pageHeader,
+    })
+
+    local pageLine = Helpers.CreateFrame({
+        Name = "HeaderLine",
+        Size = UDim2.new(0, 74, 0, 2),
+        Position = UDim2.new(0, 0, 1, -1),
+        BackgroundColor3 = theme.Accent,
+        BorderSizePixel = 0,
+        Parent = pageHeader,
+    })
+    Helpers.Corner(pageLine, 2)
 
     local columns = Helpers.CreateFrame({
         Name = "Columns",
         Size = UDim2.new(1, -(pageSideInset + pageRightReserve), 0, 0),
-        Position = UDim2.fromOffset(pageSideInset, pageTopInset),
+        Position = UDim2.fromOffset(pageSideInset, 88),
         AutomaticSize = Enum.AutomaticSize.Y,
         BackgroundTransparency = 1,
         Parent = page,
@@ -253,20 +357,14 @@ function Tab.new(window: any, name: string): TabHandle
         end
 
         task.defer(function()
-            page.CanvasSize = UDim2.new(
-                0, 0, 0,
-                math.max(leftColumn.AbsoluteSize.Y, rightColumn.AbsoluteSize.Y)
-                    + pageTopInset + pagePadding.PaddingTop.Offset + pagePadding.PaddingBottom.Offset + 6
-            )
+            local contentHeight = math.max(leftColumn.AbsoluteSize.Y, rightColumn.AbsoluteSize.Y)
+            page.CanvasSize = UDim2.fromOffset(0, math.max(0, pageTopInset + contentHeight + 24))
         end)
     end
 
     self._Maid:GiveTask(columnLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        page.CanvasSize = UDim2.new(
-            0, 0, 0,
-            math.max(leftColumn.AbsoluteSize.Y, rightColumn.AbsoluteSize.Y)
-                + pageTopInset + pagePadding.PaddingTop.Offset + pagePadding.PaddingBottom.Offset + 6
-        )
+        local contentHeight = math.max(leftColumn.AbsoluteSize.Y, rightColumn.AbsoluteSize.Y)
+        page.CanvasSize = UDim2.fromOffset(0, math.max(0, pageTopInset + contentHeight + 24))
     end))
 
     self.Button = button
@@ -279,6 +377,10 @@ function Tab.new(window: any, name: string): TabHandle
     self._IndicatorGlow = indicatorGlow
     self._ActiveGlow = activeGlow
     self._ActiveGlowImage = activeGlowImage
+    self._PageHeader = pageHeader
+    self._PageTitle = pageTitle
+    self._PageEyebrow = pageEyebrow
+    self._PageLine = pageLine
     self._Columns = columns
     self._LeftColumn = leftColumn
     self._RightColumn = rightColumn
@@ -294,8 +396,7 @@ function Tab.new(window: any, name: string): TabHandle
     end))
 
     self._ThemeConnection = window.Library.Theme.Changed:Connect(function()
-        self:SetActive(self == window._ActiveTab)
-        page.ScrollBarImageColor3 = window.Library.Theme.Accent
+        self:RefreshTheme()
         activeGradient.Color = ColorSequence.new({
             ColorSequenceKeypoint.new(0, window.Library.Theme.Accent),
             ColorSequenceKeypoint.new(1, window.Library.Theme.AccentAlt or window.Library.Theme.Accent),
@@ -309,12 +410,12 @@ end
 function Tab:SetActive(active: boolean)
     local theme = self.Window.Library.Theme
     self._ActiveFill.BackgroundColor3 = theme.Accent
-    self._ActiveFill.BackgroundTransparency = if active then 0.84 else 1
+    Tween.Play(self._ActiveFill, { BackgroundTransparency = if active then 0.84 else 1 }, { Time = 0.18 })
     self._HoverFill.BackgroundColor3 = theme.SurfaceHover
     self._HoverFill.BackgroundTransparency = 1
 
     self._Indicator.BackgroundColor3 = theme.Accent
-    self._Indicator.BackgroundTransparency = if active then 0 else 1
+    Tween.Play(self._Indicator, { BackgroundTransparency = if active then 0 else 1 }, { Time = 0.15 })
     self._IndicatorGlow.BackgroundColor3 = theme.Accent
     self._IndicatorGlow.BackgroundTransparency = if active then 0.82 else 1
     self._ActiveGlow.Color = theme.Accent
@@ -324,14 +425,34 @@ function Tab:SetActive(active: boolean)
         self._ActiveGlowImage.ImageTransparency = if active then 0.94 else 1
     end
 
-    self._Icon.TextColor3 = if active then theme.Text else theme.TextMuted
+    self._Icon.ImageColor3 = if active then theme.Text else theme.TextMuted
+    self._Icon.ImageTransparency = if self._Icon.Image == "" then 1 else 0
     self._Label.TextColor3 = if active then theme.Text else theme.TextMuted
-    self._Icon.TextSize = if active then 17 else 16
+
+    if self.Button then
+        self.Button.BackgroundColor3 = if active then theme.SurfaceHover else theme.ElementBackground
+        self.Button.BackgroundTransparency = if active then 0.05 else 0.22
+    end
 end
 
 function Tab:RefreshTheme()
+    local theme = self.Window.Library.Theme
     self:SetActive(self == self.Window._ActiveTab)
-    self.Page.ScrollBarImageColor3 = self.Window.Library.Theme.Accent
+    self.Page.ScrollBarImageColor3 = theme.Accent
+    if self._PageTitle then self._PageTitle.TextColor3 = theme.Text end
+    if self._PageEyebrow then self._PageEyebrow.TextColor3 = theme.Accent end
+    if self._PageLine then self._PageLine.BackgroundColor3 = theme.Accent end
+    -- Ensure tab sidebar button chrome tracks theme even when inactive
+    if self._HoverFill then
+        self._HoverFill.BackgroundColor3 = theme.SurfaceHover
+    end
+    for _, section in self._Sections do
+        if section and section.RefreshTheme then
+            pcall(function()
+                section:RefreshTheme()
+            end)
+        end
+    end
 end
 
 function Tab:Show()
@@ -345,13 +466,15 @@ end
 
 function Tab:CreateSection(nameOrData: any)
     local name = nil
+    local description = nil
     if type(nameOrData) == "string" then
         name = nameOrData
     elseif type(nameOrData) == "table" then
         name = nameOrData.Name or nameOrData.Title or nil
+        description = nameOrData.Description or nameOrData.Desc or nil
     end
 
-    local section = Section.new(self, name)
+    local section = Section.new(self, name, description)
     table.insert(self._Sections, section)
     self._UpdateColumns()
     return section
@@ -372,6 +495,15 @@ function Tab:CreateInput(data: any) return self:_getDefaultSection():CreateInput
 function Tab:CreateKeybind(data: any) return self:_getDefaultSection():CreateKeybind(data) end
 function Tab:CreateColorPicker(data: any) return self:_getDefaultSection():CreateColorPicker(data) end
 function Tab:CreateParagraph(data: any) return self:_getDefaultSection():CreateParagraph(data) end
+function Tab:CreateWorldRadar(data: any?) return self:_getDefaultSection():CreateWorldRadar(data) end
+function Tab:CreateIconButton(data: any?) return self:_getDefaultSection():CreateIconButton(data) end
+function Tab:CreateDivider(data: any?) return self:_getDefaultSection():CreateDivider(data) end
+function Tab:CreateStat(data: any?) return self:_getDefaultSection():CreateStat(data) end
+function Tab:CreateNotice(data: any?) return self:_getDefaultSection():CreateNotice(data) end
+function Tab:CreateCard(data: any?) return self:_getDefaultSection():CreateCard(data) end
+function Tab:CreateBadge(data: any?) return self:_getDefaultSection():CreateBadge(data) end
+function Tab:CreateProgress(data: any?) return self:_getDefaultSection():CreateProgress(data) end
+function Tab:CreateStatus(data: any?) return self:_getDefaultSection():CreateStatus(data) end
 
 function Tab:Destroy()
     for _, section in self._Sections do

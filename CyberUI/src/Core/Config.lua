@@ -136,8 +136,13 @@ function Config:Get(key: string): any
 	return self._values[key]
 end
 
+function Config:GetAll(): { [string]: any }
+	return self._values
+end
+
 function Config:Set(key: string, value: any)
-	if self._values[key] == value then
+	-- tables always write (profiles mutate in place)
+	if type(value) ~= "table" and self._values[key] == value then
 		return
 	end
 	self._values[key] = value

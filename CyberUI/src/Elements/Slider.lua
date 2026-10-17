@@ -35,6 +35,10 @@ function Slider.new(section: any, data: SliderOptions): SliderHandle
 	local rounding = data.Rounding or 1
 	local initial = data.CurrentValue or data.Default or min
 	local library = section.Tab.Window.Library
+	local savedRaw = nil
+	if data.Flag and library:_shouldSaveFlag(data.Flag, data.Save) and library.Config then
+		savedRaw = library.Config:Get(`Flags.{data.Flag}`)
+	end
 	initial = library:_getSavedFlag(data.Flag, initial, data.Save)
 
 	local self = setmetatable({
@@ -58,6 +62,7 @@ function Slider.new(section: any, data: SliderOptions): SliderHandle
 	Helpers.Corner(row, Theme.CornerRadiusSmall)
 	local rowStroke = Helpers.Stroke(row, library.Theme.Border, 1)
 	rowStroke.Transparency = 0.18
+	self._RowStroke = rowStroke
 
 	local label = Helpers.CreateLabel({
 		Name = "Label",
@@ -155,8 +160,13 @@ function Slider.new(section: any, data: SliderOptions): SliderHandle
 		library:_setFlag(data.Flag, value, data.Save)
 		self._Changed:Fire(value)
 
-		if fireCallback ~= false and data.Callback then
-			task.spawn(data.Callback, value)
+		if fireCallback ~= false and type(data.Callback) == "function" then
+			task.spawn(function()
+				local ok, err = pcall(data.Callback, value)
+				if not ok then
+					warn("[Vaxorin] Slider callback error:", err)
+				end
+			end)
 		end
 	end
 
@@ -194,27 +204,49 @@ function Slider.new(section: any, data: SliderOptions): SliderHandle
 
 	if data.Flag then
 		library:_setFlag(data.Flag, self._Value, data.Save)
+		if library._bindFlagControl then library:_bindFlagControl(data.Flag, self) end
 	end
 
 	self:_applyVisual(false)
+
+	if data.Callback and data.FireOnLoad ~= false and savedRaw ~= nil then
+		task.defer(function()
+			data.Callback(self._Value)
+		end)
+	end
 
 	return self :: any
 end
 
 function Slider:RefreshTheme()
 	local theme = self._Section.Tab.Window.Library.Theme
-	self.Instance.BackgroundColor3 = theme.ElementBackground or theme.Background
-	self.Label.TextColor3 = theme.Text
-	self.ValueLabel.TextColor3 = theme.Accent
-	self.Track.BackgroundColor3 = theme.Border
-	self.Fill.BackgroundColor3 = theme.Accent
-	self.FillGlow.Color = theme.Accent
-	self.Knob.BackgroundColor3 = theme.Text
+	local Tween = require(script.Parent.Parent.Utils.Tween)
+	Tween.Play(self.Instance, { BackgroundColor3 = theme.ElementBackground or theme.Background }, { Time = 0.22 })
+	Tween.Play(self.Label, { TextColor3 = theme.Text }, { Time = 0.22 })
+	Tween.Play(self.ValueLabel, { TextColor3 = theme.Accent }, { Time = 0.22 })
+	Tween.Play(self.Track, { BackgroundColor3 = theme.Border }, { Time = 0.22 })
+	Tween.Play(self.Fill, { BackgroundColor3 = theme.Accent }, { Time = 0.22 })
+	if self.FillGlow then
+		Tween.Play(self.FillGlow, { Color = theme.Accent }, { Time = 0.22 })
+	end
+	Tween.Play(self.Knob, { BackgroundColor3 = theme.Text }, { Time = 0.22 })
+	if self._RowStroke then
+		Tween.Play(self._RowStroke, { Color = theme.Border }, { Time = 0.22 })
+	end
+	for _, d in self.Instance:GetDescendants() do
+		if d:IsA("UIStroke") then
+			if d == self.FillGlow or (d.Transparency or 0) > 0.5 then
+				Tween.Play(d, { Color = theme.Accent }, { Time = 0.22 })
+			else
+				Tween.Play(d, { Color = theme.Border }, { Time = 0.22 })
+			end
+		end
+	end
 	self:_applyVisual(false)
 end
 
-function Slider:Set(value: number)
-	self:_commit(value, false)
+function Slider:Set(value: number, fireCallback: boolean?)
+	self:_commit(value, fireCallback == true)
 end
 
 function Slider:Get(): number

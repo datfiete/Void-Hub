@@ -34,7 +34,12 @@ function Toggle.new(section: any, data: ToggleOptions): ToggleHandle
 	}, Toggle)
 
 	local library = section.Tab.Window.Library
-	self._Value = library:_getSavedFlag(data.Flag, self._Value, data.Save)
+	local defaultValue = self._Value
+	local savedRaw = nil
+	if data.Flag and library:_shouldSaveFlag(data.Flag, data.Save) and library.Config then
+		savedRaw = library.Config:Get(`Flags.{data.Flag}`)
+	end
+	self._Value = library:_getSavedFlag(data.Flag, defaultValue, data.Save)
 
 	local row = Helpers.CreateFrame({
 		Name = "Toggle",
@@ -45,6 +50,12 @@ function Toggle.new(section: any, data: ToggleOptions): ToggleHandle
 	Helpers.Corner(row, Theme.CornerRadiusSmall)
 	local rowStroke = Helpers.Stroke(row, library.Theme.Border, 1)
 	rowStroke.Transparency = 0.18
+	local pop = Instance.new("UIScale")
+	pop.Scale = 0.94
+	pop.Parent = row
+	task.defer(function()
+		Tween.Play(pop, { Scale = 1 }, { Time = 0.18, EasingStyle = Enum.EasingStyle.Back })
+	end)
 
 	local label = Helpers.CreateLabel({
 		Name = "Label",
@@ -119,8 +130,13 @@ function Toggle.new(section: any, data: ToggleOptions): ToggleHandle
 		library:_setFlag(data.Flag, value, data.Save)
 		self._Changed:Fire(value)
 
-		if fireCallback ~= false and data.Callback then
-			task.spawn(data.Callback, value)
+		if fireCallback ~= false and type(data.Callback) == "function" then
+			task.spawn(function()
+				local ok, err = pcall(data.Callback, value)
+				if not ok then
+					warn("[Vaxorin] Toggle callback error:", err)
+				end
+			end)
 		end
 	end
 
@@ -131,21 +147,46 @@ function Toggle.new(section: any, data: ToggleOptions): ToggleHandle
 
 	if data.Flag then
 		library:_setFlag(data.Flag, self._Value, data.Save)
+		if library._bindFlagControl then
+			library:_bindFlagControl(data.Flag, self)
+		end
 	end
 
 	self:_applyVisual(self._Value, false)
+
+	-- Config restored the value but did not run the feature callback — fire once on load.
+	if type(data.Callback) == "function" and data.FireOnLoad ~= false and savedRaw ~= nil then
+		task.defer(function()
+			local ok, err = pcall(data.Callback, self._Value)
+			if not ok then
+				warn("[Vaxorin] Toggle FireOnLoad error:", err)
+			end
+		end)
+	end
 
 	return self :: any
 end
 
 function Toggle:RefreshTheme()
 	local theme = self._Section.Tab.Window.Library.Theme
-	self.Instance.BackgroundColor3 = theme.ElementBackground or theme.Background
-	self.Label.TextColor3 = theme.Text
-	self.Switch.BackgroundColor3 = if self._Value then theme.Accent else theme.Border
+	Tween.Play(self.Instance, { BackgroundColor3 = theme.ElementBackground or theme.Background }, { Time = 0.22 })
+	local rootStroke = self.Instance:FindFirstChildOfClass("UIStroke")
+	if rootStroke then
+		Tween.Play(rootStroke, { Color = theme.Border }, { Time = 0.22 })
+	end
+	if self.Label then
+		Tween.Play(self.Label, { TextColor3 = theme.Text }, { Time = 0.22 })
+	end
+	Tween.Play(self.Switch, { BackgroundColor3 = if self._Value then theme.Accent else theme.Border }, { Time = 0.22 })
+	-- VaxorinGlow is an ImageLabel (Helpers.Glow), not UIStroke
 	if self.SwitchGlow then
-		self.SwitchGlow.Color = theme.Accent
-		self.SwitchGlow.Transparency = if self._Value then 0.84 else 1
+		if self.SwitchGlow:IsA("ImageLabel") then
+			self.SwitchGlow.ImageColor3 = theme.Accent
+			self.SwitchGlow.ImageTransparency = if self._Value then 0.84 else 1
+		elseif self.SwitchGlow:IsA("UIStroke") then
+			self.SwitchGlow.Color = theme.Accent
+			self.SwitchGlow.Transparency = if self._Value then 0.84 else 1
+		end
 	end
 	local switchStroke = self.Switch:FindFirstChildOfClass("UIStroke")
 	if switchStroke then
@@ -155,8 +196,8 @@ function Toggle:RefreshTheme()
 	self.Knob.BackgroundColor3 = theme.Text
 end
 
-function Toggle:Set(value: boolean)
-	self:_commit(value, false)
+function Toggle:Set(value: boolean, fireCallback: boolean?)
+	self:_commit(value, fireCallback == true)
 end
 
 function Toggle:Get(): boolean

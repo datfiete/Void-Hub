@@ -5,6 +5,9 @@ local Tab = require(script.Parent.Tab)
 local Maid = require(script.Parent.Parent.Utils.Maid)
 local Helpers = require(script.Parent.Parent.Utils.Helpers)
 local Tween = require(script.Parent.Parent.Utils.Tween)
+local ESPBuilder = require(script.Parent.ESPBuilder)
+local ESPWorldRenderer = require(script.Parent.ESPWorldRenderer)
+local LayoutVariants = require(script.Parent.LayoutVariants)
 
 local TweenService = game:GetService("TweenService")
 local Lighting = game:GetService("Lighting")
@@ -12,9 +15,223 @@ local SoundService = game:GetService("SoundService")
 local Stats = game:GetService("Stats")
 
 local GUI_NAME = "Vaxorin"
-local VERSION = "3.0"
+local VERSION = "5.0"
 local Vaxorin_Logo = "rbxassetid://135320038058277"
 local LEGACY_LOGO = "rbxassetid://128228297210141"
+
+
+-- Inline weather (no separate module — works with older load.lua MODULE_PATHS)
+
+local function createWeather(parent: Instance)
+	local RunService = game:GetService("RunService")
+	local layer = Instance.new("Frame")
+	layer.Name = "WeatherLayer"
+	layer.BackgroundTransparency = 1
+	layer.Size = UDim2.fromScale(1, 1)
+	layer.ZIndex = 100
+	layer.ClipsDescendants = false
+	layer.Visible = false
+	layer.Active = false
+	layer.Parent = parent
+
+	-- Deep-Fishing style particles use soft glow sprites, not solid rectangles
+	local STAR = "rbxassetid://99851851"
+	local GLOW = "rbxassetid://6014261993"
+
+	local presets = {
+		Rain = {
+			count = 70,
+			vy = { 280, 460 }, vx = { -25, 10 },
+			size = { 1, 2, 14, 22 }, -- minW maxW minH maxH
+			color = Color3.fromRGB(180, 210, 240),
+			image = nil, -- thin frame streaks
+			rot = 12,
+			spin = 0,
+			trans = { 0.25, 0.55 },
+		},
+		Snow = {
+			count = 48,
+			vy = { 28, 70 }, vx = { -40, 40 },
+			size = { 6, 14, 6, 14 },
+			color = Color3.fromRGB(255, 255, 255),
+			image = STAR,
+			rot = 0,
+			spin = 25,
+			trans = { 0.05, 0.35 },
+		},
+		Sakura = {
+			count = 36,
+			vy = { 35, 75 }, vx = { -60, 60 },
+			size = { 8, 16, 8, 16 },
+			color = Color3.fromRGB(255, 150, 190),
+			image = STAR,
+			rot = 0,
+			spin = 80,
+			trans = { 0.05, 0.3 },
+		},
+		Stars = {
+			count = 50,
+			vy = { 6, 18 }, vx = { -10, 10 },
+			size = { 4, 12, 4, 12 },
+			color = Color3.fromRGB(255, 245, 255),
+			image = STAR,
+			rot = 0,
+			spin = 10,
+			trans = { 0.1, 0.6 },
+			twinkle = true,
+		},
+		Leaves = {
+			count = 28,
+			vy = { 45, 95 }, vx = { -90, 90 },
+			size = { 10, 18, 8, 14 },
+			color = Color3.fromRGB(210, 150, 60),
+			image = STAR,
+			rot = 0,
+			spin = 120,
+			trans = { 0.05, 0.25 },
+		},
+	}
+
+	local api = {
+		_kind = "None",
+		_items = {} :: { any },
+		_conn = nil :: RBXScriptConnection?,
+		_scope = "Screen",
+		_screenParent = parent,
+		_uiParent = nil,
+	}
+
+	function api:SetParentTargets(screenParent: Instance?, uiParent: Instance?)
+		self._screenParent = screenParent or self._screenParent
+		self._uiParent = uiParent
+	end
+
+	function api:SetScope(scope: string)
+		scope = scope or "Screen"
+		self._scope = scope
+		local target = if scope == "UI" and self._uiParent then self._uiParent else self._screenParent
+		if target and layer.Parent ~= target then
+			layer.Parent = target
+		end
+		layer.ClipsDescendants = (scope == "UI")
+		-- Behind chrome when inside UI, above dim when full-screen
+		layer.ZIndex = if scope == "UI" then 2 else 100
+	end
+
+	function api:Set(kind: string)
+		kind = kind or "None"
+		if self._conn then
+			self._conn:Disconnect()
+			self._conn = nil
+		end
+		for _, item in self._items do
+			if item.inst then item.inst:Destroy() end
+		end
+		table.clear(self._items)
+		self._kind = kind
+		local preset = presets[kind]
+		if not preset then
+			layer.Visible = false
+			return
+		end
+		layer.Visible = true
+		local rng = Random.new()
+
+		for i = 1, preset.count do
+			local w = rng:NextInteger(preset.size[1], preset.size[2])
+			local h = rng:NextInteger(preset.size[3], preset.size[4])
+			local inst: GuiObject
+			if preset.image then
+				local img = Instance.new("ImageLabel")
+				img.BackgroundTransparency = 1
+				img.Image = preset.image
+				img.ImageColor3 = preset.color
+				img.ImageTransparency = rng:NextNumber(preset.trans[1], preset.trans[2])
+				img.ScaleType = Enum.ScaleType.Fit
+				inst = img
+			else
+				local f = Instance.new("Frame")
+				f.BorderSizePixel = 0
+				f.BackgroundColor3 = preset.color
+				f.BackgroundTransparency = rng:NextNumber(preset.trans[1], preset.trans[2])
+				inst = f
+			end
+			inst.Size = UDim2.fromOffset(w, h)
+			inst.AnchorPoint = Vector2.new(0.5, 0.5)
+			inst.ZIndex = 101
+			inst.Active = false
+			inst.Parent = layer
+
+			local abs = layer.AbsoluteSize
+			local startX = rng:NextNumber(0, math.max(abs.X, 200))
+			local startY = rng:NextNumber(-abs.Y * 0.3, math.max(abs.Y, 200))
+			inst.Position = UDim2.fromOffset(startX, startY)
+			inst.Rotation = preset.rot + rng:NextNumber(-20, 20)
+
+			self._items[i] = {
+				inst = inst,
+				x = startX,
+				y = startY,
+				vx = rng:NextNumber(preset.vx[1], preset.vx[2]),
+				vy = rng:NextNumber(preset.vy[1], preset.vy[2]),
+				spin = (if preset.spin ~= 0 then rng:NextNumber(-preset.spin, preset.spin) else 0),
+				baseT = if inst:IsA("ImageLabel") then inst.ImageTransparency else inst.BackgroundTransparency,
+				phase = rng:NextNumber(0, math.pi * 2),
+				twinkle = preset.twinkle == true,
+				isImage = inst:IsA("ImageLabel"),
+			}
+		end
+
+		self._conn = RunService.RenderStepped:Connect(function(dt)
+			dt = math.clamp(dt, 0, 0.05)
+			local abs = layer.AbsoluteSize
+			if abs.X < 4 or abs.Y < 4 then
+				return
+			end
+			local t = os.clock()
+			for _, item in self._items do
+				local inst = item.inst
+				if not inst or not inst.Parent then
+					continue
+				end
+				-- continuous velocity — never "stop"
+				item.x += item.vx * dt + math.sin(t * 1.4 + item.phase) * 18 * dt
+				item.y += item.vy * dt
+				inst.Rotation += item.spin * dt
+
+				if item.twinkle then
+					local pulse = 0.15 + 0.45 * (0.5 + 0.5 * math.sin(t * 3.2 + item.phase))
+					if item.isImage then
+						(inst :: ImageLabel).ImageTransparency = pulse
+					end
+				end
+
+				-- recycle past edges
+				if item.y > abs.Y + 40 then
+					item.y = rng:NextNumber(-50, -10)
+					item.x = rng:NextNumber(0, abs.X)
+				elseif item.x < -40 then
+					item.x = abs.X + 20
+				elseif item.x > abs.X + 40 then
+					item.x = -20
+				end
+
+				inst.Position = UDim2.fromOffset(item.x, item.y)
+			end
+		end)
+	end
+
+	function api:Destroy()
+		if self._conn then self._conn:Disconnect() end
+		for _, item in self._items do
+			if item.inst then item.inst:Destroy() end
+		end
+		layer:Destroy()
+	end
+
+	return api
+end
+
 
 -- Soft 9-slice drop shadow, used behind the main window for real depth instead
 -- of a flat card floating on nothing.
@@ -100,8 +317,27 @@ export type WindowOptions = {
 	HideCoreUI: boolean?,
 }
 
+export type DeveloperPanelHandle = {
+	SetStats: (self: DeveloperPanelHandle, stats: { [string]: any }) -> (),
+	SetContent: (self: DeveloperPanelHandle, content: string) -> (),
+	Close: (self: DeveloperPanelHandle) -> (),
+	Open: (self: DeveloperPanelHandle) -> (),
+}
+
 export type WindowHandle = {
 	CreateTab: (self: WindowHandle, name: string) -> any,
+	CreateDeveloperWindow: (self: WindowHandle, options: any?) -> DeveloperPanelHandle,
+	OpenDeveloperWindow: (self: WindowHandle, options: any?) -> DeveloperPanelHandle,
+	CreateESPBuilder: (self: WindowHandle, options: any?) -> any,
+	CreateESPWorldRenderer: (self: WindowHandle, options: any?) -> any,
+	CreateNotice: (self: WindowHandle, data: any) -> any,
+	CreateStat: (self: WindowHandle, data: any) -> any,
+	CreateDivider: (self: WindowHandle, data: any?) -> any,
+	CreateIconButton: (self: WindowHandle, data: any?) -> any,
+	CreateCard: (self: WindowHandle, data: any) -> any,
+	CreateBadge: (self: WindowHandle, data: any) -> any,
+	CreateProgress: (self: WindowHandle, data: any) -> any,
+	CreateStatus: (self: WindowHandle, data: any) -> any,
 	Notify: (self: WindowHandle, options: any) -> any,
 	Destroy: (self: WindowHandle) -> (),
 }
@@ -136,7 +372,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	}, Window)
 
 	local Players = game:GetService("Players")
-	local localPlayer = Players.LocalPlayer.Name
+	local localPlayer = Players.LocalPlayer and Players.LocalPlayer.Name or "Player"
 	local UserInputService = game:GetService("UserInputService")
 	local RunService = game:GetService("RunService")
 	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
@@ -291,12 +527,12 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 
 	local showSearch = data.ShowSearch ~= false
 	local showWindowControls = data.ShowWindowControls ~= false
-	local topBarHeight = Theme.TopBarHeight or 82
+	local topBarHeight = Theme.TopBarHeight or 72
 	local infoBarHeight = 0 -- Vaxorin keeps the content area clean; optional info bar remains available internally
 
 	-- Resize limits
-	local minWindowSize = Vector2.new(560, 380)
-	local maxWindowSize = Vector2.new(1040, 680)
+	local minWindowSize = Vector2.new(640, 430)
+	local maxWindowSize = Vector2.new(1180, 760)
 
 	-- Keep the default window comfortably inside the current viewport. This is
 	-- especially important on small emulator resolutions where a fixed desktop
@@ -321,91 +557,71 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	)
 
 	-- ============================================
-	-- LOADING SCREEN
+	-- V4 BOOT SEQUENCE
 	-- ============================================
-	local loadingFrame = Helpers.CreateFrame({
-		Name = "Loading",
-		Size = UDim2.fromOffset(420, 180),
-		Position = UDim2.fromScale(0.5, 0.5),
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundColor3 = library.Theme.Secondary,
-		Parent = screenGui,
-	})
-	Helpers.Corner(loadingFrame, Theme.CornerRadius)
-	Helpers.Stroke(loadingFrame, library.Theme.Border, 1)
-	Helpers.Padding(loadingFrame, 20)
+	local loadingGui = Instance.new("ScreenGui")
+	loadingGui.Name = "VaxorinBoot"
+	loadingGui.ResetOnSpawn = false
+	loadingGui.IgnoreGuiInset = true
+	loadingGui.DisplayOrder = 2147483647
+	loadingGui.Parent = screenGui
 
-	local loadingAccent = Helpers.CreateFrame({
-		Name = "Accent",
-		Size = UDim2.new(0, 4, 1, -40),
-		Position = UDim2.new(0, 20, 0, 20),
-		BackgroundColor3 = library.Theme.Accent,
-		Parent = loadingFrame,
-	})
-	Helpers.Corner(loadingAccent, 2)
+	local bootBackdrop = Helpers.CreateFrame({ Name = "Backdrop", Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(2, 3, 7), BackgroundTransparency = 0.02, Parent = loadingGui })
+	local bootGlow = Helpers.CreateFrame({ Name = "Glow", Size = UDim2.fromOffset(460, 460), Position = UDim2.fromScale(0.5, 0.48), AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = library.Theme.Accent, BackgroundTransparency = 0.92, Parent = bootBackdrop })
+	Helpers.Corner(bootGlow, 999)
 
-	local loadingTitle = Helpers.CreateLabel({
-		Name = "LoadingTitle",
-		Size = UDim2.new(1, -44, 0, 34),
-		Position = UDim2.fromOffset(20, 0),
-		Text = windowName,
-		Font = Theme.FontBold,
-		TextColor3 = library.Theme.Text,
-		TextSize = 22,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		Parent = loadingFrame,
-	})
+	local bootCard = Helpers.CreateFrame({ Name = "Card", Size = UDim2.fromOffset(520, 320), Position = UDim2.fromScale(0.5, 0.5), AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = library.Theme.Secondary, Parent = bootBackdrop })
+	Helpers.Corner(bootCard, 22)
+	local bootStroke = Helpers.Stroke(bootCard, library.Theme.BorderStrong or library.Theme.Border, 1)
 
-	local loadingSubtitle = Helpers.CreateLabel({
-		Name = "LoadingSubtitle",
-		Size = UDim2.new(1, -44, 0, 24),
-		Position = UDim2.fromOffset(20, 38),
-		Text = windowSubtitle or "Welcome to " .. windowName,
-		TextColor3 = library.Theme.TextMuted,
-		TextSize = 14,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		Parent = loadingFrame,
-	})
+	local bootTopLine = Helpers.CreateFrame({ Name = "TopLine", Size = UDim2.new(1, -56, 0, 2), Position = UDim2.fromOffset(28, 20), BackgroundColor3 = library.Theme.Accent, Parent = bootCard })
+	Helpers.Corner(bootTopLine, 2)
 
-	local loadingVersion = Helpers.CreateLabel({
-		Name = "LoadingVersion",
-		Size = UDim2.new(1, -44, 0, 20),
-		Position = UDim2.fromOffset(20, 62),
-		Text = VERSION,
-		TextColor3 = library.Theme.TextMuted,
-		TextSize = 12,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		Parent = loadingFrame,
-	})
+	local bootTitle = Helpers.CreateLabel({ Name = "Title", Size = UDim2.new(1, -56, 0, 34), Position = UDim2.fromOffset(28, 42), Text = windowName, Font = Theme.FontBold, TextSize = 28, TextColor3 = library.Theme.Text, Parent = bootCard })
+	local bootSub = Helpers.CreateLabel({ Name = "Sub", Size = UDim2.new(1, -56, 0, 18), Position = UDim2.fromOffset(28, 76), Text = "INITIALIZING COMMAND INTERFACE", Font = Theme.FontBold, TextSize = 9, TextColor3 = library.Theme.Accent, Parent = bootCard })
+	local bootStatus = Helpers.CreateLabel({ Name = "Status", Size = UDim2.new(1, -56, 0, 22), Position = UDim2.fromOffset(28, 112), Text = "Preparing interface...", Font = Theme.Font, TextSize = 12, TextColor3 = library.Theme.TextMuted, Parent = bootCard })
 
-	local loadingStatus = Helpers.CreateLabel({
-		Name = "LoadingStatus",
-		Size = UDim2.new(1, -44, 0, 20),
-		Position = UDim2.fromOffset(20, 90),
-		Text = "Loading components...",
-		TextColor3 = library.Theme.TextMuted,
-		TextSize = 12,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		Parent = loadingFrame,
-	})
+	local bootTrack = Helpers.CreateFrame({ Name = "Track", Size = UDim2.new(1, -56, 0, 8), Position = UDim2.fromOffset(28, 156), BackgroundColor3 = library.Theme.Background, Parent = bootCard })
+	Helpers.Corner(bootTrack, 4)
+	local bootFill = Helpers.CreateFrame({ Name = "Fill", Size = UDim2.fromScale(0, 1), BackgroundColor3 = library.Theme.Accent, Parent = bootTrack })
+	Helpers.Corner(bootFill, 4)
 
-	local progressTrack = Helpers.CreateFrame({
-		Name = "ProgressTrack",
-		Size = UDim2.new(1, -44, 0, 6),
-		Position = UDim2.fromOffset(20, 130),
-		BackgroundColor3 = library.Theme.Background,
-		Parent = loadingFrame,
-	})
-	Helpers.Corner(progressTrack, 3)
+	local bootPercent = Helpers.CreateLabel({ Name = "Percent", Size = UDim2.fromOffset(70, 22), Position = UDim2.new(1, -98, 0, 176), Text = "0%", Font = Theme.FontBold, TextSize = 12, TextColor3 = library.Theme.Text, TextXAlignment = Enum.TextXAlignment.Right, Parent = bootCard })
+	local bootStage = Helpers.CreateLabel({ Name = "Stage", Size = UDim2.new(1, -56, 0, 18), Position = UDim2.fromOffset(28, 204), Text = "CORE / 00", Font = Theme.FontBold, TextSize = 9, TextColor3 = library.Theme.TextMuted, Parent = bootCard })
 
-	local progressFill = Helpers.CreateFrame({
-		Name = "ProgressFill",
-		Size = UDim2.fromScale(0, 1),
-		BackgroundColor3 = library.Theme.Accent,
-		Parent = progressTrack,
-	})
-	Helpers.Corner(progressFill, 3)
-	Tween.Play(progressFill, { Size = UDim2.fromScale(1, 1) }, { Time = 0.85 })
+	local bootPips = {}
+	for i = 1, 5 do
+		local pip = Helpers.CreateFrame({ Name = "Pip" .. i, Size = UDim2.fromOffset(54, 4), Position = UDim2.fromOffset(28 + (i - 1) * 62, 244), BackgroundColor3 = library.Theme.BorderStrong or library.Theme.Border, Parent = bootCard })
+		Helpers.Corner(pip, 2)
+		table.insert(bootPips, pip)
+	end
+
+	local bootFooter = Helpers.CreateLabel({ Name = "Footer", Size = UDim2.new(1, -56, 0, 18), Position = UDim2.fromOffset(28, 274), Text = "VAXORIN / CYBERUI  " .. VERSION, Font = Theme.FontBold, TextSize = 8, TextColor3 = library.Theme.TextMuted, Parent = bootCard })
+
+	local bootPhases = {
+		{0.16, "Mounting interface...", "CORE / 01"},
+		{0.34, "Registering components...", "CORE / 02"},
+		{0.55, "Building workspace...", "UI / 03"},
+		{0.76, "Linking interactions...", "INPUT / 04"},
+		{1.00, "System ready", "READY / 05"},
+	}
+	task.spawn(function()
+		for index, phase in bootPhases do
+			local value, status, stage = phase[1], phase[2], phase[3]
+			bootStatus.Text = status
+			bootStage.Text = stage
+			bootPercent.Text = tostring(math.floor(value * 100)) .. "%"
+			Tween.Play(bootFill, { Size = UDim2.fromScale(value, 1) }, { Time = 0.22 })
+			for i, pip in bootPips do
+				Tween.Play(pip, { BackgroundColor3 = if i <= index then library.Theme.Accent else (library.Theme.BorderStrong or library.Theme.Border) }, { Time = 0.14 })
+			end
+			task.wait(0.18)
+		end
+	end)
+	self._BootGui = loadingGui
+	self._BootCard = bootCard
+	self._BootStatus = bootStatus
+	self._BootFill = bootFill
 
 	-- Remove old bootstrap loader
 	local bootstrapLoader = sharedState.CyberUI_BootstrapLoader
@@ -599,8 +815,8 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	-- black block without turning it into a neon banner.
 	local topAccentRail = Instance.new("Frame")
 	topAccentRail.Name = "AccentRail"
-	topAccentRail.Size = UDim2.new(0, 150, 0, 2)
-	topAccentRail.Position = UDim2.new(0, 18, 1, -3)
+	topAccentRail.Size = UDim2.new(0, 220, 0, 2)
+	topAccentRail.Position = UDim2.new(0, 22, 1, -3)
 	topAccentRail.BackgroundColor3 = library.Theme.Accent
 	topAccentRail.BackgroundTransparency = 0.14
 	topAccentRail.BorderSizePixel = 0
@@ -634,8 +850,8 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 
 	local brand = Helpers.CreateFrame({
 		Name = "Brand",
-		Size = UDim2.new(0, 370, 1, 0),
-		Position = UDim2.fromOffset(18, 0),
+		Size = UDim2.new(0, 390, 1, 0),
+		Position = UDim2.fromOffset(22, 0),
 		BackgroundTransparency = 1,
 		Parent = topBar,
 	})
@@ -718,7 +934,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Size = UDim2.new(1, 0, 0, 34),
 		Text = windowName,
 		Font = Theme.FontBold,
-		TextSize = 27,
+		TextSize = 24,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = library.Theme.Text,
 		TextTruncate = Enum.TextTruncate.AtEnd,
@@ -730,7 +946,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Name = "ProductMeta",
 		Size = UDim2.new(1, 0, 0, 13),
 		Position = UDim2.fromOffset(1, 57),
-		Text = "VAXORIN  /  UNIVERSAL UI",
+		Text = "VAXORIN  /  COMMAND CENTER  /  3.2",
 		Font = Theme.FontBold,
 		TextSize = 9,
 		TextColor3 = library.Theme.TextMuted,
@@ -743,7 +959,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 
 	local controlWidth = showWindowControls and 112 or 0
 	local headerControlGap = showWindowControls and 20 or 14
-	local brandWidth = 372
+	local brandWidth = 394
 
 	-- Reserve a real rectangle for badges instead of letting an auto-sized
 	-- container compete with the window controls. The badges are right-aligned
@@ -867,30 +1083,557 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	-- ============================================
 	-- FLOATING BUTTON
 	-- ============================================
-	local floatingButton = Instance.new("ImageButton")
-	floatingButton.Name = "FloatingToggle"
-	floatingButton.Size = UDim2.fromOffset(48, 48)
-	floatingButton.Position = UDim2.new(0.5, 0, 0, 20)
-	floatingButton.BackgroundColor3 = library.Theme.Secondary
-	floatingButton.BackgroundTransparency = 0.1
-	floatingButton.Image = logoAsset
-	floatingButton.ScaleType = Enum.ScaleType.Fit
-	floatingButton.ImageTransparency = 0
-	floatingButton.Visible = false
-	floatingButton.AutoButtonColor = false
-	floatingButton.ZIndex = 50
-	floatingButton.Active = true
-	floatingButton.Selectable = true
-	floatingButton.Parent = screenGui
-	Helpers.Corner(floatingButton, 10)
-	Helpers.Stroke(floatingButton, library.Theme.Accent, 1.5)
+	-- ============================================
+	-- DYNAMIC ISLAND (open control — Deep Fishing style)
+	-- Compact top-center pill; expands slightly on hover.
+	-- ============================================
+	local island = Instance.new("CanvasGroup")
+	island.Name = "Island"
+	island.Size = UDim2.fromOffset(168, 34)
+	island.Position = UDim2.new(0.5, 0, 0, 10)
+	island.AnchorPoint = Vector2.new(0.5, 0)
+	island.BackgroundColor3 = Color3.fromRGB(30, 30, 34)
+	island.BackgroundTransparency = 0
+	island.BorderSizePixel = 0
+	island.Visible = false
+	island.ZIndex = 55
+	island.Parent = screenGui
+	Helpers.Corner(island, 16)
+	local islandStroke = Helpers.Stroke(island, library.Theme.Border, 1)
+	islandStroke.Transparency = 0.35
+	self._IslandStroke = islandStroke
 
-	self._Maid:GiveTask(floatingButton.MouseEnter:Connect(function()
-		Tween.Play(floatingButton, { BackgroundTransparency = 0 }, { Time = 0.15 })
+	local islandCompact = Helpers.CreateFrame({
+		Name = "Compact",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Color3.fromRGB(30, 30, 34),
+		BackgroundTransparency = 0,
+		Parent = island,
+	})
+	Helpers.Corner(islandCompact, 16)
+
+	local islandIcon = Instance.new("ImageLabel")
+	islandIcon.Name = "Icon"
+	islandIcon.BackgroundTransparency = 1
+	islandIcon.Size = UDim2.fromOffset(18, 18)
+	islandIcon.Position = UDim2.new(0, 12, 0.5, 0)
+	islandIcon.AnchorPoint = Vector2.new(0, 0.5)
+	islandIcon.Image = logoAsset
+	islandIcon.ScaleType = Enum.ScaleType.Fit
+	islandIcon.ZIndex = 56
+	islandIcon.Parent = islandCompact
+
+	local islandTitle = Helpers.CreateLabel({
+		Name = "Title",
+		Size = UDim2.new(1, -70, 1, 0),
+		Position = UDim2.fromOffset(36, 0),
+		Text = "Vaxorin",
+		Font = Theme.FontBold,
+		TextSize = 12,
+		TextColor3 = library.Theme.Text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = islandCompact,
+	})
+	islandTitle.ZIndex = 56
+
+	-- Accent bars (right side), like Deep Fishing island signal marks
+	local bars = Helpers.CreateFrame({
+		Name = "Bars",
+		Size = UDim2.fromOffset(18, 16),
+		Position = UDim2.new(1, -14, 0.5, 0),
+		AnchorPoint = Vector2.new(1, 0.5),
+		BackgroundTransparency = 1,
+		Parent = islandCompact,
+	})
+	bars.ZIndex = 56
+	for i, h in ipairs({ 13, 15, 4, 4 }) do
+		local bar = Instance.new("Frame")
+		bar.Name = "Bar" .. i
+		bar.Size = UDim2.fromOffset(3, h)
+		bar.Position = UDim2.new(0, (i - 1) * 5, 0.5, 0)
+		bar.AnchorPoint = Vector2.new(0, 0.5)
+		bar.BackgroundColor3 = library.Theme.Accent
+		bar.BorderSizePixel = 0
+		bar.ZIndex = 57
+		bar.Parent = bars
+		Helpers.Corner(bar, 1)
+	end
+
+	local islandHit = Instance.new("TextButton")
+	islandHit.Name = "Hit"
+	islandHit.Size = UDim2.fromScale(1, 1)
+	islandHit.BackgroundTransparency = 1
+	islandHit.Text = ""
+	islandHit.ZIndex = 58
+	islandHit.Parent = island
+
+	-- Keep legacy name so existing SetVisible logic still finds a toggle control
+	local floatingButton = islandHit
+	floatingButton.Name = "FloatingToggle"
+	self._FloatingButton = island
+	self._FloatingIcon = islandIcon
+	self._IslandTitle = islandTitle
+	self._IslandBars = bars
+	self._IslandCompact = islandCompact
+
+	-- Activity panel (hover info) — Deep Fishing style
+	-- Clip host so the card appears to slide out of the island
+	local islandActivityHost = Instance.new("Frame")
+	islandActivityHost.Name = "ActivityHost"
+	islandActivityHost.BackgroundTransparency = 1
+	islandActivityHost.BorderSizePixel = 0
+	islandActivityHost.ClipsDescendants = true
+	islandActivityHost.Visible = false
+	islandActivityHost.ZIndex = 59
+	islandActivityHost.AnchorPoint = Vector2.new(0.5, 0)
+	islandActivityHost.Size = UDim2.fromOffset(320, 0)
+	islandActivityHost.Parent = screenGui
+	self._IslandActivityHost = islandActivityHost
+
+	local islandActivity = Instance.new("Frame")
+	islandActivity.Name = "Activity"
+	islandActivity.Size = UDim2.fromOffset(300, 148)
+	islandActivity.Position = UDim2.new(0.5, 0, 0, 0)
+	islandActivity.AnchorPoint = Vector2.new(0.5, 0)
+	islandActivity.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+	islandActivity.BackgroundTransparency = 0.02
+	islandActivity.Visible = true
+	islandActivity.ZIndex = 60
+	islandActivity.Parent = islandActivityHost
+	Helpers.Corner(islandActivity, 14)
+	Helpers.Stroke(islandActivity, library.Theme.Border, 1)
+	Helpers.Padding(islandActivity, 12)
+
+	-- Header row: avatar + name + session
+	local actAvatar = Instance.new("ImageLabel")
+	actAvatar.Name = "Avatar"
+	actAvatar.Size = UDim2.fromOffset(32, 32)
+	actAvatar.Position = UDim2.fromOffset(0, 0)
+	actAvatar.BackgroundColor3 = library.Theme.ElementBackground
+	actAvatar.BorderSizePixel = 0
+	actAvatar.Image = ""
+	actAvatar.ZIndex = 61
+	actAvatar.Parent = islandActivity
+	Helpers.Corner(actAvatar, 16)
+	local lp = Players.LocalPlayer
+	pcall(function()
+		if lp then
+			actAvatar.Image = Players:GetUserThumbnailAsync(
+				lp.UserId,
+				Enum.ThumbnailType.HeadShot,
+				Enum.ThumbnailSize.Size48x48
+			)
+		end
+	end)
+
+	local actTitle = Helpers.CreateLabel({
+		Name = "ActTitle",
+		Size = UDim2.new(1, -100, 0, 16),
+		Position = UDim2.fromOffset(40, 0),
+		Text = (lp and (lp.DisplayName or lp.Name)) or tostring(localPlayer),
+		Font = Theme.FontBold,
+		TextSize = 13,
+		TextColor3 = library.Theme.Text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = islandActivity,
+	})
+	actTitle.ZIndex = 61
+
+	local actGame = Helpers.CreateLabel({
+		Name = "ActGame",
+		Size = UDim2.new(1, -100, 0, 14),
+		Position = UDim2.fromOffset(40, 16),
+		Text = "Vaxorin",
+		Font = Theme.Font,
+		TextSize = 10,
+		TextColor3 = library.Theme.TextMuted,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = islandActivity,
+	})
+	actGame.ZIndex = 61
+	pcall(function()
+		local info = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId)
+		if info and info.Name then actGame.Text = info.Name end
+	end)
+
+	local actSession = Helpers.CreateLabel({
+		Name = "ActSession",
+		Size = UDim2.fromOffset(64, 16),
+		Position = UDim2.new(1, 0, 0, 0),
+		AnchorPoint = Vector2.new(1, 0),
+		Text = "0m 0s",
+		Font = Theme.FontBold,
+		TextSize = 11,
+		TextColor3 = library.Theme.Text,
+		TextXAlignment = Enum.TextXAlignment.Right,
+		Parent = islandActivity,
+	})
+	actSession.ZIndex = 61
+
+	local actSessionLbl = Helpers.CreateLabel({
+		Name = "ActSessionLbl",
+		Size = UDim2.fromOffset(64, 12),
+		Position = UDim2.new(1, 0, 0, 16),
+		AnchorPoint = Vector2.new(1, 0),
+		Text = "session",
+		Font = Theme.Font,
+		TextSize = 9,
+		TextColor3 = library.Theme.TextMuted,
+		TextXAlignment = Enum.TextXAlignment.Right,
+		Parent = islandActivity,
+	})
+	actSessionLbl.ZIndex = 61
+
+	-- FPS / Ping row
+	local actFpsVal = Helpers.CreateLabel({
+		Name = "ActFps",
+		Size = UDim2.fromOffset(90, 18),
+		Position = UDim2.fromOffset(0, 42),
+		Text = "— fps",
+		Font = Theme.FontBold,
+		TextSize = 14,
+		TextColor3 = Color3.fromRGB(120, 255, 160),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = islandActivity,
+	})
+	actFpsVal.ZIndex = 61
+	local actFpsLbl = Helpers.CreateLabel({
+		Name = "ActFpsLbl",
+		Size = UDim2.fromOffset(90, 12),
+		Position = UDim2.fromOffset(0, 58),
+		Text = "FRAME RATE",
+		Font = Theme.Font,
+		TextSize = 8,
+		TextColor3 = library.Theme.TextMuted,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = islandActivity,
+	})
+	actFpsLbl.ZIndex = 61
+
+	local actPingVal = Helpers.CreateLabel({
+		Name = "ActPing",
+		Size = UDim2.fromOffset(90, 18),
+		Position = UDim2.fromOffset(110, 42),
+		Text = "— ms",
+		Font = Theme.FontBold,
+		TextSize = 14,
+		TextColor3 = Color3.fromRGB(120, 255, 160),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = islandActivity,
+	})
+	actPingVal.ZIndex = 61
+	local actPingLbl = Helpers.CreateLabel({
+		Name = "ActPingLbl",
+		Size = UDim2.fromOffset(90, 12),
+		Position = UDim2.fromOffset(110, 58),
+		Text = "PING",
+		Font = Theme.Font,
+		TextSize = 8,
+		TextColor3 = library.Theme.TextMuted,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = islandActivity,
+	})
+	actPingLbl.ZIndex = 61
+
+	-- Status chips row
+	local chips = Helpers.CreateFrame({
+		Name = "Chips",
+		Size = UDim2.new(1, 0, 0, 20),
+		Position = UDim2.fromOffset(0, 76),
+		BackgroundTransparency = 1,
+		Parent = islandActivity,
+	})
+	chips.ZIndex = 61
+	local chipsLayout = Instance.new("UIListLayout")
+	chipsLayout.FillDirection = Enum.FillDirection.Horizontal
+	chipsLayout.Padding = UDim.new(0, 6)
+	chipsLayout.Parent = chips
+
+	local function makeChip(name: string, text: string): TextLabel
+		local chip = Instance.new("TextLabel")
+		chip.Name = name
+		chip.AutomaticSize = Enum.AutomaticSize.X
+		chip.Size = UDim2.fromOffset(0, 18)
+		chip.BackgroundColor3 = library.Theme.ElementBackground or Color3.fromRGB(30, 30, 36)
+		chip.BackgroundTransparency = 0.1
+		chip.BorderSizePixel = 0
+		chip.Font = Theme.Font
+		chip.TextSize = 10
+		chip.TextColor3 = library.Theme.Text
+		chip.Text = text
+		chip.ZIndex = 62
+		chip.Parent = chips
+		Helpers.Corner(chip, 6)
+		local pad = Instance.new("UIPadding")
+		pad.PaddingLeft = UDim.new(0, 8)
+		pad.PaddingRight = UDim.new(0, 8)
+		pad.Parent = chip
+		return chip
+	end
+	local chipPlayers = makeChip("Players", "Players 0")
+	local chipRunning = makeChip("Running", "Ready")
+	local chipTab = makeChip("Tab", "Tab Home")
+
+	local actDesc = Helpers.CreateLabel({
+		Name = "ActDesc",
+		Size = UDim2.new(1, 0, 0, 14),
+		Position = UDim2.fromOffset(0, 100),
+		Text = "Vaxorin · CyberUI",
+		Font = Theme.Font,
+		TextSize = 10,
+		TextColor3 = library.Theme.TextMuted,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		Parent = islandActivity,
+	})
+	actDesc.ZIndex = 61
+
+	local actHint = Helpers.CreateLabel({
+		Name = "ActHint",
+		Size = UDim2.new(1, 0, 0, 14),
+		Position = UDim2.fromOffset(0, 118),
+		Text = "Click or press RCtrl to open",
+		Font = Theme.Font,
+		TextSize = 10,
+		TextColor3 = library.Theme.TextMuted,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = islandActivity,
+	})
+	actHint.ZIndex = 61
+
+	self._IslandActivity = islandActivity
+	self._IslandActStatus = chipRunning
+	self._IslandActStats = actFpsVal
+	self._IslandActFps = actFpsVal
+	self._IslandActPing = actPingVal
+	self._IslandActSession = actSession
+	self._IslandActPlayers = chipPlayers
+	self._IslandActTab = chipTab
+	self._IslandActGame = actGame
+	self._IslandActAvatar = actAvatar
+	self._IslandSessionStart = os.clock()
+
+	-- Classic circular open button (legacy)
+	local classicBtn = Instance.new("ImageButton")
+	classicBtn.Name = "ClassicOpen"
+	classicBtn.Size = UDim2.fromOffset(50, 50)
+	classicBtn.Position = UDim2.new(0, 43, 0.5, 0)
+	classicBtn.AnchorPoint = Vector2.new(0, 0.5)
+	classicBtn.BackgroundColor3 = library.Theme.Background
+	classicBtn.BackgroundTransparency = 0
+	classicBtn.Image = ""
+	classicBtn.AutoButtonColor = false
+	classicBtn.Visible = false
+	classicBtn.ZIndex = 55
+	classicBtn.Parent = screenGui
+	Helpers.Corner(classicBtn, 12)
+	local classicStroke = Helpers.Stroke(classicBtn, library.Theme.Border, 1.3)
+	local classicIcon = Instance.new("ImageLabel")
+	classicIcon.BackgroundTransparency = 1
+	classicIcon.Size = UDim2.fromOffset(23, 23)
+	classicIcon.Position = UDim2.fromScale(0.5, 0.5)
+	classicIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+	classicIcon.Image = logoAsset
+	classicIcon.ScaleType = Enum.ScaleType.Fit
+	classicIcon.ZIndex = 56
+	classicIcon.Parent = classicBtn
+	self._ClassicOpen = classicBtn
+	self._ClassicStroke = classicStroke
+
+	function self:_applyOpenStyle(style: string)
+		style = style or "Island"
+		self._OpenStyle = style
+		local useIsland = style ~= "Button"
+		if island then
+			-- visibility controlled by SetVisible; just track preferred control
+			island:SetAttribute("Preferred", useIsland)
+		end
+		if classicBtn then
+			classicBtn:SetAttribute("Preferred", not useIsland)
+		end
+		-- If currently hidden UI, show the right control
+		if not self._Visible and self._StartupComplete then
+			if useIsland then
+				island.Visible = true
+				classicBtn.Visible = false
+				self._FloatingButton = island
+			else
+				island.Visible = false
+				classicBtn.Visible = true
+				self._FloatingButton = classicBtn
+			end
+		end
+	end
+
+	-- Island hover → separate info card (island itself stays the same size)
+	local activityScale = Instance.new("UIScale")
+	activityScale.Name = "Pop"
+	activityScale.Scale = 0.9
+	activityScale.Parent = islandActivity
+
+	local ACTIVITY_H = 160
+	local activityFollowConn = nil :: RBXScriptConnection?
+
+	local function placeActivityHost()
+		local host = self._IslandActivityHost or islandActivityHost
+		if not host then return end
+		-- Follow island Position (works after drag) in the same ScreenGui space
+		local yOff = island.Position.Y.Offset + island.AbsoluteSize.Y + 10
+		host.AnchorPoint = Vector2.new(0.5, 0)
+		host.Position = UDim2.new(
+			island.Position.X.Scale,
+			island.Position.X.Offset,
+			island.Position.Y.Scale,
+			yOff
+		)
+	end
+
+	local function showIslandActivity()
+		local host = self._IslandActivityHost or islandActivityHost
+		placeActivityHost()
+		host.Size = UDim2.fromOffset(320, 0)
+		host.Visible = true
+		islandActivity.BackgroundColor3 = library.Theme.Secondary or Color3.fromRGB(18, 18, 22)
+		if actTitle then actTitle.TextColor3 = library.Theme.Text end
+		if actGame then actGame.TextColor3 = library.Theme.TextMuted end
+		if actHint then actHint.TextColor3 = library.Theme.TextMuted end
+		if actFpsVal then actFpsVal.TextColor3 = Color3.fromRGB(120, 255, 160) end
+		if actPingVal then actPingVal.TextColor3 = Color3.fromRGB(120, 255, 160) end
+		islandActivity.Position = UDim2.new(0.5, 0, 0, 0)
+		Tween.Play(host, { Size = UDim2.fromOffset(320, ACTIVITY_H) }, { Time = 0.22, EasingStyle = Enum.EasingStyle.Quint })
+		if activityFollowConn then activityFollowConn:Disconnect() end
+		activityFollowConn = game:GetService("RunService").RenderStepped:Connect(function()
+			if host.Visible then
+				placeActivityHost()
+			end
+		end)
+		self._Maid:GiveTask(activityFollowConn)
+		for _, bar in bars:GetChildren() do
+			if bar:IsA("Frame") then
+				Tween.Play(bar, { BackgroundColor3 = library.Theme.AccentAlt or library.Theme.Accent }, { Time = 0.12 })
+			end
+		end
+	end
+
+	local function hideIslandActivity()
+		local host = self._IslandActivityHost
+		if not host or not host.Visible then
+			return
+		end
+		if activityFollowConn then
+			activityFollowConn:Disconnect()
+			activityFollowConn = nil
+		end
+		Tween.Play(host, { Size = UDim2.fromOffset(320, 0) }, { Time = 0.16, EasingStyle = Enum.EasingStyle.Quint })
+		task.delay(0.16, function()
+			if host then host.Visible = false end
+		end)
+		for _, bar in bars:GetChildren() do
+			if bar:IsA("Frame") then
+				Tween.Play(bar, { BackgroundColor3 = library.Theme.Accent }, { Time = 0.12 })
+			end
+		end
+	end
+
+	self._Maid:GiveTask(islandHit.MouseEnter:Connect(showIslandActivity))
+
+	self._Maid:GiveTask(classicBtn.MouseEnter:Connect(function()
+		Tween.Play(classicBtn, { BackgroundColor3 = library.Theme.SurfaceHover }, { Time = 0.12 })
 	end))
-	self._Maid:GiveTask(floatingButton.MouseLeave:Connect(function()
-		Tween.Play(floatingButton, { BackgroundTransparency = 0.1 }, { Time = 0.15 })
+	self._Maid:GiveTask(classicBtn.MouseLeave:Connect(function()
+		Tween.Play(classicBtn, { BackgroundColor3 = library.Theme.Background }, { Time = 0.12 })
 	end))
+	self._Maid:GiveTask(classicBtn.MouseButton1Click:Connect(function()
+		playClick()
+		self:SetVisible(true)
+	end))
+
+	-- Live stats for island activity (always running)
+	self._LiveFps = 0
+	self._LivePing = 0
+	do
+		local frames, last = 0, os.clock()
+		self._Maid:GiveTask(game:GetService("RunService").RenderStepped:Connect(function()
+			frames += 1
+			local now = os.clock()
+			if now - last >= 0.4 then
+				self._LiveFps = math.floor(frames / (now - last) + 0.5)
+				frames = 0
+				last = now
+			end
+		end))
+		self._Maid:GiveTask(task.spawn(function()
+			while true do
+				local ping = 0
+				pcall(function()
+					local okFps = workspace:GetRealPhysicsFPS()
+					if typeof(okFps) == "number" and okFps > 0 and (self._LiveFps or 0) < 1 then
+						self._LiveFps = math.floor(okFps + 0.5)
+					end
+				end)
+				pcall(function()
+					local item = Stats.Network.ServerStatsItem["Data Ping"]
+					if item and item.GetValue then
+						ping = math.floor((item:GetValue() or 0) + 0.5)
+					end
+				end)
+				if ping == 0 then
+					pcall(function()
+						local localPlayer = game:GetService("Players").LocalPlayer
+						if localPlayer and localPlayer.GetNetworkPing then
+							ping = math.floor(localPlayer:GetNetworkPing() * 1000 + 0.5)
+						end
+					end)
+				end
+				self._LivePing = ping
+				local fps = self._LiveFps or 0
+				local ping = self._LivePing or 0
+				if self._IslandActFps then
+					self._IslandActFps.Text = string.format("%d fps", fps)
+				elseif self._IslandActStats then
+					self._IslandActStats.Text = string.format("%d fps", fps)
+				end
+				if self._IslandActPing then
+					self._IslandActPing.Text = string.format("%d ms", ping)
+				end
+				if self._IslandActSession and self._IslandSessionStart then
+					local sec = math.floor(os.clock() - self._IslandSessionStart)
+					local m = math.floor(sec / 60)
+					local s = sec % 60
+					self._IslandActSession.Text = string.format("%dm %02ds", m, s)
+				end
+				if self._IslandActPlayers then
+					self._IslandActPlayers.Text = string.format("Players %d/%d", #Players:GetPlayers(), Players.MaxPlayers)
+				end
+				if self._IslandActTab and self._ActiveTab then
+					local n = self._ActiveTab.Name or self._ActiveTab._Name or "Home"
+					self._IslandActTab.Text = "Tab " .. tostring(n)
+				end
+				if self._IslandActStatus then
+					local st = "Ready"
+					if self._FooterStatus and self._FooterStatus.Text and self._FooterStatus.Text ~= "" then
+						st = self._FooterStatus.Text
+					end
+					self._IslandActStatus.Text = st
+				end
+				task.wait(0.35)
+			end
+		end))
+	end
+
+
+	self._Maid:GiveTask(islandHit.MouseLeave:Connect(function()
+		task.delay(0.12, function()
+			-- stay open if pointer moved onto the revealed card
+		end)
+		hideIslandActivity()
+	end))
+	islandActivityHost.Active = true
+	self._Maid:GiveTask(islandActivityHost.MouseEnter:Connect(function()
+		local host = self._IslandActivityHost
+		if host then host.Visible = true end
+	end))
+	self._Maid:GiveTask(islandActivityHost.MouseLeave:Connect(hideIslandActivity))
 
 	-- Drag-vs-click distinction: only treat it as a "toggle" click if the pointer
 	-- barely moved. Previously any drag would also fire SetVisible(true) on release.
@@ -906,7 +1649,8 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			self._FloatDragging = true
 			self._FloatDragStart = input.Position
-			self._FloatStart = floatingButton.Position
+			local target = self._FloatingButton or floatingButton
+			self._FloatStart = target.Position
 			self._FloatDragInputType = input.UserInputType
 			floatMovedDistance = 0
 		end
@@ -919,7 +1663,8 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 			local delta = input.Position - self._FloatDragStart
 			floatMovedDistance = delta.Magnitude
-			floatingButton.Position = UDim2.new(
+			local target = self._FloatingButton or floatingButton
+			target.Position = UDim2.new(
 				self._FloatStart.X.Scale,
 				self._FloatStart.X.Offset + delta.X,
 				self._FloatStart.Y.Scale,
@@ -939,8 +1684,46 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		end
 	end))
 
-	self._Maid:Give(floatingButton)
-	self._FloatingButton = floatingButton
+	self._Maid:Give(island)
+	-- Weather layer on full ScreenGui so particles are always visible
+	self._Weather = createWeather(screenGui)
+	self._Weather:SetParentTargets(screenGui, main)
+	self._WeatherKind = "None"
+	self._WeatherScope = "Screen"
+	self._OpenStyle = "Island" -- or "Button"
+
+	-- Dim in SEPARATE ScreenGui with lower DisplayOrder — never covers Vaxorin UI
+	local dimGui = Instance.new("ScreenGui")
+	dimGui.Name = "VaxorinDimGui"
+	dimGui.ResetOnSpawn = false
+	dimGui.IgnoreGuiInset = true
+	dimGui.DisplayOrder = math.max(0, (screenGui.DisplayOrder or 100) - 20)
+	dimGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	dimGui.Parent = screenGui.Parent
+	self._DimGui = dimGui
+
+	local dim = Instance.new("Frame")
+	dim.Name = "VaxorinDim"
+	dim.Size = UDim2.fromScale(1, 1)
+	dim.BackgroundColor3 = Color3.new(0, 0, 0)
+	dim.BackgroundTransparency = 1
+	dim.BorderSizePixel = 0
+	dim.Active = false
+	dim.Visible = true
+	dim.Parent = dimGui
+	self._Dim = dim
+	self._DimAmount = self._DimAmount or 0.45
+
+	main.ZIndex = 50
+	screenGui.DisplayOrder = math.max(screenGui.DisplayOrder or 100, dimGui.DisplayOrder + 20)
+
+	-- Window open/close scale
+	local mainScale = Instance.new("UIScale")
+	mainScale.Name = "OpenScale"
+	mainScale.Scale = 1
+	mainScale.Parent = main
+	self._MainScale = mainScale
+
 
 	-- ============================================
 	-- WATERMARK (compact draggable FPS / Ping / Uptime pill)
@@ -1111,6 +1894,18 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		if dragInputType ~= nil and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
 			dragging = false
 			dragInputType = nil
+			-- Remember where the user left the window
+			self._MainBasePos = main.Position
+			if self.Library and self.Library.SetSession then
+				pcall(function()
+					self.Library:SetSession("WindowPos", {
+						XS = main.Position.X.Scale,
+						XO = main.Position.X.Offset,
+						YS = main.Position.Y.Scale,
+						YO = main.Position.Y.Offset,
+					})
+				end)
+			end
 		end
 	end))
 
@@ -1203,6 +1998,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		BackgroundTransparency = 1,
 		Parent = main,
 	})
+	contentArea.ZIndex = 10
 
 	-- Small status capsule in the new header/content gutter. It provides a
 	-- deliberate visual transition so the cards do not begin directly under the
@@ -1210,7 +2006,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	local statusRibbon = Helpers.CreateFrame({
 		Name = "StatusRibbon",
 		Size = UDim2.fromOffset(190, 28),
-		Position = UDim2.new(0.64, 0, 0, 7),
+		Position = UDim2.new(1, -130, 0, 7),
 		AnchorPoint = Vector2.new(0.5, 0),
 		BackgroundColor3 = library.Theme.Surface,
 		BackgroundTransparency = 0.08,
@@ -1256,11 +2052,12 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Size = UDim2.new(0, Theme.SidebarWidth, 1, 0),
 		Position = UDim2.fromOffset(0, 0),
 		BackgroundColor3 = library.Theme.Secondary,
-		BackgroundTransparency = 0.01,
+		BackgroundTransparency = 0,
 		Parent = contentArea,
 	})
 	local sidebarCorner = Helpers.Corner(sidebar, Theme.CornerRadius)
 	sidebar.ClipsDescendants = true
+	sidebar.ZIndex = 10
 	Helpers.Padding(sidebar, 16)
 
 
@@ -1268,7 +2065,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Name = "NavigationLabel",
 		Size = UDim2.new(1, 0, 0, 16),
 		Position = UDim2.new(0, 0, 0, if showSearch then 50 else 8),
-		Text = "NAVIGATION",
+		Text = "WORKSPACE",
 		Font = Theme.FontBold,
 		TextSize = 10,
 		TextColor3 = library.Theme.TextMuted,
@@ -1283,7 +2080,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	if showSearch then
 		local searchHolder = Helpers.CreateFrame({
 			Name = "SearchHolder",
-			Size = UDim2.new(1, 0, 0, 44),
+			Size = UDim2.new(1, 0, 0, 40),
 			Position = UDim2.fromOffset(0, 0),
 			BackgroundColor3 = library.Theme.Background,
 			BackgroundTransparency = 0.02,
@@ -1292,6 +2089,8 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Helpers.Corner(searchHolder, Theme.CornerRadiusSmall)
 		local searchStroke = Helpers.Stroke(searchHolder, library.Theme.Border, 1)
 		searchStroke.Transparency = 0.28
+		self._SearchHolder = searchHolder
+		self._SearchStroke = searchStroke
 
 		local searchIcon, searchIconStroke, searchIconHandle = createMagnifier(searchHolder, library.Theme)
 
@@ -1309,7 +2108,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		searchBox.TextXAlignment = Enum.TextXAlignment.Left
 		searchBox.ClearTextOnFocus = false
 		searchBox.Parent = searchHolder
-		searchTop = 68
+		searchTop = 62
 	else
 		searchTop = 28
 	end
@@ -1335,34 +2134,60 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	self._SearchResults = searchResults
 	self._SearchResultsStroke = searchResultsStroke
 
-	local footerHeight = 78
-	local tabList = Helpers.CreateFrame({
-		Name = "TabList",
-		Size = UDim2.new(1, 0, 1, -(searchTop + footerHeight + 12)),
-		Position = UDim2.new(0, 0, 0, searchTop),
-		BackgroundTransparency = 1,
-		Parent = sidebar,
-	})
+	local footerHeight = 68
+	local tabList = Instance.new("ScrollingFrame")
+	tabList.Name = "TabList"
+	tabList.Size = UDim2.new(1, 0, 1, -(searchTop + footerHeight + 12))
+	tabList.Position = UDim2.new(0, 0, 0, searchTop)
+	tabList.BackgroundTransparency = 1
+	tabList.BorderSizePixel = 0
+	tabList.Active = true
+	tabList.ScrollingEnabled = true
+	tabList.ScrollingDirection = Enum.ScrollingDirection.Y
+	tabList.ScrollBarThickness = 2
+	tabList.ScrollBarImageColor3 = library.Theme.Accent
+	tabList.ScrollBarImageTransparency = 0.75
+	tabList.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	tabList.CanvasSize = UDim2.new()
+	tabList.ClipsDescendants = true
+	tabList.Parent = sidebar
 	local tabLayout = Helpers.ListLayout(tabList, 5)
 	tabLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
 
 	local footer = Helpers.CreateFrame({
-		Name = "Footer",
+		Name = "FooterBar",
 		Size = UDim2.new(1, 0, 0, footerHeight),
 		Position = UDim2.new(0, 0, 1, -footerHeight),
-		BackgroundColor3 = library.Theme.Background,
-		BackgroundTransparency = 0.03,
+		BackgroundColor3 = library.Theme.ElementBackground or library.Theme.Secondary,
+		BackgroundTransparency = 0,
 		Parent = sidebar,
 	})
 	Helpers.Corner(footer, Theme.CornerRadiusSmall)
-	Helpers.Stroke(footer, library.Theme.Border, 1)
+	local footerStroke = Helpers.Stroke(footer, library.Theme.BorderStrong or library.Theme.Border, 1)
+	footerStroke.Transparency = 0.05
+	self._Footer = footer
+	self._FooterStroke = footerStroke
+	local footerAccent = Instance.new("Frame")
+	footerAccent.Name = "FooterAccent"
+	footerAccent.Size = UDim2.new(1, 0, 0, 2)
+	footerAccent.Position = UDim2.fromOffset(0, 0)
+	footerAccent.BackgroundColor3 = library.Theme.Accent
+	footerAccent.BorderSizePixel = 0
+	footerAccent.ZIndex = 2
+	footerAccent.Parent = footer
+	self._FooterAccent = footerAccent
 
 	local avatarImage = Instance.new("ImageLabel")
 	avatarImage.Name = "Avatar"
+	local defaultAvatar = ""
+	pcall(function()
+		local image, ready = Players:GetUserThumbnailAsync(Players.LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
+		if ready then defaultAvatar = image end
+	end)
 	avatarImage.Size = UDim2.fromOffset(42, 42)
 	avatarImage.Position = UDim2.fromOffset(10, 17)
 	avatarImage.BackgroundTransparency = 1
-	avatarImage.Image = data.Footer and data.Footer.Avatar or ""
+	avatarImage.Image = if data.Footer and data.Footer.Avatar then data.Footer.Avatar else defaultAvatar
 	avatarImage.ScaleType = Enum.ScaleType.Crop
 	avatarImage.Parent = footer
 	Helpers.Corner(avatarImage, 22)
@@ -1402,6 +2227,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	pages.BackgroundTransparency = 1
 	pages.BorderSizePixel = 0
 	pages.ClipsDescendants = true
+	pages.ZIndex = 10
 	pages.Parent = contentArea
 
 	-- ============================================
@@ -1543,8 +2369,9 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	-- THEME REFRESH
 	-- ============================================
 	local function refreshWindowTheme()
-		main.BackgroundColor3 = library.Theme.Background
-		topBar.BackgroundColor3 = library.Theme.Secondary
+		local fadeT = 0.28
+		Tween.Play(main, { BackgroundColor3 = library.Theme.Background }, { Time = fadeT })
+		Tween.Play(topBar, { BackgroundColor3 = library.Theme.Secondary }, { Time = fadeT })
 		topBarGradient.Color = ColorSequence.new({
 			ColorSequenceKeypoint.new(0, library.Theme.Secondary),
 			ColorSequenceKeypoint.new(0.55, library.Theme.Secondary),
@@ -1571,14 +2398,75 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		logoFrame.BackgroundColor3 = library.Theme.Background
 		logoStroke.Color = library.Theme.BorderStrong or library.Theme.Border
 		logoAccentStroke.Color = library.Theme.Accent
-		sidebar.BackgroundColor3 = library.Theme.Secondary
+		Tween.Play(sidebar, { BackgroundColor3 = library.Theme.Secondary }, { Time = 0.28 })
 		navLabel.TextColor3 = library.Theme.TextMuted
 		if searchBox then
 			searchBox.TextColor3 = library.Theme.Text
 			searchBox.PlaceholderColor3 = library.Theme.TextMuted
 		end
-		footer.BackgroundColor3 = library.Theme.Background
-		footerStatus.TextColor3 = library.Theme.Accent
+		if self._SearchHolder then
+			self._SearchHolder.BackgroundColor3 = library.Theme.Background
+		end
+		if self._SearchStroke then
+			self._SearchStroke.Color = library.Theme.Border
+		end
+		if self._SearchResults then
+			self._SearchResults.BackgroundColor3 = library.Theme.Surface
+		end
+		local footerBg = library.Theme.ElementBackground or library.Theme.Surface or library.Theme.Secondary
+		Tween.Play(footer, { BackgroundColor3 = footerBg, BackgroundTransparency = 0 }, { Time = 0.28 })
+		if self._FooterStroke then
+			self._FooterStroke.Color = library.Theme.Accent
+			self._FooterStroke.Transparency = 0.55
+		end
+		if self._FooterAccent then
+			self._FooterAccent.BackgroundColor3 = library.Theme.Accent
+		end
+		if footerName then
+			footerName.TextColor3 = library.Theme.Text
+		end
+		if footerStatus then
+			footerStatus.TextColor3 = library.Theme.Accent
+		end
+		for _, d in footer:GetDescendants() do
+			if d:IsA("UIStroke") and d ~= self._FooterStroke then
+				d.Color = library.Theme.BorderStrong or library.Theme.Border
+			elseif d:IsA("TextLabel") then
+				if d.Name == "Status" then
+					d.TextColor3 = library.Theme.Accent
+				elseif d.Name ~= "ActHint" then
+					d.TextColor3 = library.Theme.Text
+				end
+			end
+		end
+		if minimizeButton then
+			minimizeButton.BackgroundColor3 = library.Theme.Background
+		end
+		if closeButton then
+			closeButton.BackgroundColor3 = library.Theme.Background
+		end
+		if self._FloatingButton then
+			self._FloatingButton.BackgroundColor3 = Color3.fromRGB(30, 30, 34)
+			if self._IslandCompact then
+				self._IslandCompact.BackgroundColor3 = Color3.fromRGB(30, 30, 34)
+			end
+		end
+		if self._IslandStroke then
+			self._IslandStroke.Color = library.Theme.Border
+		end
+		if self._FloatingStroke then
+			self._FloatingStroke.Color = library.Theme.Border
+		end
+		if self._IslandTitle then
+			self._IslandTitle.TextColor3 = library.Theme.Text
+		end
+		if self._IslandBars then
+			for _, bar in self._IslandBars:GetChildren() do
+				if bar:IsA("Frame") then
+					bar.BackgroundColor3 = library.Theme.Accent
+				end
+			end
+		end
 		atmosphere.BackgroundColor3 = library.Theme.Background
 		atmosphereGradient.Color = ColorSequence.new({
 			ColorSequenceKeypoint.new(0, library.Theme.Background),
@@ -1710,9 +2598,16 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	self.SearchBox = searchBox
 	self._SearchIconStroke = searchIconStroke
 	self._SearchIconHandle = searchIconHandle
+	self._AvatarImage = avatarImage
+	self._NavLabel = navLabel
 	self._FooterName = footerName
 	self._FooterStatus = footerStatus
-	self._LoadingFrame = loadingFrame
+	self._LoadingFrame = loadingGui
+	self._BootGui = loadingGui
+	self._ContentArea = contentArea
+	self._TopBarHeight = topBarHeight
+	self._SidebarWidth = Theme.SidebarWidth
+	self._LayoutMode = data.Layout or "Vaxorin"
 	self._Visible = true
 	self._Minimized = false
 	self._StartupComplete = false
@@ -1725,6 +2620,8 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		return windowSize
 	end
 	self._CornerInstances = { mainCorner, topBarCorner, sidebarCorner, infoBarCorner }
+
+	self._LayoutVariants = LayoutVariants.new(self, data.Layout or "Vaxorin")
 
 	local function clearSearchResults()
 		for _, child in searchResults:GetChildren() do
@@ -1850,33 +2747,72 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	-- ============================================
 	-- STARTUP COMPLETE
 	-- ============================================
-	self._Maid:GiveTask(task.delay(0.8, function()
-		if not self.Gui then
-			return
-		end
-
-		if loadingFrame and loadingFrame.Parent then
-			loadingStatus.Text = "Ready"
-
-			Tween.Play(loadingFrame, { BackgroundTransparency = 1 }, { Time = 0.2 })
-			Tween.Play(loadingAccent, { BackgroundTransparency = 1 }, { Time = 0.2 })
-			Tween.Play(loadingTitle, { TextTransparency = 1 }, { Time = 0.2 })
-			Tween.Play(loadingSubtitle, { TextTransparency = 1 }, { Time = 0.2 })
-			Tween.Play(loadingVersion, { TextTransparency = 1 }, { Time = 0.2 })
-			Tween.Play(loadingStatus, { TextTransparency = 1 }, { Time = 0.2 })
-			Tween.Play(progressTrack, { BackgroundTransparency = 1 }, { Time = 0.2 })
-			Tween.Play(progressFill, { BackgroundTransparency = 1 }, { Time = 0.2 })
-
-			task.wait(0.2)
-			if loadingFrame and loadingFrame.Parent then
-				loadingFrame:Destroy()
+	self._Maid:GiveTask(task.delay(1.15, function()
+		if not self.Gui then return end
+		if self._BootGui and self._BootGui.Parent then
+			Tween.Play(self._BootCard, { Size = UDim2.fromOffset(560, 344) }, { Time = 0.18 })
+			task.wait(0.08)
+			Tween.Play(self._BootGui:FindFirstChild("Backdrop"), { BackgroundTransparency = 1 }, { Time = 0.18 })
+			Tween.Play(self._BootCard, { BackgroundTransparency = 1 }, { Time = 0.18 })
+			for _, child in self._BootCard:GetDescendants() do
+				if child:IsA("TextLabel") then Tween.Play(child, { TextTransparency = 1 }, { Time = 0.16 }) end
+				if child:IsA("Frame") then Tween.Play(child, { BackgroundTransparency = 1 }, { Time = 0.16 }) end
+				if child:IsA("UIStroke") then Tween.Play(child, { Transparency = 1 }, { Time = 0.16 }) end
 			end
+			task.wait(0.2)
+			if self._BootGui.Parent then self._BootGui:Destroy() end
 		end
-
 		self._StartupComplete = true
 		self:SetVisible(self._Visible)
 	end))
 
+	local restoredLayout = data.Layout or "Vaxorin"
+	if self.Library then
+		local fromFlag = self.Library:_getSavedFlag("Vaxorin.Visual.Layout", nil, true)
+		local fromSession = self.Library.GetSession and self.Library:GetSession("Layout", nil)
+		restoredLayout = fromFlag or fromSession or restoredLayout
+	end
+	-- Apply saved theme so Home / chrome use correct colors from the start
+	pcall(function()
+		local style = self.Library:_getSavedFlag("Vaxorin.Theme.Style", self.Library.Theme.Style, true)
+		if style then
+			self.Library.Theme.Style = style
+		end
+	end)
+	-- Restore open control + weather (no Home tab — dashboard via Island hover / footer)
+	pcall(function()
+		local openStyle = self.Library:_getSavedFlag("Vaxorin.Visual.OpenStyle", self._OpenStyle or "Island", true)
+		if self._applyOpenStyle then self:_applyOpenStyle(openStyle) end
+		local weather = self.Library:_getSavedFlag("Vaxorin.Visual.Weather", "None", true)
+		if weather and self._Weather then
+			self._WeatherKind = weather
+			self._Weather:Set(weather)
+		end
+		local dimPct = self.Library:_getSavedFlag("Vaxorin.Visual.DimAmount", 45, true)
+		if typeof(dimPct) == "number" then
+			self._DimAmount = math.clamp(dimPct / 100, 0, 1)
+		end
+	end)
+	-- Footer click opens a lightweight dashboard notify for now
+	if footer then
+		footer.Active = true
+		self._Maid:GiveTask(footer.InputBegan:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 then
+				local fpsText = self._IslandActStats and self._IslandActStats.Text or ""
+				self:Notify({
+					Title = "Dashboard",
+					Content = string.format("%s\n%s\nPlace %s", 
+						(footerName and footerName.Text) or "Welcome",
+						fpsText,
+						tostring(game.PlaceId)),
+					Type = "Info",
+					Duration = 3,
+				})
+			end
+		end))
+	end
+	self:_createHomeTab()
+	self:SetLayout(restoredLayout)
 	return self :: any
 end
 
@@ -1953,15 +2889,241 @@ function Window:_selectTab(tab: any)
 	Tween.Play(newPage, { Position = UDim2.fromOffset(0, 0) }, { Time = 0.2 })
 end
 
+function Window:SetLayout(mode: string)
+	local normalized = ({ Vaxorin = "Vaxorin", Classic = "Classic", Minecraft = "Minecraft", Orbit = "Orbit", Aether = "Aether", Nova = "Nova", Vortex = "Vortex", Prism = "Prism", Eclipse = "Eclipse", Zenith = "Zenith", Compact = "Orbit", Expanded = "Vaxorin" })[mode] or "Vaxorin"
+	self._LayoutMode = normalized
+	if self._LayoutVariants then
+		self._LayoutVariants:SetMode(normalized)
+	end
+	if self._LayoutModeLabel then self._LayoutModeLabel.Text = normalized .. " interface" end
+	return normalized
+end
+
+
+function Window:_createHomeTab()
+	if self._HomeTab then
+		return self._HomeTab
+	end
+
+	local library = self.Library
+	local Players = game:GetService("Players")
+	local Stats = game:GetService("Stats")
+	local localPlayer = Players.LocalPlayer
+
+	-- Insert Home as first tab
+	local homeTab = Tab.new(self, "Home")
+	self._HomeTab = homeTab
+	table.insert(self._Tabs, 1, homeTab)
+	if self._LayoutVariants and self._LayoutVariants.SyncTabs then
+		self._LayoutVariants:SyncTabs()
+	end
+
+	local displayName = localPlayer.DisplayName or localPlayer.Name
+	local userName = localPlayer.Name
+
+	local welcome = homeTab:CreateSection({
+		Name = "Welcome",
+		Description = "Welcome back",
+	})
+	welcome:CreateParagraph({
+		Title = "WELCOME BACK",
+		Content = displayName .. "\n@" .. userName,
+	})
+	local avatarUrl = ""
+	pcall(function()
+		avatarUrl = Players:GetUserThumbnailAsync(
+			localPlayer.UserId,
+			Enum.ThumbnailType.HeadShot,
+			Enum.ThumbnailSize.Size150x150
+		)
+	end)
+	if avatarUrl ~= "" then
+		welcome:CreateParagraph({
+			Title = "Avatar",
+			Content = "Loaded for " .. displayName,
+		})
+	end
+	welcome:CreateButton({
+		Name = "Copy Username",
+		Callback = function()
+			if setclipboard then pcall(setclipboard, userName) end
+			self:Notify({ Title = "Username", Content = "Copied @" .. userName, Type = "Success", Duration = 2 })
+		end,
+	})
+
+	local perf = homeTab:CreateSection({
+		Name = "Performance",
+		Description = "Live client stats",
+	})
+	local fpsStat = perf:CreateStat({ Label = "FPS", Value = "—", Delta = "Live" })
+	local pingStat = perf:CreateStat({ Label = "PING", Value = "—", Delta = "ms" })
+	local playersStat = perf:CreateStat({
+		Label = "PLAYERS",
+		Value = string.format("%d/%d", #Players:GetPlayers(), Players.MaxPlayers),
+		Delta = "Server",
+	})
+	local sessionStat = perf:CreateStat({ Label = "SESSION", Value = "0s", Delta = "Uptime" })
+
+	local gameSec = homeTab:CreateSection({
+		Name = "Game",
+		Description = "Current place",
+	})
+	local gameName = "Unknown"
+	local creatorName = ""
+	pcall(function()
+		local info = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId)
+		if info then
+			gameName = info.Name or gameName
+			creatorName = info.Creator and info.Creator.Name or ""
+		end
+	end)
+	gameSec:CreateParagraph({
+		Title = gameName,
+		Content = string.format(
+			"%s%s\nPlaceId: %s  ·  Job truncated\nPlayers: %d/%d",
+			creatorName ~= "" and ("by " .. creatorName .. "\n") or "",
+			"",
+			tostring(game.PlaceId),
+			#Players:GetPlayers(),
+			Players.MaxPlayers
+		),
+	})
+
+	local actions = homeTab:CreateSection({
+		Name = "Quick Actions",
+		Description = "Server utilities",
+	})
+	actions:CreateButton({
+		Name = "Rejoin",
+		Callback = function()
+			pcall(function()
+				game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, game.JobId, localPlayer)
+			end)
+		end,
+	})
+	actions:CreateButton({
+		Name = "Hop (same place)",
+		Callback = function()
+			pcall(function()
+				game:GetService("TeleportService"):Teleport(game.PlaceId, localPlayer)
+			end)
+		end,
+	})
+	actions:CreateButton({
+		Name = "Copy Job ID",
+		Callback = function()
+			if setclipboard then pcall(setclipboard, game.JobId) end
+			self:Notify({ Title = "JobId", Content = "Copied", Type = "Info", Duration = 2 })
+		end,
+	})
+	actions:CreateButton({
+		Name = "Copy Place ID",
+		Callback = function()
+			if setclipboard then pcall(setclipboard, tostring(game.PlaceId)) end
+			self:Notify({ Title = "PlaceId", Content = "Copied", Type = "Info", Duration = 2 })
+		end,
+	})
+
+	local sessionStart = os.clock()
+	local frames, last = 0, os.clock()
+	local fpsValue = 0
+	self._Maid:GiveTask(game:GetService("RunService").RenderStepped:Connect(function()
+		frames += 1
+		local now = os.clock()
+		if now - last >= 0.5 then
+			fpsValue = math.floor(frames / (now - last) + 0.5)
+			frames = 0
+			last = now
+		end
+	end))
+	self._Maid:GiveTask(task.spawn(function()
+		while self.Gui and self.Gui.Parent do
+			local ping = 0
+			pcall(function()
+				local item = Stats.Network.ServerStatsItem["Data Ping"]
+				if item then ping = math.floor((item:GetValue() or 0) + 0.5) end
+			end)
+			if ping == 0 then
+				pcall(function()
+					if localPlayer.GetNetworkPing then
+						ping = math.floor(localPlayer:GetNetworkPing() * 1000 + 0.5)
+					end
+				end)
+			end
+			if fpsStat and fpsStat.Set then fpsStat:Set(tostring(fpsValue)) end
+			if pingStat and pingStat.Set then pingStat:Set(tostring(ping) .. "ms") end
+			if playersStat and playersStat.Set then
+				playersStat:Set(string.format("%d/%d", #Players:GetPlayers(), Players.MaxPlayers))
+			end
+			if sessionStat and sessionStat.Set then
+				local sec = math.floor(os.clock() - sessionStart)
+				local m = math.floor(sec / 60)
+				local s = sec % 60
+				sessionStat:Set(string.format("%dm %02ds", m, s))
+			end
+			task.wait(0.5)
+		end
+	end))
+
+	if not self._ActiveTab then
+		self:_selectTab(homeTab)
+	end
+	if self._OptionsTab then
+		self:_ensureOptionsLast()
+	end
+
+	return homeTab
+end
+
+
+function Window:_ensureOptionsLast()
+	if not self._OptionsTab or not self._Tabs then
+		return
+	end
+	local tabs = self._Tabs
+	local idx = nil
+	for i, t in ipairs(tabs) do
+		if t == self._OptionsTab then
+			idx = i
+			break
+		end
+	end
+	if idx then
+		table.remove(tabs, idx)
+	end
+	table.insert(tabs, self._OptionsTab)
+	-- LayoutOrder on tab buttons if present
+	for i, t in ipairs(tabs) do
+		if t and t.Button then
+			t.Button.LayoutOrder = i
+		end
+	end
+	if self._LayoutVariants and self._LayoutVariants.SyncTabs then
+		pcall(function()
+			self._LayoutVariants:SyncTabs()
+		end)
+	end
+end
+
 function Window:CreateTab(name: string)
 	local tab = Tab.new(self, name)
 	table.insert(self._Tabs, tab)
+	if self._LayoutVariants and self._LayoutVariants.SyncTabs then self._LayoutVariants:SyncTabs() end
 
 	if not self._OptionsTab then
 		self:_createOptionsTab()
+	else
+		self:_ensureOptionsLast()
+	end
+
+	local savedTab = nil
+	if self.Library and self.Library.GetSession then
+		savedTab = self.Library:GetSession("LastTab", nil)
 	end
 
 	if not self._ActiveTab then
+		self:_selectTab(tab)
+	elseif savedTab and name == savedTab then
 		self:_selectTab(tab)
 	end
 
@@ -1973,9 +3135,11 @@ function Window:_createOptionsTab()
 		return self._OptionsTab
 	end
 
-	local optionsTab = Tab.new(self, "⚙️ Options")
+	local optionsTab = Tab.new(self, "Options")
 	self._OptionsTab = optionsTab
-	table.insert(self._Tabs, optionsTab)
+	table.insert(self._Tabs, optionsTab) -- always at end
+	self:_ensureOptionsLast()
+	if self._LayoutVariants and self._LayoutVariants.SyncTabs then self._LayoutVariants:SyncTabs() end
 
 	self.Library.Theme.Style = self.Library:_getSavedFlag("Vaxorin.Theme.Style", self.Library.Theme.Style, true)
 	self.Library.Theme.Background = self.Library:_getSavedFlag("Vaxorin.Theme.Background", self.Library.Theme.Background, true)
@@ -1992,11 +3156,192 @@ function Window:_createOptionsTab()
 
 	visualSection:CreateDropdown({
 		Name = "Theme Preset",
-		Options = { "Vaxorin", "Dark", "Light", "Cyber" },
+		Options = { "Vaxorin", "Deep", "Sakura", "Midnight", "Ocean", "Emerald", "Crimson", "Amber", "Frost", "Rose", "Neon", "Sunset", "Forest", "Slate", "Dark", "Light", "Cyber" },
 		CurrentOption = self.Library.Theme.Style,
 		Flag = "Vaxorin.Theme.Style",
+		Save = true,
 		Callback = function(value)
-			self.Library.Theme.Style = value
+			if type(value) == "table" then value = value[1] end
+			self.Library.Theme.Style = tostring(value or "Vaxorin")
+			if self.RefreshTheme then self:RefreshTheme() end
+		end,
+	})
+
+	visualSection:CreateDropdown({
+		Name = "Open Control",
+		Options = { "Island", "Button" },
+		CurrentOption = self._OpenStyle or "Island",
+		Flag = "Vaxorin.Visual.OpenStyle",
+		Save = true,
+		Callback = function(value)
+			if type(value) == "table" then value = value[1] end
+			if self._applyOpenStyle then
+				self:_applyOpenStyle(tostring(value or "Island"))
+			else
+				self._OpenStyle = tostring(value or "Island")
+			end
+		end,
+	})
+
+	visualSection:CreateDropdown({
+		Name = "Weather",
+		Options = { "None", "Rain", "Snow", "Sakura", "Stars", "Leaves" },
+		CurrentOption = self._WeatherKind or "None",
+		Flag = "Vaxorin.Visual.Weather",
+		Save = true,
+		Callback = function(value)
+			if type(value) == "table" then value = value[1] end
+			value = tostring(value or "None")
+			self._WeatherKind = value
+			if self._Weather then
+				self._Weather:Set(value)
+			end
+		end,
+	})
+
+	visualSection:CreateDropdown({
+		Name = "Weather Scope",
+		Options = { "Screen", "UI" },
+		CurrentOption = self._WeatherScope or "Screen",
+		Flag = "Vaxorin.Visual.WeatherScope",
+		Save = true,
+		Callback = function(value)
+			if type(value) == "table" then value = value[1] end
+			value = tostring(value or "Screen")
+			self._WeatherScope = value
+			if self._Weather and self._Weather.SetScope then
+				self._Weather:SetScope(value)
+			end
+		end,
+	})
+
+	visualSection:CreateSlider({
+		Name = "Background Dim",
+		Min = 0,
+		Max = 100,
+		Default = math.floor((self._DimAmount or 0.45) * 100 + 0.5),
+		Flag = "Vaxorin.Visual.DimAmount",
+		Save = true,
+		Callback = function(value)
+			local n = tonumber(value) or 45
+			self._DimAmount = math.clamp(n / 100, 0, 1)
+			if self._Dim and self._Visible then
+				Tween.Play(self._Dim, { BackgroundTransparency = 1 - self._DimAmount }, { Time = 0.12 })
+			end
+		end,
+	})
+
+	visualSection:CreateDropdown({
+		Name = "Layout",
+		Options = { "Vaxorin", "Classic", "Minecraft", "Orbit", "Aether", "Nova", "Vortex", "Prism", "Eclipse", "Zenith" },
+		CurrentOption = self._LayoutMode,
+		Flag = "Vaxorin.Visual.Layout",
+		Callback = function(value)
+			self:SetLayout(value)
+		end,
+	})
+
+	-- Profiles (requires ConfigurationSaving.Enabled = true)
+	local profileSection = optionsTab:CreateSection("Profiles")
+	profileSection:CreateParagraph({
+		Title = "Config profiles",
+		Content = "Save and load full setting snapshots. Needs ConfigurationSaving enabled in CreateWindow.",
+	})
+
+	local profileNames = {}
+	if self.Library and self.Library.GetProfiles then
+		profileNames = self.Library:GetProfiles()
+	end
+	if #profileNames == 0 then
+		profileNames = { "(none yet)" }
+	end
+
+	local activeProfile = "(none yet)"
+	if self.Library and self.Library.GetSession then
+		activeProfile = self.Library:GetSession("ActiveProfile", nil) or profileNames[1]
+	end
+
+	local profileDropdown
+	profileDropdown = profileSection:CreateDropdown({
+		Name = "Profile",
+		Options = profileNames,
+		CurrentOption = activeProfile,
+		Flag = "Vaxorin.Session.ActiveProfile",
+		Save = false,
+		Callback = function(value)
+			if value and value ~= "(none yet)" and self.Library and self.Library.LoadProfile then
+				local ok = self.Library:LoadProfile(value)
+				if self.Library.Notify then
+					self.Library:Notify({
+						Title = if ok then "Profile loaded" else "Load failed",
+						Content = tostring(value),
+						Duration = 2,
+					})
+				end
+			end
+		end,
+	})
+
+	profileSection:CreateInput({
+		Name = "New profile name",
+		PlaceholderText = "e.g. Farm, PvP",
+		CurrentValue = "",
+		Flag = "Vaxorin.Session.ProfileDraft",
+		Save = false,
+		Callback = function() end,
+	})
+
+	profileSection:CreateButton({
+		Name = "Save current as profile",
+		Callback = function()
+			if not self.Library or not self.Library.SaveProfile then
+				return
+			end
+			local draft = self.Library.Flags["Vaxorin.Session.ProfileDraft"]
+			local name = if type(draft) == "string" and draft ~= "" then draft else nil
+			if not name and self.Library.GetSession then
+				name = self.Library:GetSession("ActiveProfile", nil)
+			end
+			if not name or name == "" or name == "(none yet)" then
+				name = "Profile " .. tostring(os.time() % 10000)
+			end
+			local ok = self.Library:SaveProfile(name)
+			if self.Library.Notify then
+				self.Library:Notify({
+					Title = if ok then "Profile saved" else "Save failed",
+					Content = tostring(name),
+					Duration = 2,
+				})
+			end
+			if ok and profileDropdown and profileDropdown.Set then
+				local names = self.Library:GetProfiles()
+				if profileDropdown.RefreshOptions then
+					profileDropdown:RefreshOptions(names)
+				end
+				profileDropdown:Set(name)
+			end
+		end,
+	})
+
+	profileSection:CreateButton({
+		Name = "Delete selected profile",
+		Callback = function()
+			if not self.Library or not self.Library.DeleteProfile then
+				return
+			end
+			local name = self.Library:GetSession("ActiveProfile", nil)
+				or self.Library.Flags["Vaxorin.Session.ActiveProfile"]
+			if not name or name == "(none yet)" then
+				return
+			end
+			local ok = self.Library:DeleteProfile(name)
+			if self.Library.Notify then
+				self.Library:Notify({
+					Title = if ok then "Profile deleted" else "Delete failed",
+					Content = tostring(name),
+					Duration = 2,
+				})
+			end
 		end,
 	})
 
@@ -2090,6 +3435,24 @@ function Window:_createOptionsTab()
 			end
 		end,
 	})
+
+	local featuresSection = optionsTab:CreateSection("✨ New in V5")
+	featuresSection:CreateBadge({ Text = "V5 MEGA UPDATE", Color = self.Library.Theme.Accent, Width = 128 })
+	featuresSection:CreateCard({ Title = "New component system", Content = "Cards, badges, progress, status, notices, stats, dividers and icon actions are now first-class elements." })
+	featuresSection:CreateStatus({ Title = "Interface", Content = "All systems operational" })
+	featuresSection:CreateProgress({ Title = "UI engine", CurrentValue = 1 })
+	featuresSection:CreateNotice({ Title = "Interface variants", Content = "Switch the entire shell: Vaxorin, Classic, Minecraft, Orbit, Aether, Nova, Vortex, Prism, Eclipse, Zenith." })
+	featuresSection:CreateStat({ Label = "Element modules", Value = "20+", Delta = "NEW" })
+	featuresSection:CreateDivider({})
+	featuresSection:CreateIconButton({ Text = "Preview Classic", Callback = function() self:SetLayout("Classic") end })
+	featuresSection:CreateIconButton({ Text = "Preview Minecraft", Callback = function() self:SetLayout("Minecraft") end })
+	featuresSection:CreateIconButton({ Text = "Preview Orbit", Callback = function() self:SetLayout("Orbit") end })
+	featuresSection:CreateIconButton({ Text = "Preview Aether", Callback = function() self:SetLayout("Aether") end })
+	featuresSection:CreateIconButton({ Text = "Preview Nova", Callback = function() self:SetLayout("Nova") end })
+	featuresSection:CreateIconButton({ Text = "Preview Vortex", Callback = function() self:SetLayout("Vortex") end })
+	featuresSection:CreateIconButton({ Text = "Preview Prism", Callback = function() self:SetLayout("Prism") end })
+	featuresSection:CreateIconButton({ Text = "Preview Eclipse", Callback = function() self:SetLayout("Eclipse") end })
+	featuresSection:CreateIconButton({ Text = "Preview Zenith", Callback = function() self:SetLayout("Zenith") end })
 
 	local generalSection = optionsTab:CreateSection("🧩 General")
 	generalSection:CreateParagraph({
@@ -2207,6 +3570,289 @@ function Window:_createOptionsTab()
 	return optionsTab
 end
 
+
+-- ============================================
+-- DEVELOPER WINDOW
+-- ============================================
+-- Opens a separate, draggable panel that developers can use for live stats,
+-- debug values, counters, status information, or any other text.
+--
+-- Example:
+-- local dev = Window:CreateDeveloperWindow({
+--     Title = "Developer Stats",
+--     Stats = {
+--         Players = #game:GetService("Players"):GetPlayers(),
+--         FPS = 60,
+--         Status = "Online",
+--     },
+-- })
+--
+-- Update it later:
+-- dev:SetStats({ Players = 12, FPS = 144, Status = "Running" })
+-- dev:SetContent("Custom developer text")
+function Window:CreateDeveloperWindow(options: any?): DeveloperPanelHandle
+	local data = (typeof(options) == "table") and options or {}
+	local parent = self._TopGuiParent or self.Gui.Parent
+	local existing = self._DeveloperGui
+	if existing then
+		existing:Destroy()
+	end
+
+	local developerGui = Instance.new("ScreenGui")
+	developerGui.Name = "VaxorinDeveloper"
+	developerGui.ResetOnSpawn = false
+	developerGui.IgnoreGuiInset = true
+	developerGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	developerGui.DisplayOrder = 999
+	developerGui.Parent = parent
+	self._DeveloperGui = developerGui
+
+	local width = tonumber(data.Width) or 360
+	local height = tonumber(data.Height) or 300
+	local titleText = tostring(data.Title or "Developer Panel")
+
+	local panel = Instance.new("Frame")
+	panel.Name = "DeveloperPanel"
+	panel.Size = UDim2.fromOffset(width, height)
+	panel.Position = UDim2.new(0.5, -width / 2, 0.5, -height / 2)
+	panel.BackgroundColor3 = Theme.Surface
+	panel.BorderSizePixel = 0
+	panel.Active = true
+	panel.Parent = developerGui
+	Helpers.Corner(panel, Theme.CornerRadius)
+	Helpers.Stroke(panel, Theme.BorderStrong, 1)
+	Helpers.Glow(panel, Theme.Accent, 10, 0.94)
+
+	local top = Instance.new("Frame")
+	top.Name = "Header"
+	top.Size = UDim2.new(1, 0, 0, 48)
+	top.BackgroundColor3 = Theme.Secondary
+	top.BorderSizePixel = 0
+	top.Active = true
+	top.Parent = panel
+
+	local title = Helpers.CreateLabel({
+		Name = "Title",
+		Size = UDim2.new(1, -56, 1, 0),
+		Position = UDim2.fromOffset(16, 0),
+		Text = titleText,
+		TextColor3 = Theme.Text,
+		TextSize = 15,
+		Font = Theme.FontBold,
+		Parent = top,
+	})
+
+	local close = Helpers.CreateButton({
+		Name = "Close",
+		Size = UDim2.fromOffset(40, 40),
+		Position = UDim2.new(1, -44, 0, 4),
+		Text = "×",
+		TextColor3 = Theme.TextMuted,
+		TextSize = 22,
+		Font = Theme.FontBold,
+		BackgroundTransparency = 1,
+		Parent = top,
+	})
+	close.MouseButton1Click:Connect(function()
+		developerGui:Destroy()
+		if self._DeveloperGui == developerGui then
+			self._DeveloperGui = nil
+		end
+	end)
+
+	local accent = Instance.new("Frame")
+	accent.Name = "Accent"
+	accent.Size = UDim2.new(1, 0, 0, 2)
+	accent.Position = UDim2.fromOffset(0, 46)
+	accent.BackgroundColor3 = Theme.Accent
+	accent.BorderSizePixel = 0
+	accent.Parent = top
+
+	local content = Instance.new("ScrollingFrame")
+	content.Name = "Content"
+	content.Size = UDim2.new(1, -24, 1, -64)
+	content.Position = UDim2.fromOffset(12, 56)
+	content.BackgroundTransparency = 1
+	content.BorderSizePixel = 0
+	content.ScrollBarThickness = 4
+	content.CanvasSize = UDim2.new()
+	content.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	content.ScrollingDirection = Enum.ScrollingDirection.Y
+	content.Parent = panel
+
+	local layout = Instance.new("UIListLayout")
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Padding = UDim.new(0, 7)
+	layout.Parent = content
+
+	local padding = Instance.new("UIPadding")
+	padding.PaddingBottom = UDim.new(0, 8)
+	padding.Parent = content
+
+	local panelHandle = {} :: any
+	local function clearContent()
+		for _, child in content:GetChildren() do
+			if child:IsA("TextLabel") or child:IsA("Frame") then
+				child:Destroy()
+			end
+		end
+	end
+
+	function panelHandle:SetStats(stats: { [string]: any })
+		clearContent()
+		local entries = {}
+		for key, value in stats do
+			table.insert(entries, { Key = tostring(key), Value = tostring(value) })
+		end
+		table.sort(entries, function(a, b)
+			return a.Key < b.Key
+		end)
+
+		for index, entry in entries do
+			local row = Instance.new("Frame")
+			row.Name = "Stat_" .. tostring(index)
+			row.Size = UDim2.new(1, 0, 0, 34)
+			row.BackgroundColor3 = Theme.ElementBackground
+			row.BorderSizePixel = 0
+			row.LayoutOrder = index
+			row.Parent = content
+			Helpers.Corner(row, Theme.CornerRadiusSmall)
+
+			Helpers.CreateLabel({
+				Name = "Key",
+				Size = UDim2.new(0.5, -12, 1, 0),
+				Position = UDim2.fromOffset(12, 0),
+				Text = entry.Key,
+				TextColor3 = Theme.TextMuted,
+				TextSize = 13,
+				Parent = row,
+			})
+
+			Helpers.CreateLabel({
+				Name = "Value",
+				Size = UDim2.new(0.5, -12, 1, 0),
+				Position = UDim2.new(0.5, 0, 0, 0),
+				Text = entry.Value,
+				TextColor3 = Theme.Text,
+				TextSize = 13,
+				Font = Theme.FontBold,
+				TextXAlignment = Enum.TextXAlignment.Right,
+				Parent = row,
+			})
+		end
+	end
+
+	function panelHandle:SetContent(text: string)
+		clearContent()
+		local label = Helpers.CreateLabel({
+			Name = "DeveloperContent",
+			Size = UDim2.new(1, -12, 0, 0),
+			Text = tostring(text or ""),
+			TextColor3 = Theme.Text,
+			TextSize = 13,
+			TextWrapped = true,
+			AutomaticSize = Enum.AutomaticSize.Y,
+			Parent = content,
+		})
+		label.LayoutOrder = 1
+	end
+
+	function panelHandle:Close()
+		if developerGui.Parent then
+			developerGui:Destroy()
+		end
+		if self._DeveloperGui == developerGui then
+			self._DeveloperGui = nil
+		end
+	end
+
+	function panelHandle:Open()
+		if not developerGui.Parent then
+			developerGui.Parent = parent
+		end
+		developerGui.Enabled = true
+	end
+
+	-- Simple drag support for the header.
+	local UserInputService = game:GetService("UserInputService")
+	local dragging = false
+	local dragStart: Vector2
+	local startPos: UDim2
+	local dragInput: InputObject?
+
+	top.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			dragStart = input.Position
+			startPos = panel.Position
+		end
+	end)
+
+	top.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = false
+		end
+	end)
+
+	top.InputChanged:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseMovement
+			or input.UserInputType == Enum.UserInputType.Touch then
+			dragInput = input
+		end
+	end)
+
+	UserInputService.InputChanged:Connect(function(input)
+		if dragging and input == dragInput then
+			local delta = input.Position - dragStart
+			panel.Position = UDim2.new(
+				startPos.X.Scale, startPos.X.Offset + delta.X,
+				startPos.Y.Scale, startPos.Y.Offset + delta.Y
+			)
+		end
+	end)
+
+	if type(data.Stats) == "table" then
+		panelHandle:SetStats(data.Stats)
+	elseif data.Content ~= nil then
+		panelHandle:SetContent(tostring(data.Content))
+	end
+
+	return panelHandle
+end
+
+function Window:OpenDeveloperWindow(options: any?): DeveloperPanelHandle
+	return self:CreateDeveloperWindow(options)
+end
+
+-- Opens the visual Custom ESP Designer. The returned layout is renderer-agnostic
+-- and can be consumed by a project-specific ESP/overlay renderer.
+function Window:CreateESPBuilder(options: any?)
+	local data = (typeof(options) == "table") and options or {}
+	if self._ESPBuilder then
+		pcall(function() self._ESPBuilder:Close() end)
+		self._ESPBuilder = nil
+	end
+	data.Parent = self._TopGuiParent or self.Gui.Parent
+	local builder = ESPBuilder.new(data)
+	self._ESPBuilder = builder
+	return builder
+end
+
+function Window:CreateESPWorldRenderer(options: any?)
+	local data = (typeof(options) == "table") and options or {}
+	if self._ESPWorldRenderer then
+		pcall(function() self._ESPWorldRenderer:Destroy() end)
+		self._ESPWorldRenderer = nil
+	end
+	data.Parent = self._TopGuiParent or self.Gui.Parent
+	local renderer = ESPWorldRenderer.new(data)
+	self._ESPWorldRenderer = renderer
+	return renderer
+end
+
+
 function Window:CreateFolder(name: string)
 	return self:CreateTab(name)
 end
@@ -2290,6 +3936,15 @@ function Window:CreateParagraph(data: any)
 	return tab:CreateParagraph(data)
 end
 
+function Window:CreateNotice(data: any) local tab=self:_getActiveTab(); if not tab then return nil end; return tab:CreateNotice(data) end
+function Window:CreateStat(data: any) local tab=self:_getActiveTab(); if not tab then return nil end; return tab:CreateStat(data) end
+function Window:CreateDivider(data: any?) local tab=self:_getActiveTab(); if not tab then return nil end; return tab:CreateDivider(data) end
+function Window:CreateIconButton(data: any?) local tab=self:_getActiveTab(); if not tab then return nil end; return tab:CreateIconButton(data) end
+function Window:CreateCard(data: any) local tab=self:_getActiveTab(); if not tab then return nil end; return tab:CreateCard(data) end
+function Window:CreateBadge(data: any) local tab=self:_getActiveTab(); if not tab then return nil end; return tab:CreateBadge(data) end
+function Window:CreateProgress(data: any) local tab=self:_getActiveTab(); if not tab then return nil end; return tab:CreateProgress(data) end
+function Window:CreateStatus(data: any) local tab=self:_getActiveTab(); if not tab then return nil end; return tab:CreateStatus(data) end
+
 function Window:SetVisible(visible: boolean)
 	self._FloatDragging = false
 	self._FloatDragInputType = nil
@@ -2298,56 +3953,108 @@ function Window:SetVisible(visible: boolean)
 	if self.Gui then
 		self.Gui.Enabled = true
 	end
+	if self._LayoutVariants and self._LayoutVariants.SetVisible then
+		self._LayoutVariants:SetVisible(visible)
+	end
 
 	if self._ApplyBlurTarget then
 		self._ApplyBlurTarget()
 	end
 
-	if visible then
-		if self.Main then
-			self.Main.Visible = self._StartupComplete
-		end
+	local function hideOpenControls()
+		if self._IslandActivityHost then self._IslandActivityHost.Visible = false end
+		if self._IslandActivity then self._IslandActivity.Visible = true end
+		local islandBtn = self.Gui and self.Gui:FindFirstChild("Island")
+		if islandBtn then islandBtn.Visible = false end
+		if self._ClassicOpen then self._ClassicOpen.Visible = false end
+	end
 
-		if self._FloatingButton and self._FloatingButton.Visible then
-			local btn = self._FloatingButton
-			Tween.Play(btn, {
-				Size = UDim2.fromOffset(0, 0),
-				ImageTransparency = 1,
-				Rotation = 90,
-			}, { Time = 0.15 })
-			task.delay(0.15, function()
-				if btn and btn.Parent then
-					btn.Visible = false
-					btn.Rotation = 0
-				end
-			end)
+	local function showOpenControls()
+		if not self._StartupComplete then return end
+		local useIsland = (self._OpenStyle or "Island") ~= "Button"
+		local islandBtn = self.Gui and self.Gui:FindFirstChild("Island")
+		if self._ClassicOpen then self._ClassicOpen.Visible = false end
+		if islandBtn then islandBtn.Visible = false end
+		if useIsland and islandBtn then
+			self._FloatingButton = islandBtn
+			islandBtn.Visible = true
+			islandBtn.Size = UDim2.fromOffset(168, 34)
+			if islandBtn:IsA("CanvasGroup") then islandBtn.GroupTransparency = 0 end
+		elseif self._ClassicOpen then
+			self._FloatingButton = self._ClassicOpen
+			self._ClassicOpen.Visible = true
+			self._ClassicOpen.Size = UDim2.fromOffset(50, 50)
+		end
+	end
+
+	if visible then
+		hideOpenControls()
+		if self.Main and self._StartupComplete then
+			self.Main.Visible = true
+			if not self._MainScale or not self._MainScale.Parent then
+				local s = Instance.new("UIScale")
+				s.Name = "OpenScale"
+				s.Scale = 1
+				s.Parent = self.Main
+				self._MainScale = s
+			end
+			-- Prefer last dragged position (never force center)
+			local base = self._MainBasePos or self.Main.Position
+			self._MainBasePos = base
+			self._MainScale.Scale = 0.86
+			self.Main.Position = UDim2.new(
+				base.X.Scale, base.X.Offset,
+				base.Y.Scale, base.Y.Offset + 18
+			)
+			Tween.Play(self._MainScale, { Scale = 1 }, {
+				Time = 0.28,
+				EasingStyle = Enum.EasingStyle.Back,
+				EasingDirection = Enum.EasingDirection.Out,
+			})
+			Tween.Play(self.Main, { Position = base }, {
+				Time = 0.28,
+				EasingStyle = Enum.EasingStyle.Quint,
+				EasingDirection = Enum.EasingDirection.Out,
+			})
+		end
+		if self._Dim then
+			self._Dim.Visible = true
+			local amount = math.clamp(self._DimAmount or 0.45, 0, 1)
+			self._Dim.BackgroundTransparency = 1
+			Tween.Play(self._Dim, { BackgroundTransparency = 1 - amount }, { Time = 0.25 })
 		end
 	else
-		if self.Main then
-			self.Main.Visible = false
+		if self._Dim then
+			Tween.Play(self._Dim, { BackgroundTransparency = 1 }, { Time = 0.2 })
 		end
-
-		if self._FloatingButton and self._StartupComplete then
-			local btn = self._FloatingButton
-			btn.Visible = true
-			btn.Size = UDim2.fromOffset(0, 0)
-			btn.ImageTransparency = 1
-			btn.Rotation = -90
-
-			Tween.Play(btn, {
-				Size = UDim2.fromOffset(58, 58),
-				ImageTransparency = 0,
-				Rotation = 10,
-			}, { Time = 0.18 })
-
-			task.delay(0.18, function()
-				if btn and btn.Parent then
-					Tween.Play(btn, {
-						Size = UDim2.fromOffset(50, 50),
-						Rotation = 0,
-					}, { Time = 0.12 })
+		if self.Main and self.Main.Visible then
+			-- Snapshot current place BEFORE close anim so reopen keeps it
+			self._MainBasePos = self.Main.Position
+			local base = self._MainBasePos
+			if self._MainScale then
+				Tween.Play(self._MainScale, { Scale = 0.9 }, {
+					Time = 0.16,
+					EasingStyle = Enum.EasingStyle.Quint,
+					EasingDirection = Enum.EasingDirection.In,
+				})
+			end
+			Tween.Play(self.Main, {
+				Position = UDim2.new(base.X.Scale, base.X.Offset, base.Y.Scale, base.Y.Offset + 14),
+			}, { Time = 0.16, EasingStyle = Enum.EasingStyle.Quint, EasingDirection = Enum.EasingDirection.In })
+			task.delay(0.17, function()
+				if self.Main and not self._Visible then
+					self.Main.Visible = false
+					if self._MainScale then self._MainScale.Scale = 1 end
+					-- Restore exact saved spot (not center)
+					if self._MainBasePos then
+						self.Main.Position = self._MainBasePos
+					end
 				end
+				showOpenControls()
 			end)
+		else
+			if self.Main then self.Main.Visible = false end
+			showOpenControls()
 		end
 	end
 end
@@ -2370,6 +4077,26 @@ function Window:Notify(options: any)
 end
 
 function Window:Destroy()
+	if self._DimGui then
+		pcall(function() self._DimGui:Destroy() end)
+		self._DimGui = nil
+	end
+	if self._LayoutVariants then
+		pcall(function() self._LayoutVariants:Destroy() end)
+		self._LayoutVariants = nil
+	end
+	if self._DeveloperGui then
+		self._DeveloperGui:Destroy()
+		self._DeveloperGui = nil
+	end
+	if self._ESPBuilder then
+		pcall(function() self._ESPBuilder:Close() end)
+		self._ESPBuilder = nil
+	end
+	if self._ESPWorldRenderer then
+		pcall(function() self._ESPWorldRenderer:Destroy() end)
+		self._ESPWorldRenderer = nil
+	end
 	for _, tab in self._Tabs do
 		if tab and tab.Destroy then
 			tab:Destroy()

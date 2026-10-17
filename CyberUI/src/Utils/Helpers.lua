@@ -162,7 +162,7 @@ function Helpers.CreateButton(props: TextProps): TextButton
 	button.TextColor3 = props.TextColor3 or Theme.Text
 	button.TextSize = props.TextSize or 14
 	button.Font = props.Font or Theme.Font
-	button.TextXAlignment = props.TextXAlignment or Enum.TextXAlignment.Left
+	button.TextXAlignment = props.TextXAlignment or Enum.TextXAlignment.Center
 	return Helpers.Apply(button, props)
 end
 

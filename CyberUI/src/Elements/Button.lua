@@ -41,6 +41,12 @@ function Button.new(section: any, data: ButtonOptions): ButtonHandle
 	local rowGlow = Helpers.Stroke(row, library.Theme.Accent, 2)
 	rowGlow.Transparency = 0.95
 	rowStroke.Transparency = 0.18
+	local pop = Instance.new("UIScale")
+	pop.Scale = 0.94
+	pop.Parent = row
+	task.defer(function()
+		Tween.Play(pop, { Scale = 1 }, { Time = 0.18, EasingStyle = Enum.EasingStyle.Back })
+	end)
 
 	self.RowGlow = rowGlow
 
@@ -55,6 +61,15 @@ function Button.new(section: any, data: ButtonOptions): ButtonHandle
 	end))
 
 	self._Maid:GiveTask(row.MouseButton1Click:Connect(function()
+		local s = row:FindFirstChildOfClass("UIScale")
+		if s then
+			Tween.Play(s, { Scale = 0.96 }, { Time = 0.06 })
+			task.delay(0.06, function()
+				if s and s.Parent then
+					Tween.Play(s, { Scale = 1 }, { Time = 0.12, EasingStyle = Enum.EasingStyle.Back })
+				end
+			end)
+		end
 		if data.Callback then
 			task.spawn(data.Callback)
 		end
@@ -67,9 +82,18 @@ function Button:RefreshTheme()
 	local theme = self._Section.Tab.Window.Library.Theme
 	self.Instance.BackgroundColor3 = theme.ElementBackground or theme.Background
 	self.Instance.TextColor3 = theme.Text
-	local stroke = self.Instance:FindFirstChildOfClass("UIStroke")
-	if stroke then
-		stroke.Color = theme.Border
+	for _, child in self.Instance:GetChildren() do
+		if child:IsA("UIStroke") then
+			-- border stroke is tighter transparency; accent glow is ~0.95
+			if child.Transparency > 0.5 then
+				child.Color = theme.Accent
+			else
+				child.Color = theme.Border
+			end
+		end
+	end
+	if self.RowGlow then
+		self.RowGlow.Color = theme.Accent
 	end
 end
 
