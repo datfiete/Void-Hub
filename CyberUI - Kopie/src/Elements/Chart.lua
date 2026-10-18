@@ -6,6 +6,14 @@ local Helpers = require(script.Parent.Parent.Utils.Helpers)
 local Chart = {}
 Chart.__index = Chart
 
+local function finiteOr(value: any, fallback: number): number
+	local n = tonumber(value)
+	if not n or n ~= n or n == math.huge or n == -math.huge then
+		return fallback
+	end
+	return n
+end
+
 export type ChartOptions = {
 	Name: string?,
 	Label: string?,
@@ -14,18 +22,21 @@ export type ChartOptions = {
 	Bars: number?,
 	Height: number?,
 	Max: number?,
+	Suffix: string?,
 }
 
 function Chart.new(section: any, data: ChartOptions?): any
 	data = data or {}
 	local theme = section.Tab.Window.Library.Theme
-	local barCount = math.clamp(tonumber(data.Bars) or 20, 6, 40)
+	local barCount = math.clamp(math.floor(finiteOr(data.Bars, 20)), 6, 40)
 	local color = data.Color or theme.Accent
-	local maxRef = tonumber(data.Max) or 60
+	local maxRef = finiteOr(data.Max, 60)
+	if maxRef <= 0 then maxRef = 60 end
+	local height = math.clamp(math.floor(finiteOr(data.Height, 78)), 60, 160)
 
 	local root = Helpers.CreateFrame({
 		Name = data.Name or "Chart",
-		Size = UDim2.new(1, 0, 0, data.Height or 78),
+		Size = UDim2.new(1, 0, 0, height),
 		BackgroundTransparency = 1,
 		Parent = section.Inner,
 	})
@@ -97,10 +108,24 @@ function Chart.new(section: any, data: ChartOptions?): any
 	return self
 end
 
+local function isFiniteNumber(value: number): boolean
+	return value == value and value ~= math.huge and value ~= -math.huge
+end
+
+function Chart:_formatValue(value: any): string
+	local n = tonumber(value)
+	if n and isFiniteNumber(n) then
+		local text = if n % 1 == 0 then tostring(math.floor(n)) else string.format("%.2f", n):gsub("0+$", ""):gsub("%.$", "")
+		return text .. (self._Data.Suffix or "")
+	end
+	return tostring(value)
+end
+
 function Chart:Set(value: any, pushHistory: boolean?)
 	local n = tonumber(value)
-	self.ValueLabel.Text = if n then (self._Data.Suffix and (tostring(n) .. self._Data.Suffix) or tostring(n)) else tostring(value)
-	if n and pushHistory ~= false then
+	if n and not isFiniteNumber(n) then n = nil end
+	self.ValueLabel.Text = self:_formatValue(if n ~= nil then n else value)
+	if n ~= nil and pushHistory ~= false then
 		table.remove(self._History, 1)
 		table.insert(self._History, n)
 		self:_paint()
@@ -108,25 +133,33 @@ function Chart:Set(value: any, pushHistory: boolean?)
 end
 
 function Chart:Push(value: number)
-	value = tonumber(value) or 0
+	local n = tonumber(value)
+	if not n or not isFiniteNumber(n) then
+		n = 0
+	end
 	table.remove(self._History, 1)
-	table.insert(self._History, value)
-	self.ValueLabel.Text = if self._Data.Suffix then (tostring(value) .. self._Data.Suffix) else tostring(value)
+	table.insert(self._History, n)
+	self.ValueLabel.Text = self:_formatValue(n)
 	self:_paint()
 end
 
 function Chart:_paint()
 	local maxV = self._MaxRef
-	for _, v in self._History do
-		if v > maxV then maxV = v end
+	for _, value in self._History do
+		if isFiniteNumber(value) then
+			maxV = math.max(maxV, math.abs(value))
+		end
 	end
-	if maxV < 1 then maxV = 1 end
+	maxV = math.max(maxV, 1)
+
 	for i, bar in self._Bars do
-		local v = self._History[i] or 0
-		local h = math.clamp(math.floor((v / maxV) * 28 + 0.5), 3, 30)
+		local value = self._History[i] or 0
+		local magnitude = if isFiniteNumber(value) then math.abs(value) else 0
+		local ratio = math.clamp(magnitude / maxV, 0, 1)
+		local h = if magnitude == 0 then 0 else math.clamp(math.floor(ratio * 28 + 0.5), 3, 30)
 		bar.Size = UDim2.new(1 / self._BarCount, -2, 0, h)
 		bar.BackgroundColor3 = self._Color
-		bar.BackgroundTransparency = 0.12 + (1 - v / maxV) * 0.5
+		bar.BackgroundTransparency = 0.12 + (1 - ratio) * 0.5
 	end
 end
 

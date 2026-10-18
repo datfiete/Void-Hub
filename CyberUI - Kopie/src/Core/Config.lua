@@ -32,8 +32,8 @@ function Config.new(folderName: string?): ConfigHandle
 	local defaultFileName = `Vaxorin-{sanitizeFileName(getGameName())}-Config`
 
 	local self = setmetatable({
-		_folderName = folderName or "Vaxorin",
-		_fileName = defaultFileName,
+		_folderName = sanitizeFileName(folderName or "Vaxorin"),
+		_fileName = sanitizeFileName(defaultFileName),
 		_values = {} :: { [string]: any },
 		_autoSave = true,
 		_pendingSave = false,
@@ -43,8 +43,12 @@ function Config.new(folderName: string?): ConfigHandle
 end
 
 function Config:SetLocation(folderName: string?, fileName: string?)
-	self._folderName = folderName or self._folderName
-	self._fileName = fileName or self._fileName
+	if folderName and folderName ~= "" then
+		self._folderName = sanitizeFileName(folderName)
+	end
+	if fileName and fileName ~= "" then
+		self._fileName = sanitizeFileName(fileName)
+	end
 end
 
 function Config:_getPath(): string
@@ -116,24 +120,48 @@ function Config:Load(): boolean
 	end
 
 	local path = self:_getPath()
-	if not isfile(path) then
+	local existsOk, exists = pcall(isfile, path)
+	if not existsOk or not exists then
 		return false
 	end
 
 	local success, decoded = pcall(function()
-		return HttpService:JSONDecode(readfile(path))
+		local raw = readfile(path)
+		local parsed = HttpService:JSONDecode(raw)
+		if typeof(parsed) ~= "table" then
+			error("root JSON value must be an object")
+		end
+		return self:_decode(parsed)
 	end)
 
 	if success and typeof(decoded) == "table" then
-		self._values = self:_decode(decoded)
+		self._values = decoded
 		return true
 	end
 
+	warn("[Config] Load failed: invalid or unreadable config at", path, decoded)
 	return false
 end
 
 function Config:Get(key: string): any
-	return self._values[key]
+	-- Preserve compatibility with older files that store dotted keys flat
+	-- (for example "Flags.Aim.Enabled"), while also supporting nested tables.
+	local direct = self._values[key]
+	if direct ~= nil then
+		return direct
+	end
+
+	local current: any = self._values
+	for part in string.gmatch(key, "[^%.]+") do
+		if type(current) ~= "table" then
+			return nil
+		end
+		current = current[part]
+		if current == nil then
+			return nil
+		end
+	end
+	return current
 end
 
 function Config:GetAll(): { [string]: any }

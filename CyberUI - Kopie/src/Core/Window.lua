@@ -4285,6 +4285,15 @@ function Window:Notify(options: any)
 end
 
 function Window:Destroy()
+	if self._Destroyed then
+		return
+	end
+	self._Destroyed = true
+
+	if self._Weather and self._Weather.Destroy then
+		pcall(function() self._Weather:Destroy() end)
+		self._Weather = nil
+	end
 	if self._DimGui then
 		pcall(function() self._DimGui:Destroy() end)
 		self._DimGui = nil
@@ -4315,6 +4324,17 @@ function Window:Destroy()
 	self._Maid:DoCleaning()
 	if self.Gui then
 		self.Gui:Destroy()
+		self.Gui = nil
+	end
+
+	-- Keep Library._Windows accurate when a single window is destroyed.
+	local library = self.Library
+	if library and type(library._Windows) == "table" then
+		for i = #library._Windows, 1, -1 do
+			if library._Windows[i] == self then
+				table.remove(library._Windows, i)
+			end
+		end
 	end
 end
 

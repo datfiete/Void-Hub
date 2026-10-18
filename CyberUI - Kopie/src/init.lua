@@ -47,11 +47,13 @@ function Library:_configureSaving(options: any?)
 	self._ConfigEnabled = config.Enabled == true
 	self._AutoSave = config.AutoSave ~= false
 	self.Config:SetLocation(config.FolderName or "Vaxorin", config.FileName or config.Name or "config")
+	self.Config:SetAutoSave(self._ConfigEnabled and self._AutoSave)
 
 	if self._ConfigEnabled and not self._ConfigLoaded then
 		self:LoadConfiguration()
 	else
 		self:_hydrateFlagsFromConfig()
+		self:_hydrateFavoritesFromConfig()
 	end
 end
 
@@ -359,16 +361,18 @@ function Library:LoadConfiguration(): boolean
 	self._ConfigLoaded = true
 	local ok = self.Config:Load()
 	self:_hydrateFlagsFromConfig()
+	self:_hydrateFavoritesFromConfig()
 	return ok
 end
 
 function Library:Destroy()
-	for _, window in self._Windows do
+	local windows = table.clone(self._Windows)
+	self._Windows = {}
+	for _, window in windows do
 		if window and window.Destroy then
 			window:Destroy()
 		end
 	end
-	self._Windows = {}
 	if self.Notifications and self.Notifications.Destroy then
 		self.Notifications:Destroy()
 	end
@@ -404,16 +408,43 @@ function Library:MarkConfigDirty(dirty: boolean?)
 	self._Health.dirty = if dirty == nil then true else dirty
 end
 
+function Library:_hydrateFavoritesFromConfig()
+	if not self._ConfigEnabled then
+		return
+	end
+	local saved = self.Config:Get("Favorites")
+	if type(saved) == "table" then
+		local favorites = {}
+		for flag, enabled in pairs(saved) do
+			if type(flag) == "string" and flag ~= "" and enabled == true then
+				favorites[flag] = true
+			end
+		end
+		self._Favorites = favorites
+	else
+		self._Favorites = self._Favorites or {}
+	end
+end
+
 function Library:ToggleFavorite(flag: string): boolean
 	flag = tostring(flag or "")
 	if flag == "" then return false end
 	self._Favorites = self._Favorites or {}
-	if self._Favorites[flag] then
+	local isFavorite = self._Favorites[flag] == true
+	if isFavorite then
 		self._Favorites[flag] = nil
-		return false
+	else
+		self._Favorites[flag] = true
 	end
-	self._Favorites[flag] = true
-	return true
+
+	if self._ConfigEnabled then
+		self.Config:Set("Favorites", self._Favorites)
+		self:MarkConfigDirty(true)
+		if self._AutoSave then
+			self.Config:_queueAutoSave()
+		end
+	end
+	return not isFavorite
 end
 
 function Library:IsFavorite(flag: string): boolean
