@@ -5,7 +5,6 @@ local Section = require(script.Parent.Section)
 local Maid = require(script.Parent.Parent.Utils.Maid)
 local Helpers = require(script.Parent.Parent.Utils.Helpers)
 local Tween = require(script.Parent.Parent.Utils.Tween)
-local Tween = require(script.Parent.Parent.Utils.Tween)
 
 local Tab = {}
 Tab.__index = Tab

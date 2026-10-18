@@ -7,3 +7,10 @@
 - Footer avatar now falls back to the local player HeadShot thumbnail automatically.
 - Layout switching is now an actual shell switch instead of a resize preset.
 - Existing Vaxorin interface remains available as the default.
+
+
+## Follow-up — 5.1 visual polish
+- Refined the default Vaxorin color palette and spacing scale.
+- Added semantic focus, disabled-text, and overlay theme tokens.
+- Removed a duplicate Tween import from the tab module.
+- See `docs/VISUAL_REFRESH_5_1.md` and `docs/QUALITY_AUDIT.md`.

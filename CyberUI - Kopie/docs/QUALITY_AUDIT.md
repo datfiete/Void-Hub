@@ -40,3 +40,18 @@ This environment does not include Roblox Studio or a Luau runtime, so I could no
 9. Test chart options with missing, non-numeric, or extreme `Bars`, `Height`, and `Max` values.
 10. Close/destroy the window twice; cleanup should be safe, the weather layer should disappear, and the library should not retain a stale window reference.
 11. Destroy a library with multiple windows and verify all windows are cleaned up.
+
+
+## Visual refresh follow-up
+
+### `src/Core/Theme.lua`
+- Refined the default Vaxorin palette with clearer surface separation and calmer border contrast.
+- Tightened default corner radii, control height, window dimensions, sidebar width, and spacing for a more compact dashboard.
+- Added semantic `Focus`, `DisabledText`, and `Overlay` theme tokens so future components can use shared states rather than hard-coded colors.
+
+### `src/Core/Tab.lua`
+- Removed a duplicate `Tween` module import.
+
+### Validation
+- Checked that all files in the project archive remain readable and that the ZIP can be rebuilt.
+- A Luau interpreter / Roblox Studio is not available in this environment, so runtime and visual regression checks remain manual.

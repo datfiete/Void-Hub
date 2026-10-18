@@ -5,19 +5,20 @@ local Signal = require(script.Parent.Parent.Utils.Signal)
 -- as an alias so existing scripts do not break.
 local stylePresets = {
     Vaxorin = {
-        Background = Color3.fromRGB(4, 6, 10),
-        Secondary = Color3.fromRGB(8, 11, 17),
-        Surface = Color3.fromRGB(13, 17, 25),
-        SurfaceHover = Color3.fromRGB(24, 29, 41),
-        ElementBackground = Color3.fromRGB(10, 14, 21),
-        ElementHover = Color3.fromRGB(22, 28, 39),
-        Text = Color3.fromRGB(244, 244, 248),
-        TextMuted = Color3.fromRGB(148, 151, 166),
-        Border = Color3.fromRGB(34, 38, 50),
-        BorderStrong = Color3.fromRGB(51, 55, 70),
-        Accent = Color3.fromRGB(139, 92, 246),
-        AccentAlt = Color3.fromRGB(59, 130, 246),
-        AccentSoft = Color3.fromRGB(91, 62, 180),
+        -- Layered neutral surfaces keep content readable without relying on glow.
+        Background = Color3.fromRGB(8, 10, 16),
+        Secondary = Color3.fromRGB(12, 15, 23),
+        Surface = Color3.fromRGB(18, 22, 32),
+        SurfaceHover = Color3.fromRGB(27, 32, 45),
+        ElementBackground = Color3.fromRGB(15, 19, 28),
+        ElementHover = Color3.fromRGB(25, 31, 43),
+        Text = Color3.fromRGB(242, 244, 250),
+        TextMuted = Color3.fromRGB(155, 163, 180),
+        Border = Color3.fromRGB(42, 48, 65),
+        BorderStrong = Color3.fromRGB(61, 69, 90),
+        Accent = Color3.fromRGB(126, 103, 255),
+        AccentAlt = Color3.fromRGB(69, 157, 255),
+        AccentSoft = Color3.fromRGB(82, 72, 173),
     },
     Dark = {
         Background = Color3.fromRGB(9, 10, 14),
@@ -299,17 +300,20 @@ local themeValues = {
     Font = Enum.Font.GothamMedium,
     FontBold = Enum.Font.GothamBold,
 
-    CornerRadius = 14,
-    CornerRadiusSmall = 10,
-    ElementHeight = 44,
-    SidebarWidth = 202,
-    WindowSize = Vector2.new(920, 600),
-    Padding = 18,
-    Gap = 12,
+    CornerRadius = 12,
+    CornerRadiusSmall = 8,
+    ElementHeight = 42,
+    SidebarWidth = 196,
+    WindowSize = Vector2.new(900, 590),
+    Padding = 16,
+    Gap = 10,
 
-    TopBarHeight = 72,
+    TopBarHeight = 64,
     LogoImage = "",
-    LogoSize = 50,
+    LogoSize = 40,
+    Focus = stylePresets.Vaxorin.Accent,
+    DisabledText = stylePresets.Vaxorin.TextMuted,
+    Overlay = Color3.fromRGB(3, 5, 9),
 }
 
 local function applyStyle(style)
@@ -327,6 +331,9 @@ local function applyStyle(style)
     themeValues.Accent = preset.Accent
     themeValues.AccentAlt = preset.AccentAlt or preset.Accent
     themeValues.AccentSoft = preset.AccentSoft or preset.Accent
+    themeValues.Focus = preset.Accent
+    themeValues.DisabledText = preset.TextMuted
+    themeValues.Overlay = preset.Background
 
     -- Deep uses a tighter shell closer to the reference hub
     if style == "Deep" then
@@ -340,15 +347,15 @@ local function applyStyle(style)
         themeValues.TopBarHeight = 62
         themeValues.LogoSize = 32
     else
-        themeValues.CornerRadius = 14
-        themeValues.CornerRadiusSmall = 10
-        themeValues.ElementHeight = 44
-        themeValues.SidebarWidth = 202
-        themeValues.WindowSize = Vector2.new(920, 600)
-        themeValues.Padding = 18
-        themeValues.Gap = 12
-        themeValues.TopBarHeight = 72
-        themeValues.LogoSize = 50
+        themeValues.CornerRadius = 12
+        themeValues.CornerRadiusSmall = 8
+        themeValues.ElementHeight = 42
+        themeValues.SidebarWidth = 196
+        themeValues.WindowSize = Vector2.new(900, 590)
+        themeValues.Padding = 16
+        themeValues.Gap = 10
+        themeValues.TopBarHeight = 64
+        themeValues.LogoSize = 40
     end
 end
 
