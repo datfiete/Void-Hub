@@ -320,14 +320,16 @@ function Library:GetProfiles(): { string }
 end
 
 function Library:CreateWindow(options: any?)
-	self:_configureSaving(options)
-
+	-- Shut down the previous library before loading this run's configuration.
+	-- Active callbacks may write their final disabled state to the same config file.
 	if self._PreviousLibrary and self._PreviousLibrary ~= self and self._PreviousLibrary.Destroy then
 		pcall(function()
 			self._PreviousLibrary:Destroy()
 		end)
 	end
 	self._PreviousLibrary = nil
+
+	self:_configureSaving(options)
 
 	for _, existingWindow in self._Windows do
 		if existingWindow and existingWindow.Destroy then
@@ -366,7 +368,49 @@ function Library:LoadConfiguration(): boolean
 end
 
 function Library:Destroy()
+	if self._Destroyed then
+		return
+	end
+	self._Destroyed = true
+
+	-- Turn off active toggle-backed features before destroying their UI.
+	-- This prevents loops/connections started by callbacks (e.g. Auto features)
+	-- from remaining active after the library is executed a second time.
 	local windows = table.clone(self._Windows)
+	local changedConfig = false
+	for _, window in windows do
+		for _, tab in ((window and window._Tabs) or {}) do
+			for _, section in ((tab and tab._Sections) or {}) do
+				for _, element in ((section and section._Elements) or {}) do
+					if element and element._Value == true and element._Data and type(element._Data.Callback) == "function" then
+						local callback = element._Data.Callback
+					local ok, err = pcall(callback, false)
+					if not ok then
+						if self.ReportError then
+							self:ReportError("Shutdown", err)
+						end
+						warn("[CyberUI] Failed to disable active toggle during shutdown:", err)
+					end
+						element._Value = false
+						local flag = element._Data.Flag
+						if type(flag) == "string" and flag ~= "" then
+							self.Flags[flag] = false
+							if self._ConfigEnabled and element._Data.Save ~= false then
+								self.Config:Set(`Flags.{flag}`, false)
+								changedConfig = true
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+	if changedConfig and self.Config then
+		pcall(function()
+			self.Config:Save()
+		end)
+	end
+
 	self._Windows = {}
 	for _, window in windows do
 		if window and window.Destroy then
@@ -375,6 +419,9 @@ function Library:Destroy()
 	end
 	if self.Notifications and self.Notifications.Destroy then
 		self.Notifications:Destroy()
+	end
+	if self._FlagControls then
+		table.clear(self._FlagControls)
 	end
 	table.clear(self.Flags)
 end

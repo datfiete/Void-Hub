@@ -15,6 +15,13 @@ function Progress.new(section:any,data:any?):any
  self:Set(data.CurrentValue or 0); return self
 end
 function Progress:Get() return self._Value end
-function Progress:RefreshTheme() local theme=self._Section.Tab.Window.Library.Theme; self.Label.TextColor3=theme.Text; self.ValueLabel.TextColor3=self._Data.Color or theme.Accent; self.Fill.BackgroundColor3=self._Data.Color or theme.Accent end
+function Progress:RefreshTheme()
+ local theme=self._Section.Tab.Window.Library.Theme
+ self.Label.TextColor3=theme.Text
+ self.ValueLabel.TextColor3=self._Data.Color or theme.Accent
+ self.Fill.BackgroundColor3=self._Data.Color or theme.Accent
+ local track=self.Fill and self.Fill.Parent
+ if track then track.BackgroundColor3=theme.Background or theme.Surface end
+end
 function Progress:Destroy() self._Maid:DoCleaning(); if self.Instance and self.Instance.Parent then self.Instance:Destroy() end end
 return Progress

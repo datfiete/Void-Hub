@@ -176,6 +176,9 @@ function Chart:RefreshTheme()
 		self._Color = theme.Accent
 		self.ValueLabel.TextColor3 = theme.Accent
 		self:_paint()
+	else
+		self.ValueLabel.TextColor3 = self._Data.Color
+		self:_paint()
 	end
 end
 

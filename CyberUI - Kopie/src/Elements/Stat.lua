@@ -12,11 +12,11 @@ function Stat:Set(value:any,delta:any?) self.ValueLabel.Text=tostring(value); if
 function Stat:RefreshTheme()
 	local theme = self._Section.Tab.Window.Library.Theme
 	if self.Instance then
-		self.Instance.BackgroundColor3 = theme.ElementBackground
+		self.Instance.BackgroundColor3 = theme.ElementBackground or theme.Surface or theme.Background
 	end
 	self.Label.TextColor3 = theme.TextMuted
 	self.ValueLabel.TextColor3 = theme.Text
-	self._Stroke.Color = theme.Border
+	self._Stroke.Color = theme.Border or theme.TextMuted
 	if not self._Data.Color then
 		self.DeltaLabel.TextColor3 = theme.Accent
 	end

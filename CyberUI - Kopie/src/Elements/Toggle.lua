@@ -170,6 +170,11 @@ function Toggle.new(section: any, data: ToggleOptions): ToggleHandle
 
 		if fireCallback ~= false and type(data.Callback) == "function" then
 			task.spawn(function()
+				-- Ignore callbacks that were queued before a rapid UI restart or
+				-- superseded by a newer toggle state.
+				if library._Destroyed or self._Value ~= value then
+					return
+				end
 				local ok, err = pcall(data.Callback, value)
 				if not ok then
 					pcall(function() local lib = self._Section.Tab.Window.Library; if lib and lib.ReportError then lib:ReportError("Toggle", err) end end)
@@ -196,6 +201,9 @@ function Toggle.new(section: any, data: ToggleOptions): ToggleHandle
 	-- Config restored the value but did not run the feature callback — fire once on load.
 	if type(data.Callback) == "function" and data.FireOnLoad ~= false and savedRaw ~= nil then
 		task.defer(function()
+			if library._Destroyed or self._Value ~= (savedRaw == true) then
+				return
+			end
 			local ok, err = pcall(data.Callback, self._Value)
 			if not ok then
 				warn("[Vaxorin] Toggle FireOnLoad error:", err)
@@ -233,6 +241,18 @@ function Toggle:RefreshTheme()
 		switchStroke.Transparency = if self._Value then 0.35 else 0.65
 	end
 	self.Knob.BackgroundColor3 = theme.Text
+
+	-- Favorite stars are separate from the toggle's main visual tree, so they
+	-- must be refreshed explicitly when the theme changes.
+	if self.Star and self.Star.Parent then
+		local favorite = false
+		local library = self._Section.Tab.Window.Library
+		if library and library.IsFavorite and self._Data.Flag then
+			favorite = library:IsFavorite(self._Data.Flag)
+		end
+		self.Star.TextColor3 = if favorite then Color3.fromRGB(255, 200, 60) else theme.TextMuted
+		self.Star.TextTransparency = if favorite then 0 else 0.35
+	end
 end
 
 function Toggle:Set(value: boolean, fireCallback: boolean?)
