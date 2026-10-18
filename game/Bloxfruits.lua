@@ -3546,7 +3546,6 @@ BF.startFarm = function()
 
             local level = BF.getPlayerLevel()
             local island = BF.resolveFarmIsland(level)
-            -- Always re-check live boss (works without quest)
             local _prioBoss, _prioIsland = nil, nil
             if config.bossPriority then
                 _prioBoss, _prioIsland = BF.findLiveBossSimple(level)
@@ -3555,17 +3554,12 @@ BF.startFarm = function()
                 end
             end
             local hrp = character:FindFirstChild("HumanoidRootPart")
-
-                        -- This is deliberately scoped to the user's existing "Season 2, 1"
-            -- entry and does not alter other level ranges.
             if island and island.Name == "Season 2, 1" then
                 island.EnemyPatterns = {"Raider"}
                 island.isBoss = false
             end
             if not hrp then task.wait(0.5) continue end
 
-            -- ===== BOSS SHORT-CIRCUIT (no quest needed) =====
-            -- Same approach as boss-timer hunt: fly above boss + attackEnemy
             if config.bossPriority then
                 local liveBoss, liveIsl = _prioBoss, _prioIsland
                 if not liveBoss then
@@ -3581,7 +3575,6 @@ BF.startFarm = function()
                         currentQuestType = "boss"
                         state = "COMBAT"
 
-                        -- optional boss quest (never blocks attack)
                         if liveIsl and liveIsl.BossQuest and (os.clock() - (_lastQuestAcceptAt or 0)) > 6 then
                             _lastQuestAcceptAt = os.clock()
                             pcall(function()
