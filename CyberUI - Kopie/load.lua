@@ -50,35 +50,26 @@ local MODULE_PATHS = {
 	"Core/Window",
 }
 
+local ACCENT = Color3.fromRGB(155, 92, 255)
+local LOGO = "rbxassetid://135320038058277"
+
 local function destroyBootstrapLoader()
 	local loader = sharedState.CyberUI_BootstrapLoader
 	sharedState.CyberUI_BootstrapLoader = nil
 
 	if loader and loader.Parent then
-		local card = loader:FindFirstChild("Card")
-		if card then
-			for _, child in card:GetDescendants() do
-				if child:IsA("TextLabel") or child:IsA("TextButton") or child:IsA("TextBox") then
-					TweenService:Create(child, TweenInfo.new(0.15), {
-						TextTransparency = 1,
-					}):Play()
-				elseif child:IsA("Frame") then
-					TweenService:Create(child, TweenInfo.new(0.15), {
-						BackgroundTransparency = 1,
-					}):Play()
-				elseif child:IsA("UIStroke") then
-					TweenService:Create(child, TweenInfo.new(0.15), {
-						Transparency = 1,
-					}):Play()
-				end
+		for _, child in loader:GetDescendants() do
+			if child:IsA("TextLabel") then
+				TweenService:Create(child, TweenInfo.new(0.2), { TextTransparency = 1 }):Play()
+			elseif child:IsA("ImageLabel") then
+				TweenService:Create(child, TweenInfo.new(0.2), { ImageTransparency = 1 }):Play()
+			elseif child:IsA("Frame") then
+				TweenService:Create(child, TweenInfo.new(0.22), { BackgroundTransparency = 1 }):Play()
+			elseif child:IsA("UIStroke") then
+				TweenService:Create(child, TweenInfo.new(0.2), { Transparency = 1 }):Play()
 			end
-
-			TweenService:Create(card, TweenInfo.new(0.15), {
-				BackgroundTransparency = 1,
-			}):Play()
 		end
-
-		task.delay(0.16, function()
+		task.delay(0.24, function()
 			if loader and loader.Parent then
 				loader:Destroy()
 			end
@@ -97,113 +88,175 @@ local function createBootstrapLoader()
 	local gui = Instance.new("ScreenGui")
 	gui.Name = "CyberUI_BootstrapLoader"
 	gui.ResetOnSpawn = false
+	gui.IgnoreGuiInset = true
 	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	gui.DisplayOrder = 2147483647
-
 	pcall(function()
 		gui.ScreenInsets = Enum.ScreenInsets.None
 	end)
-
 	gui.Parent = playerGui
 
+	local backdrop = Instance.new("Frame")
+	backdrop.Name = "Backdrop"
+	backdrop.Size = UDim2.fromScale(1, 1)
+	backdrop.BackgroundColor3 = Color3.fromRGB(4, 2, 10)
+	backdrop.BackgroundTransparency = 0.12
+	backdrop.BorderSizePixel = 0
+	backdrop.Parent = gui
+
+	-- bloom
+	local bloom = Instance.new("Frame")
+	bloom.Name = "Bloom"
+	bloom.Size = UDim2.fromOffset(420, 420)
+	bloom.Position = UDim2.fromScale(0.5, 0.5)
+	bloom.AnchorPoint = Vector2.new(0.5, 0.5)
+	bloom.BackgroundColor3 = ACCENT
+	bloom.BackgroundTransparency = 0.92
+	bloom.BorderSizePixel = 0
+	bloom.Parent = backdrop
+	local bloomCorner = Instance.new("UICorner")
+	bloomCorner.CornerRadius = UDim.new(1, 0)
+	bloomCorner.Parent = bloom
+
+	-- Card kept for destroyBootstrapLoader compatibility (invisible full-area host)
 	local card = Instance.new("Frame")
 	card.Name = "Card"
-	card.Size = UDim2.fromOffset(440, 190)
-	card.Position = UDim2.fromScale(0.5, 0.5)
-	card.AnchorPoint = Vector2.new(0.5, 0.5)
-	card.BackgroundColor3 = Color3.fromRGB(8, 10, 17)
+	card.Size = UDim2.fromScale(1, 1)
+	card.BackgroundTransparency = 1
 	card.BorderSizePixel = 0
 	card.Parent = gui
 
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 10)
-	corner.Parent = card
+	local logoWrap = Instance.new("Frame")
+	logoWrap.Name = "LogoWrap"
+	logoWrap.Size = UDim2.fromOffset(88, 88)
+	logoWrap.Position = UDim2.new(0.5, 0, 0.5, -64)
+	logoWrap.AnchorPoint = Vector2.new(0.5, 0.5)
+	logoWrap.BackgroundColor3 = Color3.fromRGB(20, 14, 32)
+	logoWrap.BackgroundTransparency = 0.2
+	logoWrap.BorderSizePixel = 0
+	logoWrap.Parent = backdrop
+	local logoCorner = Instance.new("UICorner")
+	logoCorner.CornerRadius = UDim.new(0, 26)
+	logoCorner.Parent = logoWrap
+	local logoStroke = Instance.new("UIStroke")
+	logoStroke.Color = ACCENT
+	logoStroke.Thickness = 1.4
+	logoStroke.Transparency = 0.3
+	logoStroke.Parent = logoWrap
 
-	local stroke = Instance.new("UIStroke")
-	stroke.Color = Color3.fromRGB(40, 40, 55)
-	stroke.Thickness = 1
-	stroke.Parent = card
-
-	local accent = Instance.new("Frame")
-	accent.Name = "Accent"
-	accent.Size = UDim2.new(0, 4, 1, -32)
-	accent.Position = UDim2.fromOffset(16, 16)
-	accent.BackgroundColor3 = Color3.fromRGB(0, 255, 200)
-	accent.BorderSizePixel = 0
-	accent.Parent = card
-
-	local accentCorner = Instance.new("UICorner")
-	accentCorner.CornerRadius = UDim.new(0, 2)
-	accentCorner.Parent = accent
+	local logo = Instance.new("ImageLabel")
+	logo.Name = "Logo"
+	logo.BackgroundTransparency = 1
+	logo.Size = UDim2.fromScale(0.7, 0.7)
+	logo.Position = UDim2.fromScale(0.5, 0.5)
+	logo.AnchorPoint = Vector2.new(0.5, 0.5)
+	logo.Image = LOGO
+	logo.ScaleType = Enum.ScaleType.Fit
+	logo.Parent = logoWrap
 
 	local title = Instance.new("TextLabel")
 	title.Name = "Title"
-	title.Size = UDim2.new(1, -48, 0, 28)
-	title.Position = UDim2.fromOffset(34, 18)
+	title.Size = UDim2.fromOffset(400, 34)
+	title.Position = UDim2.new(0.5, 0, 0.5, 0)
+	title.AnchorPoint = Vector2.new(0.5, 0)
 	title.BackgroundTransparency = 1
-	title.Text = "VAXORIN  /  BOOT SEQUENCE"
-	title.TextColor3 = Color3.fromRGB(240, 240, 240)
-	title.TextSize = 20
+	title.Text = "Vaxorin"
+	title.TextColor3 = Color3.fromRGB(245, 240, 255)
+	title.TextSize = 28
 	title.Font = Enum.Font.GothamBold
-	title.TextXAlignment = Enum.TextXAlignment.Left
-	title.Parent = card
+	title.Parent = backdrop
 
 	local status = Instance.new("TextLabel")
 	status.Name = "Status"
-	status.Size = UDim2.new(1, -48, 0, 20)
-	status.Position = UDim2.fromOffset(34, 52)
+	status.Size = UDim2.fromOffset(420, 20)
+	status.Position = UDim2.new(0.5, 0, 0.5, 40)
+	status.AnchorPoint = Vector2.new(0.5, 0)
 	status.BackgroundTransparency = 1
-	status.Text = "Initializing core modules..."
-	status.TextColor3 = Color3.fromRGB(160, 160, 170)
+	status.Text = "Loading modules…"
+	status.TextColor3 = Color3.fromRGB(150, 140, 170)
 	status.TextSize = 13
 	status.Font = Enum.Font.GothamMedium
-	status.TextXAlignment = Enum.TextXAlignment.Left
-	status.Parent = card
+	status.Parent = backdrop
 
 	local track = Instance.new("Frame")
 	track.Name = "Track"
-	track.Size = UDim2.new(1, -48, 0, 8)
-	track.Position = UDim2.fromOffset(34, 132)
-	track.BackgroundColor3 = Color3.fromRGB(13, 13, 18)
+	track.Size = UDim2.fromOffset(220, 3)
+	track.Position = UDim2.new(0.5, 0, 0.5, 74)
+	track.AnchorPoint = Vector2.new(0.5, 0)
+	track.BackgroundColor3 = Color3.fromRGB(40, 32, 55)
 	track.BorderSizePixel = 0
-	track.Parent = card
-
+	track.Parent = backdrop
 	local trackCorner = Instance.new("UICorner")
-	trackCorner.CornerRadius = UDim.new(0, 3)
+	trackCorner.CornerRadius = UDim.new(1, 0)
 	trackCorner.Parent = track
 
 	local fill = Instance.new("Frame")
 	fill.Name = "Fill"
-	fill.Size = UDim2.fromScale(0.03, 1)
-	fill.BackgroundColor3 = Color3.fromRGB(0, 255, 200)
+	fill.Size = UDim2.fromScale(0.02, 1)
+	fill.BackgroundColor3 = ACCENT
 	fill.BorderSizePixel = 0
 	fill.Parent = track
-
 	local fillCorner = Instance.new("UICorner")
-	fillCorner.CornerRadius = UDim.new(0, 3)
+	fillCorner.CornerRadius = UDim.new(1, 0)
 	fillCorner.Parent = fill
 
-	TweenService:Create(fill, TweenInfo.new(3.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-		Size = UDim2.fromScale(0.94, 1),
-	}):Play()
+	local percent = Instance.new("TextLabel")
+	percent.Name = "Percent"
+	percent.Size = UDim2.fromOffset(80, 18)
+	percent.Position = UDim2.new(0.5, 0, 0.5, 88)
+	percent.AnchorPoint = Vector2.new(0.5, 0)
+	percent.BackgroundTransparency = 1
+	percent.Text = "0%"
+	percent.TextColor3 = Color3.fromRGB(220, 210, 240)
+	percent.TextSize = 12
+	percent.Font = Enum.Font.GothamBold
+	percent.Parent = backdrop
+
+	-- Put Status on card as well so setStatus keeps working (primary status is on backdrop)
+	local statusRef = Instance.new("TextLabel")
+	statusRef.Name = "Status"
+	statusRef.BackgroundTransparency = 1
+	statusRef.Size = UDim2.fromOffset(0, 0)
+	statusRef.Text = ""
+	statusRef.Visible = false
+	statusRef.Parent = card
 
 	sharedState.CyberUI_BootstrapLoader = gui
 	return gui
 end
 
-local function setStatus(gui: ScreenGui?, text: string)
+local function setStatus(gui: ScreenGui?, text: string, progress: number?)
 	if not gui then
 		return
 	end
 
-	local card = gui:FindFirstChild("Card")
-	if not card then
-		return
+	local clean = tostring(text or "")
+	clean = clean:gsub("^Loading%s+", ""):gsub("%.%.%.$", "")
+	clean = clean:gsub("/", " / ")
+	if clean == "" then
+		clean = "Loading…"
 	end
 
-	local status = card:FindFirstChild("Status")
-	if status and status:IsA("TextLabel") then
-		status.Text = text
+	local backdrop = gui:FindFirstChild("Backdrop")
+	if backdrop then
+		local s = backdrop:FindFirstChild("Status")
+		if s and s:IsA("TextLabel") then
+			s.Text = clean
+		end
+		if typeof(progress) == "number" then
+			local track = backdrop:FindFirstChild("Track")
+			local fill = track and track:FindFirstChild("Fill")
+			local percent = backdrop:FindFirstChild("Percent")
+			local p = math.clamp(progress, 0, 1)
+			if fill and fill:IsA("Frame") then
+				TweenService:Create(fill, TweenInfo.new(0.18, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+					Size = UDim2.fromScale(math.max(0.03, p), 1),
+				}):Play()
+			end
+			if percent and percent:IsA("TextLabel") then
+				percent.Text = tostring(math.floor(p * 100 + 0.5)) .. "%"
+			end
+		end
 	end
 end
 
@@ -213,8 +266,13 @@ local bootstrap = createBootstrapLoader()
 -- no longer looks like Vaxorin simply "closing".
 local sources: { [string]: string } = {}
 
+local _fetchIndex = 0
+local _fetchTotal = #MODULE_PATHS
+
 local function fetch(path: string): string
-	setStatus(bootstrap, "Loading " .. path .. "...")
+	_fetchIndex += 1
+	local progress = _fetchIndex / math.max(1, _fetchTotal)
+	setStatus(bootstrap, path, progress)
 
 	local url = REPO .. "/" .. path .. ".lua"
 	local ok, result = pcall(function()

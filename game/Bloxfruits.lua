@@ -4721,7 +4721,6 @@ BF.startAutoRaid = function()
             local ok, err = pcall(function()
                 if not config.autoRaid then return end
 
-                -- DEAD: wait for respawn, do not fly to old raid
                 if BF.isPlayerDead() then
                     BF.notifyUser("Raid", "Dead - waiting respawn", 2)
                     task.wait(1)
