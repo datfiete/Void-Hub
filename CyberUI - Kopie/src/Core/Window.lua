@@ -557,71 +557,253 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	)
 
 	-- ============================================
-	-- V4 BOOT SEQUENCE
+	-- CINEMATIC BOOT SEQUENCE
 	-- ============================================
 	local loadingGui = Instance.new("ScreenGui")
 	loadingGui.Name = "VaxorinBoot"
 	loadingGui.ResetOnSpawn = false
 	loadingGui.IgnoreGuiInset = true
 	loadingGui.DisplayOrder = 2147483647
+	loadingGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	loadingGui.Parent = screenGui
 
-	local bootBackdrop = Helpers.CreateFrame({ Name = "Backdrop", Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(2, 3, 7), BackgroundTransparency = 0.02, Parent = loadingGui })
-	local bootGlow = Helpers.CreateFrame({ Name = "Glow", Size = UDim2.fromOffset(460, 460), Position = UDim2.fromScale(0.5, 0.48), AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = library.Theme.Accent, BackgroundTransparency = 0.92, Parent = bootBackdrop })
-	Helpers.Corner(bootGlow, 999)
+	local bootBackdrop = Helpers.CreateFrame({
+		Name = "Backdrop",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Color3.fromRGB(4, 2, 10),
+		BackgroundTransparency = 1,
+		Parent = loadingGui,
+	})
+	Tween.Play(bootBackdrop, { BackgroundTransparency = 0.08 }, { Time = 0.35 })
 
-	local bootCard = Helpers.CreateFrame({ Name = "Card", Size = UDim2.fromOffset(520, 320), Position = UDim2.fromScale(0.5, 0.5), AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = library.Theme.Secondary, Parent = bootBackdrop })
-	Helpers.Corner(bootCard, 22)
-	local bootStroke = Helpers.Stroke(bootCard, library.Theme.BorderStrong or library.Theme.Border, 1)
+	-- Soft radial accent bloom
+	local bootBloom = Helpers.CreateFrame({
+		Name = "Bloom",
+		Size = UDim2.fromOffset(120, 120),
+		Position = UDim2.fromScale(0.5, 0.48),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = library.Theme.Accent,
+		BackgroundTransparency = 0.96,
+		Parent = bootBackdrop,
+	})
+	Helpers.Corner(bootBloom, 999)
 
-	local bootTopLine = Helpers.CreateFrame({ Name = "TopLine", Size = UDim2.new(1, -56, 0, 2), Position = UDim2.fromOffset(28, 20), BackgroundColor3 = library.Theme.Accent, Parent = bootCard })
-	Helpers.Corner(bootTopLine, 2)
+	-- Orbit rings
+	local function makeRing(size: number, transparency: number, z: number)
+		local ring = Instance.new("Frame")
+		ring.Name = "Ring"
+		ring.Size = UDim2.fromOffset(size, size)
+		ring.Position = UDim2.fromScale(0.5, 0.48)
+		ring.AnchorPoint = Vector2.new(0.5, 0.5)
+		ring.BackgroundTransparency = 1
+		ring.ZIndex = z
+		ring.Parent = bootBackdrop
+		local stroke = Instance.new("UIStroke")
+		stroke.Color = library.Theme.Accent
+		stroke.Thickness = 1.2
+		stroke.Transparency = transparency
+		stroke.Parent = ring
+		Helpers.Corner(ring, 999)
+		return ring, stroke
+	end
+	local ring1 = makeRing(180, 0.75, 1)
+	local ring2 = makeRing(260, 0.85, 1)
+	local ring3 = makeRing(340, 0.92, 1)
 
-	local bootTitle = Helpers.CreateLabel({ Name = "Title", Size = UDim2.new(1, -56, 0, 34), Position = UDim2.fromOffset(28, 42), Text = windowName, Font = Theme.FontBold, TextSize = 28, TextColor3 = library.Theme.Text, Parent = bootCard })
-	local bootSub = Helpers.CreateLabel({ Name = "Sub", Size = UDim2.new(1, -56, 0, 18), Position = UDim2.fromOffset(28, 76), Text = "INITIALIZING COMMAND INTERFACE", Font = Theme.FontBold, TextSize = 9, TextColor3 = library.Theme.Accent, Parent = bootCard })
-	local bootStatus = Helpers.CreateLabel({ Name = "Status", Size = UDim2.new(1, -56, 0, 22), Position = UDim2.fromOffset(28, 112), Text = "Preparing interface...", Font = Theme.Font, TextSize = 12, TextColor3 = library.Theme.TextMuted, Parent = bootCard })
-
-	local bootTrack = Helpers.CreateFrame({ Name = "Track", Size = UDim2.new(1, -56, 0, 8), Position = UDim2.fromOffset(28, 156), BackgroundColor3 = library.Theme.Background, Parent = bootCard })
-	Helpers.Corner(bootTrack, 4)
-	local bootFill = Helpers.CreateFrame({ Name = "Fill", Size = UDim2.fromScale(0, 1), BackgroundColor3 = library.Theme.Accent, Parent = bootTrack })
-	Helpers.Corner(bootFill, 4)
-
-	local bootPercent = Helpers.CreateLabel({ Name = "Percent", Size = UDim2.fromOffset(70, 22), Position = UDim2.new(1, -98, 0, 176), Text = "0%", Font = Theme.FontBold, TextSize = 12, TextColor3 = library.Theme.Text, TextXAlignment = Enum.TextXAlignment.Right, Parent = bootCard })
-	local bootStage = Helpers.CreateLabel({ Name = "Stage", Size = UDim2.new(1, -56, 0, 18), Position = UDim2.fromOffset(28, 204), Text = "CORE / 00", Font = Theme.FontBold, TextSize = 9, TextColor3 = library.Theme.TextMuted, Parent = bootCard })
-
-	local bootPips = {}
-	for i = 1, 5 do
-		local pip = Helpers.CreateFrame({ Name = "Pip" .. i, Size = UDim2.fromOffset(54, 4), Position = UDim2.fromOffset(28 + (i - 1) * 62, 244), BackgroundColor3 = library.Theme.BorderStrong or library.Theme.Border, Parent = bootCard })
-		Helpers.Corner(pip, 2)
-		table.insert(bootPips, pip)
+	-- Floating particles
+	local particleFolder = Instance.new("Folder")
+	particleFolder.Name = "Particles"
+	particleFolder.Parent = bootBackdrop
+	local particles = {}
+	for i = 1, 18 do
+		local p = Instance.new("Frame")
+		p.Size = UDim2.fromOffset(math.random(2, 4), math.random(2, 4))
+		p.Position = UDim2.fromScale(math.random(), math.random())
+		p.AnchorPoint = Vector2.new(0.5, 0.5)
+		p.BackgroundColor3 = library.Theme.Accent
+		p.BackgroundTransparency = 0.35 + math.random() * 0.5
+		p.BorderSizePixel = 0
+		p.Parent = particleFolder
+		Helpers.Corner(p, 999)
+		particles[i] = p
 	end
 
-	local bootFooter = Helpers.CreateLabel({ Name = "Footer", Size = UDim2.new(1, -56, 0, 18), Position = UDim2.fromOffset(28, 274), Text = "VAXORIN / CYBERUI  " .. VERSION, Font = Theme.FontBold, TextSize = 8, TextColor3 = library.Theme.TextMuted, Parent = bootCard })
+	-- Center logo mark
+	local logoWrap = Helpers.CreateFrame({
+		Name = "LogoWrap",
+		Size = UDim2.fromOffset(88, 88),
+		Position = UDim2.fromScale(0.5, 0.42),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = library.Theme.Secondary,
+		BackgroundTransparency = 1,
+		Parent = bootBackdrop,
+	})
+	Helpers.Corner(logoWrap, 24)
+	local logoStroke = Helpers.Stroke(logoWrap, library.Theme.Accent, 1.5)
+	logoStroke.Transparency = 1
+	local logoScale = Instance.new("UIScale")
+	logoScale.Scale = 0.4
+	logoScale.Parent = logoWrap
+	local logoLetter = Helpers.CreateLabel({
+		Name = "V",
+		Size = UDim2.fromScale(1, 1),
+		Text = "V",
+		Font = Theme.FontBold,
+		TextSize = 42,
+		TextColor3 = library.Theme.Accent,
+		TextTransparency = 1,
+		Parent = logoWrap,
+	})
 
-	local bootPhases = {
-		{0.16, "Mounting interface...", "CORE / 01"},
-		{0.34, "Registering components...", "CORE / 02"},
-		{0.55, "Building workspace...", "UI / 03"},
-		{0.76, "Linking interactions...", "INPUT / 04"},
-		{1.00, "System ready", "READY / 05"},
-	}
+	local bootTitle = Helpers.CreateLabel({
+		Name = "Title",
+		Size = UDim2.fromOffset(480, 40),
+		Position = UDim2.new(0.5, 0, 0.42, 70),
+		AnchorPoint = Vector2.new(0.5, 0),
+		Text = windowName,
+		Font = Theme.FontBold,
+		TextSize = 30,
+		TextColor3 = library.Theme.Text,
+		TextTransparency = 1,
+		Parent = bootBackdrop,
+	})
+	local bootSub = Helpers.CreateLabel({
+		Name = "Sub",
+		Size = UDim2.fromOffset(480, 20),
+		Position = UDim2.new(0.5, 0, 0.42, 108),
+		AnchorPoint = Vector2.new(0.5, 0),
+		Text = "COMMAND INTERFACE",
+		Font = Theme.FontBold,
+		TextSize = 11,
+		TextColor3 = library.Theme.Accent,
+		TextTransparency = 1,
+		Parent = bootBackdrop,
+	})
+
+	-- Slim progress under title
+	local bootTrack = Helpers.CreateFrame({
+		Name = "Track",
+		Size = UDim2.fromOffset(220, 3),
+		Position = UDim2.new(0.5, 0, 0.42, 148),
+		AnchorPoint = Vector2.new(0.5, 0),
+		BackgroundColor3 = Color3.fromRGB(40, 32, 55),
+		BackgroundTransparency = 1,
+		Parent = bootBackdrop,
+	})
+	Helpers.Corner(bootTrack, 2)
+	local bootFill = Helpers.CreateFrame({
+		Name = "Fill",
+		Size = UDim2.fromScale(0, 1),
+		BackgroundColor3 = library.Theme.Accent,
+		Parent = bootTrack,
+	})
+	Helpers.Corner(bootFill, 2)
+	local bootStatus = Helpers.CreateLabel({
+		Name = "Status",
+		Size = UDim2.fromOffset(400, 18),
+		Position = UDim2.new(0.5, 0, 0.42, 162),
+		AnchorPoint = Vector2.new(0.5, 0),
+		Text = "Booting…",
+		Font = Theme.Font,
+		TextSize = 12,
+		TextColor3 = library.Theme.TextMuted,
+		TextTransparency = 1,
+		Parent = bootBackdrop,
+	})
+	local bootPercent = Helpers.CreateLabel({
+		Name = "Percent",
+		Size = UDim2.fromOffset(80, 18),
+		Position = UDim2.new(0.5, 0, 0.42, 182),
+		AnchorPoint = Vector2.new(0.5, 0),
+		Text = "0%",
+		Font = Theme.FontBold,
+		TextSize = 11,
+		TextColor3 = library.Theme.Text,
+		TextTransparency = 1,
+		Parent = bootBackdrop,
+	})
+
+	-- Fake "card" ref for teardown compatibility
+	local bootCard = logoWrap
+
+	-- Intro animation timeline
 	task.spawn(function()
-		for index, phase in bootPhases do
-			local value, status, stage = phase[1], phase[2], phase[3]
-			bootStatus.Text = status
-			bootStage.Text = stage
-			bootPercent.Text = tostring(math.floor(value * 100)) .. "%"
-			Tween.Play(bootFill, { Size = UDim2.fromScale(value, 1) }, { Time = 0.22 })
-			for i, pip in bootPips do
-				Tween.Play(pip, { BackgroundColor3 = if i <= index then library.Theme.Accent else (library.Theme.BorderStrong or library.Theme.Border) }, { Time = 0.14 })
+		-- Logo slam-in
+		Tween.Play(logoWrap, { BackgroundTransparency = 0.15 }, { Time = 0.35 })
+		Tween.Play(logoStroke, { Transparency = 0.25 }, { Time = 0.4 })
+		Tween.Play(logoLetter, { TextTransparency = 0 }, {
+			Time = 0.35,
+			EasingStyle = Enum.EasingStyle.Quint,
+			EasingDirection = Enum.EasingDirection.Out,
+		})
+		Tween.Play(logoScale, { Scale = 1 }, {
+			Time = 0.55,
+			EasingStyle = Enum.EasingStyle.Back,
+			EasingDirection = Enum.EasingDirection.Out,
+		})
+		Tween.Play(bootBloom, {
+			Size = UDim2.fromOffset(520, 520),
+			BackgroundTransparency = 0.9,
+		}, { Time = 0.7 })
+
+		task.wait(0.2)
+		Tween.Play(bootTitle, { TextTransparency = 0 }, { Time = 0.35 })
+		task.wait(0.08)
+		Tween.Play(bootSub, { TextTransparency = 0 }, { Time = 0.3 })
+		Tween.Play(bootTrack, { BackgroundTransparency = 0.2 }, { Time = 0.25 })
+		Tween.Play(bootStatus, { TextTransparency = 0 }, { Time = 0.25 })
+		Tween.Play(bootPercent, { TextTransparency = 0 }, { Time = 0.25 })
+
+		-- Spin rings slowly via rotation
+		task.spawn(function()
+			local t = 0
+			while loadingGui.Parent do
+				t += task.wait()
+				ring1.Rotation = t * 28
+				ring2.Rotation = -t * 18
+				ring3.Rotation = t * 12
+				for i, p in particles do
+					local base = i / #particles
+					local y = (base + t * 0.04 * (0.5 + (i % 3) * 0.2)) % 1.2 - 0.1
+					local x = (0.15 + (i * 0.041) % 0.7) + math.sin(t * 0.8 + i) * 0.03
+					p.Position = UDim2.fromScale(x, y)
+					p.BackgroundTransparency = 0.3 + (y % 1) * 0.5
+				end
 			end
-			task.wait(0.18)
+		end)
+
+		local phases = {
+			{ 0.18, "Mounting surface…" },
+			{ 0.36, "Hydrating theme…" },
+			{ 0.55, "Wiring controls…" },
+			{ 0.74, "Linking config…" },
+			{ 0.90, "Finalizing…" },
+			{ 1.00, "Ready" },
+		}
+		for _, phase in phases do
+			local value, status = phase[1], phase[2]
+			bootStatus.Text = status
+			bootPercent.Text = tostring(math.floor(value * 100)) .. "%"
+			Tween.Play(bootFill, { Size = UDim2.fromScale(value, 1) }, {
+				Time = 0.28,
+				EasingStyle = Enum.EasingStyle.Quint,
+				EasingDirection = Enum.EasingDirection.Out,
+			})
+			-- subtle logo pulse
+			Tween.Play(logoScale, { Scale = 1.04 }, { Time = 0.12 })
+			task.wait(0.12)
+			Tween.Play(logoScale, { Scale = 1 }, { Time = 0.16 })
+			task.wait(0.16)
 		end
 	end)
+
 	self._BootGui = loadingGui
 	self._BootCard = bootCard
 	self._BootStatus = bootStatus
 	self._BootFill = bootFill
+	self._BootBloom = bootBloom
+	self._BootLogoScale = logoScale
+	self._FirstReveal = true
 
 	-- Remove old bootstrap loader
 	local bootstrapLoader = sharedState.CyberUI_BootstrapLoader
@@ -2785,20 +2967,44 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	-- ============================================
 	-- STARTUP COMPLETE
 	-- ============================================
-	self._Maid:GiveTask(task.delay(1.15, function()
+	self._Maid:GiveTask(task.delay(2.05, function()
 		if not self.Gui then return end
 		if self._BootGui and self._BootGui.Parent then
-			Tween.Play(self._BootCard, { Size = UDim2.fromOffset(560, 344) }, { Time = 0.18 })
-			task.wait(0.08)
-			Tween.Play(self._BootGui:FindFirstChild("Backdrop"), { BackgroundTransparency = 1 }, { Time = 0.18 })
-			Tween.Play(self._BootCard, { BackgroundTransparency = 1 }, { Time = 0.18 })
-			for _, child in self._BootCard:GetDescendants() do
-				if child:IsA("TextLabel") then Tween.Play(child, { TextTransparency = 1 }, { Time = 0.16 }) end
-				if child:IsA("Frame") then Tween.Play(child, { BackgroundTransparency = 1 }, { Time = 0.16 }) end
-				if child:IsA("UIStroke") then Tween.Play(child, { Transparency = 1 }, { Time = 0.16 }) end
+			local backdrop = self._BootGui:FindFirstChild("Backdrop")
+			-- Flash bloom + logo shrink, then dissolve
+			if self._BootBloom then
+				Tween.Play(self._BootBloom, {
+					Size = UDim2.fromOffset(900, 900),
+					BackgroundTransparency = 0.82,
+				}, { Time = 0.28 })
 			end
-			task.wait(0.2)
-			if self._BootGui.Parent then self._BootGui:Destroy() end
+			if self._BootLogoScale then
+				Tween.Play(self._BootLogoScale, { Scale = 1.15 }, {
+					Time = 0.2,
+					EasingStyle = Enum.EasingStyle.Back,
+					EasingDirection = Enum.EasingDirection.Out,
+				})
+			end
+			task.wait(0.16)
+			if self._BootLogoScale then
+				Tween.Play(self._BootLogoScale, { Scale = 0.6 }, { Time = 0.22 })
+			end
+			if backdrop then
+				for _, child in backdrop:GetDescendants() do
+					if child:IsA("TextLabel") then
+						Tween.Play(child, { TextTransparency = 1 }, { Time = 0.22 })
+					elseif child:IsA("Frame") and child.Name ~= "Backdrop" then
+						Tween.Play(child, { BackgroundTransparency = 1 }, { Time = 0.22 })
+					elseif child:IsA("UIStroke") then
+						Tween.Play(child, { Transparency = 1 }, { Time = 0.2 })
+					end
+				end
+				Tween.Play(backdrop, { BackgroundTransparency = 1 }, { Time = 0.32 })
+			end
+			task.wait(0.28)
+			if self._BootGui.Parent then
+				self._BootGui:Destroy()
+			end
 		end
 		self._StartupComplete = true
 		self:SetVisible(self._Visible)
@@ -4206,24 +4412,47 @@ function Window:SetVisible(visible: boolean)
 				s.Parent = self.Main
 				self._MainScale = s
 			end
-			-- Prefer last dragged position (never force center)
 			local base = self._MainBasePos or self.Main.Position
 			self._MainBasePos = base
-			self._MainScale.Scale = 0.86
-			self.Main.Position = UDim2.new(
-				base.X.Scale, base.X.Offset,
-				base.Y.Scale, base.Y.Offset + 18
-			)
-			Tween.Play(self._MainScale, { Scale = 1 }, {
-				Time = 0.28,
-				EasingStyle = Enum.EasingStyle.Back,
-				EasingDirection = Enum.EasingDirection.Out,
-			})
-			Tween.Play(self.Main, { Position = base }, {
-				Time = 0.28,
-				EasingStyle = Enum.EasingStyle.Quint,
-				EasingDirection = Enum.EasingDirection.Out,
-			})
+			local first = self._FirstReveal == true
+			self._FirstReveal = false
+			if first then
+				-- Cinematic first reveal after boot
+				self._MainScale.Scale = 0.72
+				self.Main.Position = UDim2.new(
+					base.X.Scale, base.X.Offset,
+					base.Y.Scale, base.Y.Offset + 42
+				)
+				if self.Main:IsA("Frame") then
+					-- soft pop shadow via transparency if available
+				end
+				Tween.Play(self._MainScale, { Scale = 1 }, {
+					Time = 0.48,
+					EasingStyle = Enum.EasingStyle.Back,
+					EasingDirection = Enum.EasingDirection.Out,
+				})
+				Tween.Play(self.Main, { Position = base }, {
+					Time = 0.45,
+					EasingStyle = Enum.EasingStyle.Quint,
+					EasingDirection = Enum.EasingDirection.Out,
+				})
+			else
+				self._MainScale.Scale = 0.9
+				self.Main.Position = UDim2.new(
+					base.X.Scale, base.X.Offset,
+					base.Y.Scale, base.Y.Offset + 16
+				)
+				Tween.Play(self._MainScale, { Scale = 1 }, {
+					Time = 0.26,
+					EasingStyle = Enum.EasingStyle.Back,
+					EasingDirection = Enum.EasingDirection.Out,
+				})
+				Tween.Play(self.Main, { Position = base }, {
+					Time = 0.26,
+					EasingStyle = Enum.EasingStyle.Quint,
+					EasingDirection = Enum.EasingDirection.Out,
+				})
+			end
 		end
 		if self._Dim then
 			self._Dim.Visible = true

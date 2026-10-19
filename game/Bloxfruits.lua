@@ -5357,5 +5357,3 @@ end
 
 print("[BF] fully loaded, lines ready")
 while task.wait(1) do end
-
-print("Test 1")
