@@ -14,6 +14,7 @@ print("[BF] load ok - full autofarm script")
 
 local BF = {}
 
+
 -- Load Vaxorin (or fallback UI)
 local useVaxorin = false
 local window = nil
@@ -670,6 +671,121 @@ local islands = {
         Quest = {"StartQuest","ForgottenQuest",2}, EnemyPatterns = {"Water Fighter"},
         BossQuest = {"StartQuest","ForgottenQuest",3}, BossPatterns = {"Tide Keeper"},
         isBoss = true},
+
+    -- ========== SEA 3 (EnemySpawns dump MAP=Sea3 PlaceId=7449423635) ==========
+    -- Port Town
+    {Name = "Port Town 1",        Min = 1500, Max = 1524, Pos = Vector3.new(-384, 56, 5669),
+        Quest = {"StartQuest","PiratePortQuest",1}, EnemyPatterns = {"Pirate Millionaire"}, isBoss = false},
+    {Name = "Port Town 2",        Min = 1525, Max = 1574, Pos = Vector3.new(-444, 83, 6051),
+        Quest = {"StartQuest","PiratePortQuest",2}, EnemyPatterns = {"Pistol Billionaire"}, isBoss = false},
+    -- Hydra Island
+    {Name = "Hydra Warriors",     Min = 1575, Max = 1599, Pos = Vector3.new(6822, 54, -915),
+        Quest = {"StartQuest","DragonCrewQuest",1}, EnemyPatterns = {"Dragon Crew Warrior"}, isBoss = false},
+    {Name = "Hydra Archers",      Min = 1600, Max = 1624, Pos = Vector3.new(6756, 490, 329),
+        Quest = {"StartQuest","DragonCrewQuest",2}, EnemyPatterns = {"Dragon Crew Archer"}, isBoss = false},
+    {Name = "Hydra Enforcers",    Min = 1625, Max = 1649, Pos = Vector3.new(4526, 1005, 367),
+        Quest = {"StartQuest","VenomCrewQuest",1}, EnemyPatterns = {"Hydra Enforcer"}, isBoss = false},
+    {Name = "Venom Assailants",   Min = 1650, Max = 1699, Pos = Vector3.new(4590, 1165, 760),
+        Quest = {"StartQuest","VenomCrewQuest",2}, EnemyPatterns = {"Venomous Assailant"}, isBoss = false},
+    -- Great Tree
+    {Name = "Great Tree 1",       Min = 1700, Max = 1724, Pos = Vector3.new(2724, 77, -7806),
+        Quest = {"StartQuest","MarineTreeIsland",1}, EnemyPatterns = {"Marine Commodore"}, isBoss = false},
+    {Name = "Great Tree 2",       Min = 1725, Max = 1774, Pos = Vector3.new(3775, 128, -7103),
+        Quest = {"StartQuest","MarineTreeIsland",2}, EnemyPatterns = {"Marine Rear Admiral"}, isBoss = false},
+    -- Floating Turtle
+    {Name = "Turtle Raiders",     Min = 1775, Max = 1799, Pos = Vector3.new(-10452, 333, -8367),
+        Quest = {"StartQuest","DeepForestIsland3",1}, EnemyPatterns = {"Fishman Raider"}, isBoss = false},
+    {Name = "Turtle Captains",    Min = 1800, Max = 1824, Pos = Vector3.new(-11015, 332, -8937),
+        Quest = {"StartQuest","DeepForestIsland3",2}, EnemyPatterns = {"Fishman Captain"}, isBoss = false},
+    {Name = "Forest Pirates",     Min = 1825, Max = 1849, Pos = Vector3.new(-13416, 332, -7813),
+        Quest = {"StartQuest","DeepForestIsland",1}, EnemyPatterns = {"Forest Pirate"}, isBoss = false},
+    {Name = "Myth Pirates",       Min = 1850, Max = 1899, Pos = Vector3.new(-13471, 494, -6876),
+        Quest = {"StartQuest","DeepForestIsland",2}, EnemyPatterns = {"Mythological Pirate"}, isBoss = false},
+    {Name = "Jungle Pirates",     Min = 1900, Max = 1924, Pos = Vector3.new(-11987, 332, -10544),
+        Quest = {"StartQuest","DeepForestIsland2",1}, EnemyPatterns = {"Jungle Pirate"}, isBoss = false},
+    {Name = "Musketeer Pirates",  Min = 1925, Max = 1974, Pos = Vector3.new(-13339, 416, -9802),
+        Quest = {"StartQuest","DeepForestIsland2",2}, EnemyPatterns = {"Musketeer Pirate"}, isBoss = false},
+    -- Haunted Castle (live names: Reborn Skeleton / Living Zombie / Demonic Soul / Posessed Mummy)
+    {Name = "Haunted 1",          Min = 1975, Max = 1999, Pos = Vector3.new(-8786, 142, 6261),
+        Quest = {"StartQuest","HauntedQuest1",1}, EnemyPatterns = {"Reborn Skeleton","Ghost"}, isBoss = false},
+    {Name = "Haunted 2",          Min = 2000, Max = 2024, Pos = Vector3.new(-10145, 147, 5955),
+        Quest = {"StartQuest","HauntedQuest1",2}, EnemyPatterns = {"Living Zombie"}, isBoss = false},
+    {Name = "Haunted 3",          Min = 2025, Max = 2049, Pos = Vector3.new(-9427, 171, 6048),
+        Quest = {"StartQuest","HauntedQuest2",1}, EnemyPatterns = {"Demonic Soul"}, isBoss = false},
+    {Name = "Haunted 4",          Min = 2050, Max = 2074, Pos = Vector3.new(-9449, 5, 6343),
+        Quest = {"StartQuest","HauntedQuest2",2}, EnemyPatterns = {"Posessed Mummy","Possessed Mummy"}, isBoss = false},
+    -- Sea of Treats
+    {Name = "Peanut 1",           Min = 2075, Max = 2099, Pos = Vector3.new(-2122, 25, -10112),
+        Quest = {"StartQuest","NutsIslandQuest",1}, EnemyPatterns = {"Peanut Scout"}, isBoss = false},
+    {Name = "Peanut 2",           Min = 2100, Max = 2124, Pos = Vector3.new(-2136, 62, -10547),
+        Quest = {"StartQuest","NutsIslandQuest",2}, EnemyPatterns = {"Peanut President"}, isBoss = false},
+    {Name = "Ice Cream 1",        Min = 2125, Max = 2149, Pos = Vector3.new(-837, 65, -10939),
+        Quest = {"StartQuest","IceCreamIslandQuest",1}, EnemyPatterns = {"Ice Cream Chef"}, isBoss = false},
+    {Name = "Ice Cream 2",        Min = 2150, Max = 2199, Pos = Vector3.new(-647, 87, -11279),
+        Quest = {"StartQuest","IceCreamIslandQuest",2}, EnemyPatterns = {"Ice Cream Commander"}, isBoss = false},
+    {Name = "Cake 1",             Min = 2200, Max = 2224, Pos = Vector3.new(-2359, 37, -12115),
+        Quest = {"StartQuest","CakeQuest1",1}, EnemyPatterns = {"Cookie Crafter"}, isBoss = false},
+    {Name = "Cake 2",             Min = 2225, Max = 2249, Pos = Vector3.new(-1570, 35, -12302),
+        Quest = {"StartQuest","CakeQuest1",2}, EnemyPatterns = {"Cake Guard"}, isBoss = false},
+    {Name = "Cake 3",             Min = 2250, Max = 2274, Pos = Vector3.new(-1818, 35, -12958),
+        Quest = {"StartQuest","CakeQuest2",1}, EnemyPatterns = {"Baking Staff"}, isBoss = false},
+    {Name = "Cake 4",             Min = 2275, Max = 2299, Pos = Vector3.new(-2254, 51, -12888),
+        Quest = {"StartQuest","CakeQuest2",2}, EnemyPatterns = {"Head Baker"}, isBoss = false},
+    {Name = "Choco 1",            Min = 2300, Max = 2324, Pos = Vector3.new(-9, 26, -12262),
+        Quest = {"StartQuest","ChocQuest1",1}, EnemyPatterns = {"Cocoa Warrior"}, isBoss = false},
+    {Name = "Choco 2",            Min = 2325, Max = 2349, Pos = Vector3.new(707, 26, -12609),
+        Quest = {"StartQuest","ChocQuest1",2}, EnemyPatterns = {"Chocolate Bar Battler"}, isBoss = false},
+    {Name = "Choco 3",            Min = 2350, Max = 2374, Pos = Vector3.new(4, 26, -12630),
+        Quest = {"StartQuest","ChocQuest2",1}, EnemyPatterns = {"Sweet Thief"}, isBoss = false},
+    {Name = "Choco 4",            Min = 2375, Max = 2399, Pos = Vector3.new(83, 26, -12954),
+        Quest = {"StartQuest","ChocQuest2",2}, EnemyPatterns = {"Candy Rebel"}, isBoss = false},
+    {Name = "Candy 1",            Min = 2400, Max = 2424, Pos = Vector3.new(-1344, 34, -14582),
+        Quest = {"StartQuest","CandyQuest1",1}, EnemyPatterns = {"Candy Pirate"}, isBoss = false},
+    {Name = "Candy 2",            Min = 2425, Max = 2449, Pos = Vector3.new(-841, 19, -14535),
+        Quest = {"StartQuest","CandyQuest1",2}, EnemyPatterns = {"Snow Demon"}, isBoss = false},
+    -- Tiki Outpost
+    {Name = "Tiki 1",             Min = 2450, Max = 2474, Pos = Vector3.new(-16272, 26, -203),
+        Quest = {"StartQuest","TikiQuest1",1}, EnemyPatterns = {"Isle Outlaw"}, isBoss = false},
+    {Name = "Tiki 2",             Min = 2475, Max = 2499, Pos = Vector3.new(-16836, 26, -179),
+        Quest = {"StartQuest","TikiQuest1",2}, EnemyPatterns = {"Island Boy"}, isBoss = false},
+    {Name = "Tiki 3",             Min = 2500, Max = 2524, Pos = Vector3.new(-16233, 25, 1033),
+        Quest = {"StartQuest","TikiQuest2",1}, EnemyPatterns = {"Sun-kissed Warrior"}, isBoss = false},
+    {Name = "Tiki 4",             Min = 2525, Max = 2549, Pos = Vector3.new(-16797, 27, 1049),
+        Quest = {"StartQuest","TikiQuest2",2}, EnemyPatterns = {"Isle Champion"}, isBoss = false},
+    {Name = "Tiki 5",             Min = 2550, Max = 2574, Pos = Vector3.new(-16544, 96, 1516),
+        Quest = {"StartQuest","TikiQuest3",1}, EnemyPatterns = {"Serpent Hunter"}, isBoss = false},
+    {Name = "Tiki 6",             Min = 2575, Max = 2599, Pos = Vector3.new(-16874, 121, 1635),
+        Quest = {"StartQuest","TikiQuest3",2}, EnemyPatterns = {"Skull Slayer"}, isBoss = false},
+    -- Submerged Island
+    {Name = "Submerged 1",        Min = 2600, Max = 2624, Pos = Vector3.new(10978, -2157, 9163),
+        Quest = {"StartQuest","SubmergedQuest1",1}, EnemyPatterns = {"Reef Bandit"}, isBoss = false},
+    {Name = "Submerged 2",        Min = 2625, Max = 2649, Pos = Vector3.new(10750, -2087, 9363),
+        Quest = {"StartQuest","SubmergedQuest1",2}, EnemyPatterns = {"Coral Pirate"}, isBoss = false},
+    {Name = "Submerged 3",        Min = 2650, Max = 2674, Pos = Vector3.new(10628, -2078, 10072),
+        Quest = {"StartQuest","SubmergedQuest2",1}, EnemyPatterns = {"Sea Chanter","Ocean Prophet"}, isBoss = false},
+    {Name = "Submerged 4",        Min = 2675, Max = 2699, Pos = Vector3.new(9827, -1995, 9745),
+        Quest = {"StartQuest","SubmergedQuest3",1}, EnemyPatterns = {"High Disciple","Ocean Prophet"}, isBoss = false},
+    {Name = "Submerged 5",        Min = 2700, Max = 2800, Pos = Vector3.new(9610, -1993, 9926),
+        Quest = {"StartQuest","SubmergedQuest3",2}, EnemyPatterns = {"Grand Devotee"}, isBoss = false},
+
+    -- Sea3 bosses (from dump + markers)
+    {Name = "Beautiful Pirate",   Min = 1950, Max = 1975, Pos = Vector3.new(5367, 26, -65),
+        Quest = {"StartQuest","DeepForestIsland2",2}, EnemyPatterns = {"Musketeer Pirate"},
+        BossQuest = nil, BossPatterns = {"Beautiful Pirate"},
+        isBoss = true},
+    {Name = "Longma",             Min = 2000, Max = 2025, Pos = Vector3.new(-10156, 338, -9446),
+        Quest = {"StartQuest","HauntedQuest1",2}, EnemyPatterns = {"Living Zombie"},
+        BossQuest = nil, BossPatterns = {"Longma"},
+        isBoss = true},
+    {Name = "Stone",              Min = 1550, Max = 1600, Pos = Vector3.new(-1110, 58, 6812),
+        Quest = {"StartQuest","PiratePortQuest",2}, EnemyPatterns = {"Pistol Billionaire"},
+        BossQuest = nil, BossPatterns = {"Stone"},
+        isBoss = true},
+    {Name = "Captain Elephant",   Min = 1875, Max = 1925, Pos = Vector3.new(-13366, 326, -8485),
+        Quest = {"StartQuest","DeepForestIsland",2}, EnemyPatterns = {"Mythological Pirate"},
+        BossQuest = nil, BossPatterns = {"Captain Elephant","Elephant"},
+        isBoss = true},
+
 }
 
 table.sort(islands, function(a,b) return a.Min < b.Min end)
@@ -3546,6 +3662,7 @@ BF.startFarm = function()
 
             local level = BF.getPlayerLevel()
             local island = BF.resolveFarmIsland(level)
+            -- Always re-check live boss (works without quest)
             local _prioBoss, _prioIsland = nil, nil
             if config.bossPriority then
                 _prioBoss, _prioIsland = BF.findLiveBossSimple(level)
@@ -3554,12 +3671,17 @@ BF.startFarm = function()
                 end
             end
             local hrp = character:FindFirstChild("HumanoidRootPart")
+
+                        -- This is deliberately scoped to the user's existing "Season 2, 1"
+            -- entry and does not alter other level ranges.
             if island and island.Name == "Season 2, 1" then
                 island.EnemyPatterns = {"Raider"}
                 island.isBoss = false
             end
             if not hrp then task.wait(0.5) continue end
 
+            -- ===== BOSS SHORT-CIRCUIT (no quest needed) =====
+            -- Same approach as boss-timer hunt: fly above boss + attackEnemy
             if config.bossPriority then
                 local liveBoss, liveIsl = _prioBoss, _prioIsland
                 if not liveBoss then
@@ -3575,6 +3697,7 @@ BF.startFarm = function()
                         currentQuestType = "boss"
                         state = "COMBAT"
 
+                        -- optional boss quest (never blocks attack)
                         if liveIsl and liveIsl.BossQuest and (os.clock() - (_lastQuestAcceptAt or 0)) > 6 then
                             _lastQuestAcceptAt = os.clock()
                             pcall(function()
@@ -3892,6 +4015,11 @@ BF.startFarm = function()
             end
 
             if state == "PATROL" then
+                                -- GUI is delayed, the farmer should still scan Workspace.Enemies
+                -- and immediately switch back to COMBAT when a Raider appears.
+
+                -- No enemy: stay at the current safe Y. The old code used a
+                -- target of nil plus a fixed +Y velocity, which caused the slow fall.
                 if heightLocked then
                     BF.setFlyTarget(Vector3.new(hrp.Position.X, lockedY, hrp.Position.Z), false)
                 else
@@ -4048,6 +4176,7 @@ BF.startAutoRandomFruit = function()
             if config.autoRandomFruit then
                 pcall(BF.buyRandomFruitOnce)
             end
+            -- check every 5 min (server CD is 2h)
             task.wait(300)
         end
     end)
@@ -4095,6 +4224,7 @@ BF.equipSword = function()
                 end
             end
         end
+        -- any melee tool fallback
         for _, t in ipairs(bp:GetChildren()) do
             if t:IsA("Tool") and (t.ToolTip == "Melee" or t.ToolTip == "") then
                 hum:EquipTool(t)
@@ -4203,6 +4333,7 @@ BF.secretWindmill = function()
         if not BF.secretsRunning then return end
         BF.hitPart(rope)
     end
+    -- claim area: docks NPC
     BF.flyTo(Vector3.new(-1140, 20, 3850), 1.5)
     BF._secretDone[key] = true
 end
@@ -4266,6 +4397,7 @@ BF.secretJungleTrees = function()
         if n >= 25 then break end
         BF.hitPart(t)
         n = n + 1
+        -- monkey thief spawn
         local enemies = Workspace:FindFirstChild("Enemies")
         if enemies then
             for _, m in ipairs(enemies:GetChildren()) do
@@ -4338,7 +4470,9 @@ BF.startAutoSecrets = function()
                 BF.runSecretsCycle()
             end)
             if not ok then warn("[BF] secrets:", err) end
+            -- full cycle then wait before retrying incomplete ones
             task.wait(15)
+            -- allow retry of failed finds after a while
             if os.clock() % 120 < 20 then
                 BF._secretDone = {}
             end
@@ -4352,6 +4486,7 @@ BF.stopAutoSecrets = function()
     BF.notifyUser("Secrets", "Auto Secrets OFF", 2)
 end
 
+-- =============================================
 BF.raidRunning = false
 BF.raidTask = nil
 BF.lastRaidChipAt = 0
@@ -4393,6 +4528,7 @@ BF.isPlayerDead = function()
 end
 
 BF.isInRaid = function()
+    -- Timer HUD OR any Island part under Locations
     if BF.raidTimerVisible() then return true end
     local locs = BF.getRaidLocations()
     if not locs then return false end
@@ -4421,6 +4557,7 @@ BF.getPartCFrame = function(obj)
     return cf
 end
 
+-- Prefer highest Island N; also accept "Island1" / loose names
 BF.getActiveRaidIsland = function()
     local locs = BF.getRaidLocations()
     if not locs then return nil, 0, nil end
@@ -4433,6 +4570,7 @@ BF.getActiveRaidIsland = function()
         end
     end
 
+    -- fallback: any child with Island in name, pick furthest from player or first
     local best, bestI, bestCf, bestScore = nil, 0, nil, -1
     for _, ch in ipairs(locs:GetChildren()) do
         local n = string.lower(ch.Name)
@@ -4472,17 +4610,19 @@ end
 
 BF.raidOrbitAngle = 0
 BF.raidHoverY = 22
-BF.raidDodgeAmp = 35
+BF.raidDodgeAmp = 35 -- side-to-side dodge distance (not stuck mid-island)
 BF.currentRaidIslandIndex = 0
 BF.raidEndedAt = 0
 local RAID_REENTRY_COOLDOWN = 8
 
+-- Stay over the island, but STRAFE left/right (real dodge), not tiny circle in the center
 BF.raidFlyToPos = function(pos)
     if not pos then return end
     pcall(function()
         BF._bossFlyUnlock = true
         if not BF.flying then BF.enableFly() end
 
+        -- smooth left-right + slight forward/back (figure-8-ish)
         BF.raidOrbitAngle = BF.raidOrbitAngle + 0.07
         local ox = math.sin(BF.raidOrbitAngle) * BF.raidDodgeAmp
         local oz = math.sin(BF.raidOrbitAngle * 0.5) * (BF.raidDodgeAmp * 0.45)
@@ -4514,6 +4654,7 @@ BF.raidKillLoop = function()
     local island, idx, cf = BF.getActiveRaidIsland()
     local focusPos = cf and cf.Position or nil
 
+    -- Fallback: no Locations parts -> use living enemies as focus (still progress raid)
     if not focusPos then
         local all = BF.getAllRaidEnemies()
         if #all > 0 then
@@ -4530,6 +4671,7 @@ BF.raidKillLoop = function()
     end
 
     if not focusPos then
+        -- truly nothing: stay put briefly (island between spawns)
         return false
     end
 
@@ -4579,6 +4721,7 @@ BF.startAutoRaid = function()
             local ok, err = pcall(function()
                 if not config.autoRaid then return end
 
+                -- DEAD: wait for respawn, do not fly to old raid
                 if BF.isPlayerDead() then
                     BF.notifyUser("Raid", "Dead - waiting respawn", 2)
                     task.wait(1)
@@ -4594,11 +4737,13 @@ BF.startAutoRaid = function()
                     return
                 end
 
+                -- Raid ended (timer gone, no islands)
                 BF.currentRaidIslandIndex = 0
                 if BF.raidEndedAt == 0 then
                     BF.raidEndedAt = os.clock()
                     BF.notifyUser("Raid", "Raid ended - cooldown then new chip", 3)
                 end
+                -- short cooldown so we don't path back into a finishing raid
                 if os.clock() - BF.raidEndedAt < RAID_REENTRY_COOLDOWN then
                     task.wait(0.5)
                     return
@@ -4685,6 +4830,10 @@ BF.stopEnemyEsp = function()
 end
 
 -- =============================================
+-- VAXORIN UI CREATION (if successful)
+-- =============================================
+
+-- =============================================
 -- FPS BOOSTER + ISLAND FLY
 -- =============================================
 BF.fpsBoostOn = false
@@ -4712,6 +4861,7 @@ BF.applyFpsBoost = function(on)
         return
     end
 
+    -- Graphics (hub-style)
     pcall(function()
         settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
         settings().Rendering.MeshPartDetailLevel = Enum.MeshPartDetailLevel.Level01
@@ -4725,6 +4875,7 @@ BF.applyFpsBoost = function(on)
         if setfpscap then setfpscap(999) end
     end)
 
+    -- Lighting
     pcall(function()
         lighting.GlobalShadows = false
         lighting.FogEnd = 9e9
@@ -4745,6 +4896,7 @@ BF.applyFpsBoost = function(on)
         end
     end)
 
+    -- Terrain / water
     pcall(function()
         if terrain then
             terrain.WaterWaveSize = 0
@@ -4775,6 +4927,7 @@ BF.applyFpsBoost = function(on)
         end
     end
 
+    -- One-shot pass (can hitch briefly once)
     task.spawn(function()
         pcall(function()
             for _, v in ipairs(workspace:GetDescendants()) do
@@ -4921,6 +5074,7 @@ if useVaxorin and window then
         Flag = "Misc.IslandSelect",
         Save = false,
         Callback = function(v)
+            -- dropdown may pass string or table
             local name = v
             if type(v) == "table" then name = v[1] or v.Name or tostring(v) end
             BF._selectedIslandFly = tostring(name)
@@ -5356,4 +5510,7 @@ else
 end
 
 print("[BF] fully loaded, lines ready")
+-- Keep script alive
 while task.wait(1) do end
+
+print("Test 1")
