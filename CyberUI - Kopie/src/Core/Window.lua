@@ -361,6 +361,506 @@ local function getExecutorName(): string
 	return "Unknown"
 end
 
+
+-- Extracted from Window.new so the compiler stays under the 200 local-register limit.
+local function startCinematicBoot(ctx)
+	local library = ctx.Library
+	local data = ctx.Data
+	local windowName = ctx.WindowName
+	local screenGui = ctx.ScreenGui
+	local sharedState = ctx.SharedState
+
+-- ============================================
+-- CINEMATIC BOOT SEQUENCE (continuous handoff)
+-- Reuses the module-loader GUI when present so the logo never blinks out.
+-- ============================================
+local bootLogoAsset = data.Logo
+if bootLogoAsset == nil or bootLogoAsset == "" or bootLogoAsset == LEGACY_LOGO then
+	bootLogoAsset = Vaxorin_Logo
+end
+
+local sharedBootstrap = sharedState.CyberUI_BootstrapLoader
+sharedState.CyberUI_BootstrapLoader = nil
+
+local loadingGui: ScreenGui
+local bootBackdrop: Frame
+local logoWrap: Frame
+local logoImage: ImageLabel?
+local logoScale: UIScale
+local logoStroke: UIStroke?
+local bootTitle: TextLabel
+local bootSub: TextLabel
+local bootTrack: Frame
+local bootFill: Frame
+local bootStatus: TextLabel
+local bootPercent: TextLabel
+local bootBloom: Frame
+local reusedBootstrap = false
+
+local function ensureUIScale(parent: Instance): UIScale
+	local s = parent:FindFirstChildOfClass("UIScale")
+	if s then return s end
+	local n = Instance.new("UIScale")
+	n.Scale = 1
+	n.Parent = parent
+	return n
+end
+
+if sharedBootstrap and sharedBootstrap.Parent then
+	reusedBootstrap = true
+	loadingGui = sharedBootstrap
+	loadingGui.Name = "VaxorinBoot"
+	loadingGui.DisplayOrder = 2147483646
+	bootBackdrop = loadingGui:FindFirstChild("Backdrop") :: any
+	if not bootBackdrop then
+		bootBackdrop = Helpers.CreateFrame({
+			Name = "Backdrop",
+			Size = UDim2.fromScale(1, 1),
+			BackgroundColor3 = Color3.fromRGB(4, 2, 10),
+			BackgroundTransparency = 0.05,
+			Parent = loadingGui,
+		})
+	end
+
+	logoWrap = bootBackdrop:FindFirstChild("LogoWrap") :: any
+	if not logoWrap then
+		logoWrap = Helpers.CreateFrame({
+			Name = "LogoWrap",
+			Size = UDim2.fromOffset(88, 88),
+			Position = UDim2.new(0.5, 0, 0.5, -64),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = library.Theme.Secondary,
+			BackgroundTransparency = 0.15,
+			Parent = bootBackdrop,
+		})
+		Helpers.Corner(logoWrap, 26)
+	end
+	logoScale = ensureUIScale(logoWrap)
+	logoStroke = logoWrap:FindFirstChildOfClass("UIStroke")
+	if not logoStroke then
+		logoStroke = Helpers.Stroke(logoWrap, library.Theme.Accent, 1.5)
+		logoStroke.Transparency = 0.25
+	end
+	logoImage = logoWrap:FindFirstChild("Logo") :: any
+	if logoImage and logoImage:IsA("ImageLabel") then
+		logoImage.Image = tostring(bootLogoAsset)
+		logoImage.ImageTransparency = 0
+	else
+		logoImage = Instance.new("ImageLabel")
+		logoImage.Name = "Logo"
+		logoImage.BackgroundTransparency = 1
+		logoImage.Size = UDim2.fromScale(0.7, 0.7)
+		logoImage.Position = UDim2.fromScale(0.5, 0.5)
+		logoImage.AnchorPoint = Vector2.new(0.5, 0.5)
+		logoImage.Image = tostring(bootLogoAsset)
+		logoImage.ScaleType = Enum.ScaleType.Fit
+		logoImage.Parent = logoWrap
+	end
+
+	-- Brand title from phase 1 becomes bootSub; window name becomes bootTitle
+	bootTitle = bootBackdrop:FindFirstChild("Title") :: any
+	if not bootTitle then
+		bootTitle = Helpers.CreateLabel({
+			Name = "Title",
+			Size = UDim2.fromOffset(520, 40),
+			Position = UDim2.new(0.5, 0, 0.5, 0),
+			AnchorPoint = Vector2.new(0.5, 0),
+			Text = "Vaxorin",
+			Font = Theme.FontBold,
+			TextSize = 28,
+			TextColor3 = library.Theme.Text,
+			Parent = bootBackdrop,
+		})
+	end
+	bootSub = bootBackdrop:FindFirstChild("WindowTitle") :: any
+	if not bootSub then
+		bootSub = Helpers.CreateLabel({
+			Name = "WindowTitle",
+			Size = UDim2.fromOffset(520, 22),
+			Position = UDim2.new(0.5, 0, 0.5, 36),
+			AnchorPoint = Vector2.new(0.5, 0),
+			Text = windowName,
+			Font = Theme.FontBold,
+			TextSize = 14,
+			TextColor3 = library.Theme.Accent,
+			TextTransparency = 1,
+			Parent = bootBackdrop,
+		})
+	end
+
+	bootStatus = bootBackdrop:FindFirstChild("Status") :: any
+	bootTrack = bootBackdrop:FindFirstChild("Track") :: any
+	bootFill = bootTrack and bootTrack:FindFirstChild("Fill") :: any
+	bootPercent = bootBackdrop:FindFirstChild("Percent") :: any
+	if not bootTrack then
+		bootTrack = Helpers.CreateFrame({
+			Name = "Track",
+			Size = UDim2.fromOffset(220, 3),
+			Position = UDim2.new(0.5, 0, 0.5, 74),
+			AnchorPoint = Vector2.new(0.5, 0),
+			BackgroundColor3 = Color3.fromRGB(40, 32, 55),
+			Parent = bootBackdrop,
+		})
+		Helpers.Corner(bootTrack, 2)
+		bootFill = Helpers.CreateFrame({
+			Name = "Fill",
+			Size = UDim2.fromScale(1, 1),
+			BackgroundColor3 = library.Theme.Accent,
+			Parent = bootTrack,
+		})
+		Helpers.Corner(bootFill, 2)
+	end
+	if not bootStatus then
+		bootStatus = Helpers.CreateLabel({
+			Name = "Status",
+			Size = UDim2.fromOffset(400, 18),
+			Position = UDim2.new(0.5, 0, 0.5, 92),
+			AnchorPoint = Vector2.new(0.5, 0),
+			Text = "Ready",
+			Font = Theme.Font,
+			TextSize = 12,
+			TextColor3 = library.Theme.TextMuted,
+			Parent = bootBackdrop,
+		})
+	end
+	if not bootPercent then
+		bootPercent = Helpers.CreateLabel({
+			Name = "Percent",
+			Size = UDim2.fromOffset(80, 18),
+			Position = UDim2.new(0.5, 0, 0.5, 112),
+			AnchorPoint = Vector2.new(0.5, 0),
+			Text = "100%",
+			Font = Theme.FontBold,
+			TextSize = 11,
+			TextColor3 = library.Theme.Text,
+			Parent = bootBackdrop,
+		})
+	end
+
+	bootBloom = bootBackdrop:FindFirstChild("Bloom") :: any
+	if not bootBloom then
+		bootBloom = Helpers.CreateFrame({
+			Name = "Bloom",
+			Size = UDim2.fromOffset(420, 420),
+			Position = UDim2.fromScale(0.5, 0.5),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = library.Theme.Accent,
+			BackgroundTransparency = 0.92,
+			Parent = bootBackdrop,
+		})
+		Helpers.Corner(bootBloom, 999)
+		bootBloom.ZIndex = 0
+	end
+else
+	-- Cold start (no module loader) — build full boot GUI
+	loadingGui = Instance.new("ScreenGui")
+	loadingGui.Name = "VaxorinBoot"
+	loadingGui.ResetOnSpawn = false
+	loadingGui.IgnoreGuiInset = true
+	loadingGui.DisplayOrder = 2147483646
+	loadingGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	local bootParent = screenGui.Parent
+	if not bootParent then
+		pcall(function()
+			loadingGui.Parent = game:GetService("CoreGui")
+		end)
+		if not loadingGui.Parent then
+			bootParent = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+			loadingGui.Parent = bootParent
+		end
+	else
+		loadingGui.Parent = bootParent
+	end
+	print("[Vaxorin] boot started")
+
+	bootBackdrop = Helpers.CreateFrame({
+		Name = "Backdrop",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Color3.fromRGB(4, 2, 10),
+		BackgroundTransparency = 0.05,
+		Parent = loadingGui,
+	})
+	bootBloom = Helpers.CreateFrame({
+		Name = "Bloom",
+		Size = UDim2.fromOffset(120, 120),
+		Position = UDim2.fromScale(0.5, 0.5),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = library.Theme.Accent,
+		BackgroundTransparency = 0.96,
+		Parent = bootBackdrop,
+	})
+	Helpers.Corner(bootBloom, 999)
+
+	logoWrap = Helpers.CreateFrame({
+		Name = "LogoWrap",
+		Size = UDim2.fromOffset(96, 96),
+		Position = UDim2.new(0.5, 0, 0.5, -70),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = library.Theme.Secondary,
+		BackgroundTransparency = 0.15,
+		Parent = bootBackdrop,
+	})
+	Helpers.Corner(logoWrap, 28)
+	logoStroke = Helpers.Stroke(logoWrap, library.Theme.Accent, 1.5)
+	logoStroke.Transparency = 0.25
+	logoScale = ensureUIScale(logoWrap)
+	logoScale.Scale = 0.4
+	logoImage = Instance.new("ImageLabel")
+	logoImage.Name = "Logo"
+	logoImage.BackgroundTransparency = 1
+	logoImage.Size = UDim2.fromScale(0.72, 0.72)
+	logoImage.Position = UDim2.fromScale(0.5, 0.5)
+	logoImage.AnchorPoint = Vector2.new(0.5, 0.5)
+	logoImage.Image = tostring(bootLogoAsset)
+	logoImage.ScaleType = Enum.ScaleType.Fit
+	logoImage.ImageTransparency = 1
+	logoImage.Parent = logoWrap
+
+	bootTitle = Helpers.CreateLabel({
+		Name = "Title",
+		Size = UDim2.fromOffset(520, 40),
+		Position = UDim2.new(0.5, 0, 0.5, 0),
+		AnchorPoint = Vector2.new(0.5, 0),
+		Text = "Vaxorin",
+		Font = Theme.FontBold,
+		TextSize = 28,
+		TextColor3 = library.Theme.Text,
+		TextTransparency = 1,
+		Parent = bootBackdrop,
+	})
+	bootSub = Helpers.CreateLabel({
+		Name = "WindowTitle",
+		Size = UDim2.fromOffset(520, 22),
+		Position = UDim2.new(0.5, 0, 0.5, 36),
+		AnchorPoint = Vector2.new(0.5, 0),
+		Text = windowName,
+		Font = Theme.FontBold,
+		TextSize = 14,
+		TextColor3 = library.Theme.Accent,
+		TextTransparency = 1,
+		Parent = bootBackdrop,
+	})
+	bootTrack = Helpers.CreateFrame({
+		Name = "Track",
+		Size = UDim2.fromOffset(220, 3),
+		Position = UDim2.new(0.5, 0, 0.5, 74),
+		AnchorPoint = Vector2.new(0.5, 0),
+		BackgroundColor3 = Color3.fromRGB(40, 32, 55),
+		Parent = bootBackdrop,
+	})
+	Helpers.Corner(bootTrack, 2)
+	bootFill = Helpers.CreateFrame({
+		Name = "Fill",
+		Size = UDim2.fromScale(0, 1),
+		BackgroundColor3 = library.Theme.Accent,
+		Parent = bootTrack,
+	})
+	Helpers.Corner(bootFill, 2)
+	bootStatus = Helpers.CreateLabel({
+		Name = "Status",
+		Size = UDim2.fromOffset(400, 18),
+		Position = UDim2.new(0.5, 0, 0.5, 92),
+		AnchorPoint = Vector2.new(0.5, 0),
+		Text = "Booting…",
+		Font = Theme.Font,
+		TextSize = 12,
+		TextColor3 = library.Theme.TextMuted,
+		TextTransparency = 1,
+		Parent = bootBackdrop,
+	})
+	bootPercent = Helpers.CreateLabel({
+		Name = "Percent",
+		Size = UDim2.fromOffset(80, 18),
+		Position = UDim2.new(0.5, 0, 0.5, 112),
+		AnchorPoint = Vector2.new(0.5, 0),
+		Text = "0%",
+		Font = Theme.FontBold,
+		TextSize = 11,
+		TextColor3 = library.Theme.Text,
+		TextTransparency = 1,
+		Parent = bootBackdrop,
+	})
+end
+
+if not reusedBootstrap then
+	print("[Vaxorin] boot started")
+else
+	print("[Vaxorin] boot started")
+end
+
+-- Rings + particles (always add for phase 2 polish)
+local function makeRing(size: number, transparency: number)
+	local ring = Instance.new("Frame")
+	ring.Name = "Ring"
+	ring.Size = UDim2.fromOffset(size, size)
+	ring.Position = UDim2.fromScale(0.5, 0.5)
+	ring.AnchorPoint = Vector2.new(0.5, 0.5)
+	ring.BackgroundTransparency = 1
+	ring.ZIndex = 0
+	ring.Parent = bootBackdrop
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = library.Theme.Accent
+	stroke.Thickness = 1.2
+	stroke.Transparency = 1 -- fade in
+	stroke.Parent = ring
+	Helpers.Corner(ring, 999)
+	return ring, stroke
+end
+local ring1, ringStroke1 = makeRing(200, 0.75)
+local ring2, ringStroke2 = makeRing(280, 0.85)
+local ring3, ringStroke3 = makeRing(360, 0.92)
+
+local particleFolder = bootBackdrop:FindFirstChild("Particles")
+if not particleFolder then
+	particleFolder = Instance.new("Folder")
+	particleFolder.Name = "Particles"
+	particleFolder.Parent = bootBackdrop
+end
+local particles = {}
+for i = 1, 16 do
+	local p = Instance.new("Frame")
+	p.Size = UDim2.fromOffset(math.random(2, 4), math.random(2, 4))
+	p.Position = UDim2.fromScale(math.random(), math.random())
+	p.AnchorPoint = Vector2.new(0.5, 0.5)
+	p.BackgroundColor3 = library.Theme.Accent
+	p.BackgroundTransparency = 0.5
+	p.BorderSizePixel = 0
+	p.Parent = particleFolder
+	Helpers.Corner(p, 999)
+	particles[i] = p
+end
+
+local bootCard = logoWrap
+
+-- PHASE HAND-OFF ANIMATION
+task.spawn(function()
+	-- Logo STAYS — only a gentle pulse, never fade out
+	Tween.Play(logoScale, { Scale = 1.06 }, {
+		Time = 0.28,
+		EasingStyle = Enum.EasingStyle.Quad,
+		EasingDirection = Enum.EasingDirection.Out,
+	})
+	task.wait(0.12)
+	Tween.Play(logoScale, { Scale = 1 }, {
+		Time = 0.35,
+		EasingStyle = Enum.EasingStyle.Back,
+		EasingDirection = Enum.EasingDirection.Out,
+	})
+	if logoImage then
+		Tween.Play(logoImage, { ImageTransparency = 0 }, { Time = 0.2 })
+	end
+	if logoStroke then
+		Tween.Play(logoStroke, { Transparency = 0.2, Color = library.Theme.Accent }, { Time = 0.3 })
+	end
+	Tween.Play(logoWrap, {
+		BackgroundTransparency = 0.12,
+		Size = UDim2.fromOffset(96, 96),
+		Position = UDim2.new(0.5, 0, 0.5, -70),
+	}, { Time = 0.35 })
+
+	-- Morph brand label: "Vaxorin" shrinks into eyebrow, window title rises in
+	bootTitle.Text = "Vaxorin"
+	Tween.Play(bootTitle, {
+		TextSize = 12,
+		TextColor3 = library.Theme.TextMuted,
+		TextTransparency = 0,
+		Position = UDim2.new(0.5, 0, 0.5, -8),
+	}, { Time = 0.4 })
+
+	bootSub.Text = windowName
+	bootSub.TextTransparency = 1
+	bootSub.Position = UDim2.new(0.5, 0, 0.5, 28)
+	Tween.Play(bootSub, {
+		TextTransparency = 0,
+		Position = UDim2.new(0.5, 0, 0.5, 8),
+		TextSize = 26,
+		TextColor3 = library.Theme.Text,
+	}, {
+		Time = 0.45,
+		EasingStyle = Enum.EasingStyle.Quint,
+		EasingDirection = Enum.EasingDirection.Out,
+	})
+
+	-- Track / status settle under title
+	Tween.Play(bootTrack, {
+		Position = UDim2.new(0.5, 0, 0.5, 48),
+		BackgroundTransparency = 0.15,
+	}, { Time = 0.3 })
+	if bootFill then
+		Tween.Play(bootFill, { Size = UDim2.fromScale(1, 1), BackgroundColor3 = library.Theme.Accent }, { Time = 0.35 })
+	end
+	Tween.Play(bootStatus, {
+		Position = UDim2.new(0.5, 0, 0.5, 62),
+		TextTransparency = 0,
+	}, { Time = 0.3 })
+	Tween.Play(bootPercent, {
+		Position = UDim2.new(0.5, 0, 0.5, 80),
+		TextTransparency = 0,
+	}, { Time = 0.3 })
+
+	bootStatus.Text = "Mounting interface…"
+	bootPercent.Text = "100%"
+
+	-- Rings fade in + spin
+	Tween.Play(ringStroke1, { Transparency = 0.72 }, { Time = 0.5 })
+	Tween.Play(ringStroke2, { Transparency = 0.82 }, { Time = 0.55 })
+	Tween.Play(ringStroke3, { Transparency = 0.9 }, { Time = 0.6 })
+	Tween.Play(bootBloom, {
+		Size = UDim2.fromOffset(560, 560),
+		BackgroundTransparency = 0.9,
+	}, { Time = 0.7 })
+
+	task.spawn(function()
+		local t = 0
+		while loadingGui.Parent do
+			t += task.wait()
+			ring1.Rotation = t * 28
+			ring2.Rotation = -t * 18
+			ring3.Rotation = t * 12
+			for i, p in particles do
+				local base = i / #particles
+				local y = (base + t * 0.04 * (0.5 + (i % 3) * 0.2)) % 1.2 - 0.1
+				local x = (0.15 + (i * 0.041) % 0.7) + math.sin(t * 0.8 + i) * 0.03
+				p.Position = UDim2.fromScale(x, y)
+				p.BackgroundTransparency = 0.35 + (y % 1) * 0.45
+			end
+		end
+	end)
+
+	local phases = {
+		{ 0.55, "Hydrating theme…" },
+		{ 0.72, "Wiring controls…" },
+		{ 0.88, "Linking config…" },
+		{ 1.00, "Ready" },
+	}
+	for _, phase in phases do
+		local value, status = phase[1], phase[2]
+		bootStatus.Text = status
+		bootPercent.Text = tostring(math.floor(value * 100)) .. "%"
+		if bootFill then
+			Tween.Play(bootFill, { Size = UDim2.fromScale(value, 1) }, {
+				Time = 0.22,
+				EasingStyle = Enum.EasingStyle.Quint,
+				EasingDirection = Enum.EasingDirection.Out,
+			})
+		end
+		Tween.Play(logoScale, { Scale = 1.03 }, { Time = 0.1 })
+		task.wait(0.1)
+		Tween.Play(logoScale, { Scale = 1 }, { Time = 0.14 })
+		task.wait(0.14)
+	end
+end)
+
+return {
+		BootGui = loadingGui,
+		BootCard = bootCard,
+		BootStatus = bootStatus,
+		BootFill = bootFill,
+		BootBloom = bootBloom,
+		BootLogoScale = logoScale,
+	}
+end
+
 function Window.new(library: any, options: WindowOptions?): WindowHandle
 	local data = (typeof(options) == "table") and options or {}
 	local self = setmetatable({
@@ -556,494 +1056,24 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		math.clamp(windowSize.Y, effectiveMinSize.Y, maxWindowSize.Y)
 	)
 
-	-- ============================================
-	-- CINEMATIC BOOT SEQUENCE (continuous handoff)
-	-- Reuses the module-loader GUI when present so the logo never blinks out.
-	-- ============================================
-	local bootLogoAsset = data.Logo
-	if bootLogoAsset == nil or bootLogoAsset == "" or bootLogoAsset == LEGACY_LOGO then
-		bootLogoAsset = Vaxorin_Logo
+	-- Cinematic boot (extracted to avoid Luau 200-local limit in Window.new)
+	local bootRefs = startCinematicBoot({
+		Library = library,
+		Data = data,
+		WindowName = windowName,
+		ScreenGui = screenGui,
+		SharedState = sharedState,
+		Self = self,
+	})
+	if bootRefs then
+		self._BootGui = bootRefs.BootGui
+		self._BootCard = bootRefs.BootCard
+		self._BootStatus = bootRefs.BootStatus
+		self._BootFill = bootRefs.BootFill
+		self._BootBloom = bootRefs.BootBloom
+		self._BootLogoScale = bootRefs.BootLogoScale
+		self._FirstReveal = true
 	end
-
-	local sharedBootstrap = sharedState.CyberUI_BootstrapLoader
-	sharedState.CyberUI_BootstrapLoader = nil
-
-	local loadingGui: ScreenGui
-	local bootBackdrop: Frame
-	local logoWrap: Frame
-	local logoImage: ImageLabel?
-	local logoScale: UIScale
-	local logoStroke: UIStroke?
-	local bootTitle: TextLabel
-	local bootSub: TextLabel
-	local bootTrack: Frame
-	local bootFill: Frame
-	local bootStatus: TextLabel
-	local bootPercent: TextLabel
-	local bootBloom: Frame
-	local reusedBootstrap = false
-
-	local function ensureUIScale(parent: Instance): UIScale
-		local s = parent:FindFirstChildOfClass("UIScale")
-		if s then return s end
-		local n = Instance.new("UIScale")
-		n.Scale = 1
-		n.Parent = parent
-		return n
-	end
-
-	if sharedBootstrap and sharedBootstrap.Parent then
-		reusedBootstrap = true
-		loadingGui = sharedBootstrap
-		loadingGui.Name = "VaxorinBoot"
-		loadingGui.DisplayOrder = 2147483646
-		bootBackdrop = loadingGui:FindFirstChild("Backdrop") :: any
-		if not bootBackdrop then
-			bootBackdrop = Helpers.CreateFrame({
-				Name = "Backdrop",
-				Size = UDim2.fromScale(1, 1),
-				BackgroundColor3 = Color3.fromRGB(4, 2, 10),
-				BackgroundTransparency = 0.05,
-				Parent = loadingGui,
-			})
-		end
-
-		logoWrap = bootBackdrop:FindFirstChild("LogoWrap") :: any
-		if not logoWrap then
-			logoWrap = Helpers.CreateFrame({
-				Name = "LogoWrap",
-				Size = UDim2.fromOffset(88, 88),
-				Position = UDim2.new(0.5, 0, 0.5, -64),
-				AnchorPoint = Vector2.new(0.5, 0.5),
-				BackgroundColor3 = library.Theme.Secondary,
-				BackgroundTransparency = 0.15,
-				Parent = bootBackdrop,
-			})
-			Helpers.Corner(logoWrap, 26)
-		end
-		logoScale = ensureUIScale(logoWrap)
-		logoStroke = logoWrap:FindFirstChildOfClass("UIStroke")
-		if not logoStroke then
-			logoStroke = Helpers.Stroke(logoWrap, library.Theme.Accent, 1.5)
-			logoStroke.Transparency = 0.25
-		end
-		logoImage = logoWrap:FindFirstChild("Logo") :: any
-		if logoImage and logoImage:IsA("ImageLabel") then
-			logoImage.Image = tostring(bootLogoAsset)
-			logoImage.ImageTransparency = 0
-		else
-			logoImage = Instance.new("ImageLabel")
-			logoImage.Name = "Logo"
-			logoImage.BackgroundTransparency = 1
-			logoImage.Size = UDim2.fromScale(0.7, 0.7)
-			logoImage.Position = UDim2.fromScale(0.5, 0.5)
-			logoImage.AnchorPoint = Vector2.new(0.5, 0.5)
-			logoImage.Image = tostring(bootLogoAsset)
-			logoImage.ScaleType = Enum.ScaleType.Fit
-			logoImage.Parent = logoWrap
-		end
-
-		-- Brand title from phase 1 becomes bootSub; window name becomes bootTitle
-		bootTitle = bootBackdrop:FindFirstChild("Title") :: any
-		if not bootTitle then
-			bootTitle = Helpers.CreateLabel({
-				Name = "Title",
-				Size = UDim2.fromOffset(520, 40),
-				Position = UDim2.new(0.5, 0, 0.5, 0),
-				AnchorPoint = Vector2.new(0.5, 0),
-				Text = "Vaxorin",
-				Font = Theme.FontBold,
-				TextSize = 28,
-				TextColor3 = library.Theme.Text,
-				Parent = bootBackdrop,
-			})
-		end
-		bootSub = bootBackdrop:FindFirstChild("WindowTitle") :: any
-		if not bootSub then
-			bootSub = Helpers.CreateLabel({
-				Name = "WindowTitle",
-				Size = UDim2.fromOffset(520, 22),
-				Position = UDim2.new(0.5, 0, 0.5, 36),
-				AnchorPoint = Vector2.new(0.5, 0),
-				Text = windowName,
-				Font = Theme.FontBold,
-				TextSize = 14,
-				TextColor3 = library.Theme.Accent,
-				TextTransparency = 1,
-				Parent = bootBackdrop,
-			})
-		end
-
-		bootStatus = bootBackdrop:FindFirstChild("Status") :: any
-		bootTrack = bootBackdrop:FindFirstChild("Track") :: any
-		bootFill = bootTrack and bootTrack:FindFirstChild("Fill") :: any
-		bootPercent = bootBackdrop:FindFirstChild("Percent") :: any
-		if not bootTrack then
-			bootTrack = Helpers.CreateFrame({
-				Name = "Track",
-				Size = UDim2.fromOffset(220, 3),
-				Position = UDim2.new(0.5, 0, 0.5, 74),
-				AnchorPoint = Vector2.new(0.5, 0),
-				BackgroundColor3 = Color3.fromRGB(40, 32, 55),
-				Parent = bootBackdrop,
-			})
-			Helpers.Corner(bootTrack, 2)
-			bootFill = Helpers.CreateFrame({
-				Name = "Fill",
-				Size = UDim2.fromScale(1, 1),
-				BackgroundColor3 = library.Theme.Accent,
-				Parent = bootTrack,
-			})
-			Helpers.Corner(bootFill, 2)
-		end
-		if not bootStatus then
-			bootStatus = Helpers.CreateLabel({
-				Name = "Status",
-				Size = UDim2.fromOffset(400, 18),
-				Position = UDim2.new(0.5, 0, 0.5, 92),
-				AnchorPoint = Vector2.new(0.5, 0),
-				Text = "Ready",
-				Font = Theme.Font,
-				TextSize = 12,
-				TextColor3 = library.Theme.TextMuted,
-				Parent = bootBackdrop,
-			})
-		end
-		if not bootPercent then
-			bootPercent = Helpers.CreateLabel({
-				Name = "Percent",
-				Size = UDim2.fromOffset(80, 18),
-				Position = UDim2.new(0.5, 0, 0.5, 112),
-				AnchorPoint = Vector2.new(0.5, 0),
-				Text = "100%",
-				Font = Theme.FontBold,
-				TextSize = 11,
-				TextColor3 = library.Theme.Text,
-				Parent = bootBackdrop,
-			})
-		end
-
-		bootBloom = bootBackdrop:FindFirstChild("Bloom") :: any
-		if not bootBloom then
-			bootBloom = Helpers.CreateFrame({
-				Name = "Bloom",
-				Size = UDim2.fromOffset(420, 420),
-				Position = UDim2.fromScale(0.5, 0.5),
-				AnchorPoint = Vector2.new(0.5, 0.5),
-				BackgroundColor3 = library.Theme.Accent,
-				BackgroundTransparency = 0.92,
-				Parent = bootBackdrop,
-			})
-			Helpers.Corner(bootBloom, 999)
-			bootBloom.ZIndex = 0
-		end
-	else
-		-- Cold start (no module loader) — build full boot GUI
-		loadingGui = Instance.new("ScreenGui")
-		loadingGui.Name = "VaxorinBoot"
-		loadingGui.ResetOnSpawn = false
-		loadingGui.IgnoreGuiInset = true
-		loadingGui.DisplayOrder = 2147483646
-		loadingGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-		local bootParent = screenGui.Parent
-		if not bootParent then
-			pcall(function()
-				loadingGui.Parent = game:GetService("CoreGui")
-			end)
-			if not loadingGui.Parent then
-				bootParent = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
-				loadingGui.Parent = bootParent
-			end
-		else
-			loadingGui.Parent = bootParent
-		end
-		print("[Vaxorin] boot started")
-
-		bootBackdrop = Helpers.CreateFrame({
-			Name = "Backdrop",
-			Size = UDim2.fromScale(1, 1),
-			BackgroundColor3 = Color3.fromRGB(4, 2, 10),
-			BackgroundTransparency = 0.05,
-			Parent = loadingGui,
-		})
-		bootBloom = Helpers.CreateFrame({
-			Name = "Bloom",
-			Size = UDim2.fromOffset(120, 120),
-			Position = UDim2.fromScale(0.5, 0.5),
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			BackgroundColor3 = library.Theme.Accent,
-			BackgroundTransparency = 0.96,
-			Parent = bootBackdrop,
-		})
-		Helpers.Corner(bootBloom, 999)
-
-		logoWrap = Helpers.CreateFrame({
-			Name = "LogoWrap",
-			Size = UDim2.fromOffset(96, 96),
-			Position = UDim2.new(0.5, 0, 0.5, -70),
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			BackgroundColor3 = library.Theme.Secondary,
-			BackgroundTransparency = 0.15,
-			Parent = bootBackdrop,
-		})
-		Helpers.Corner(logoWrap, 28)
-		logoStroke = Helpers.Stroke(logoWrap, library.Theme.Accent, 1.5)
-		logoStroke.Transparency = 0.25
-		logoScale = ensureUIScale(logoWrap)
-		logoScale.Scale = 0.4
-		logoImage = Instance.new("ImageLabel")
-		logoImage.Name = "Logo"
-		logoImage.BackgroundTransparency = 1
-		logoImage.Size = UDim2.fromScale(0.72, 0.72)
-		logoImage.Position = UDim2.fromScale(0.5, 0.5)
-		logoImage.AnchorPoint = Vector2.new(0.5, 0.5)
-		logoImage.Image = tostring(bootLogoAsset)
-		logoImage.ScaleType = Enum.ScaleType.Fit
-		logoImage.ImageTransparency = 1
-		logoImage.Parent = logoWrap
-
-		bootTitle = Helpers.CreateLabel({
-			Name = "Title",
-			Size = UDim2.fromOffset(520, 40),
-			Position = UDim2.new(0.5, 0, 0.5, 0),
-			AnchorPoint = Vector2.new(0.5, 0),
-			Text = "Vaxorin",
-			Font = Theme.FontBold,
-			TextSize = 28,
-			TextColor3 = library.Theme.Text,
-			TextTransparency = 1,
-			Parent = bootBackdrop,
-		})
-		bootSub = Helpers.CreateLabel({
-			Name = "WindowTitle",
-			Size = UDim2.fromOffset(520, 22),
-			Position = UDim2.new(0.5, 0, 0.5, 36),
-			AnchorPoint = Vector2.new(0.5, 0),
-			Text = windowName,
-			Font = Theme.FontBold,
-			TextSize = 14,
-			TextColor3 = library.Theme.Accent,
-			TextTransparency = 1,
-			Parent = bootBackdrop,
-		})
-		bootTrack = Helpers.CreateFrame({
-			Name = "Track",
-			Size = UDim2.fromOffset(220, 3),
-			Position = UDim2.new(0.5, 0, 0.5, 74),
-			AnchorPoint = Vector2.new(0.5, 0),
-			BackgroundColor3 = Color3.fromRGB(40, 32, 55),
-			Parent = bootBackdrop,
-		})
-		Helpers.Corner(bootTrack, 2)
-		bootFill = Helpers.CreateFrame({
-			Name = "Fill",
-			Size = UDim2.fromScale(0, 1),
-			BackgroundColor3 = library.Theme.Accent,
-			Parent = bootTrack,
-		})
-		Helpers.Corner(bootFill, 2)
-		bootStatus = Helpers.CreateLabel({
-			Name = "Status",
-			Size = UDim2.fromOffset(400, 18),
-			Position = UDim2.new(0.5, 0, 0.5, 92),
-			AnchorPoint = Vector2.new(0.5, 0),
-			Text = "Booting…",
-			Font = Theme.Font,
-			TextSize = 12,
-			TextColor3 = library.Theme.TextMuted,
-			TextTransparency = 1,
-			Parent = bootBackdrop,
-		})
-		bootPercent = Helpers.CreateLabel({
-			Name = "Percent",
-			Size = UDim2.fromOffset(80, 18),
-			Position = UDim2.new(0.5, 0, 0.5, 112),
-			AnchorPoint = Vector2.new(0.5, 0),
-			Text = "0%",
-			Font = Theme.FontBold,
-			TextSize = 11,
-			TextColor3 = library.Theme.Text,
-			TextTransparency = 1,
-			Parent = bootBackdrop,
-		})
-	end
-
-	if not reusedBootstrap then
-		print("[Vaxorin] boot started")
-	else
-		print("[Vaxorin] boot started")
-	end
-
-	-- Rings + particles (always add for phase 2 polish)
-	local function makeRing(size: number, transparency: number)
-		local ring = Instance.new("Frame")
-		ring.Name = "Ring"
-		ring.Size = UDim2.fromOffset(size, size)
-		ring.Position = UDim2.fromScale(0.5, 0.5)
-		ring.AnchorPoint = Vector2.new(0.5, 0.5)
-		ring.BackgroundTransparency = 1
-		ring.ZIndex = 0
-		ring.Parent = bootBackdrop
-		local stroke = Instance.new("UIStroke")
-		stroke.Color = library.Theme.Accent
-		stroke.Thickness = 1.2
-		stroke.Transparency = 1 -- fade in
-		stroke.Parent = ring
-		Helpers.Corner(ring, 999)
-		return ring, stroke
-	end
-	local ring1, ringStroke1 = makeRing(200, 0.75)
-	local ring2, ringStroke2 = makeRing(280, 0.85)
-	local ring3, ringStroke3 = makeRing(360, 0.92)
-
-	local particleFolder = bootBackdrop:FindFirstChild("Particles")
-	if not particleFolder then
-		particleFolder = Instance.new("Folder")
-		particleFolder.Name = "Particles"
-		particleFolder.Parent = bootBackdrop
-	end
-	local particles = {}
-	for i = 1, 16 do
-		local p = Instance.new("Frame")
-		p.Size = UDim2.fromOffset(math.random(2, 4), math.random(2, 4))
-		p.Position = UDim2.fromScale(math.random(), math.random())
-		p.AnchorPoint = Vector2.new(0.5, 0.5)
-		p.BackgroundColor3 = library.Theme.Accent
-		p.BackgroundTransparency = 0.5
-		p.BorderSizePixel = 0
-		p.Parent = particleFolder
-		Helpers.Corner(p, 999)
-		particles[i] = p
-	end
-
-	local bootCard = logoWrap
-
-	-- PHASE HAND-OFF ANIMATION
-	task.spawn(function()
-		-- Logo STAYS — only a gentle pulse, never fade out
-		Tween.Play(logoScale, { Scale = 1.06 }, {
-			Time = 0.28,
-			EasingStyle = Enum.EasingStyle.Quad,
-			EasingDirection = Enum.EasingDirection.Out,
-		})
-		task.wait(0.12)
-		Tween.Play(logoScale, { Scale = 1 }, {
-			Time = 0.35,
-			EasingStyle = Enum.EasingStyle.Back,
-			EasingDirection = Enum.EasingDirection.Out,
-		})
-		if logoImage then
-			Tween.Play(logoImage, { ImageTransparency = 0 }, { Time = 0.2 })
-		end
-		if logoStroke then
-			Tween.Play(logoStroke, { Transparency = 0.2, Color = library.Theme.Accent }, { Time = 0.3 })
-		end
-		Tween.Play(logoWrap, {
-			BackgroundTransparency = 0.12,
-			Size = UDim2.fromOffset(96, 96),
-			Position = UDim2.new(0.5, 0, 0.5, -70),
-		}, { Time = 0.35 })
-
-		-- Morph brand label: "Vaxorin" shrinks into eyebrow, window title rises in
-		bootTitle.Text = "Vaxorin"
-		Tween.Play(bootTitle, {
-			TextSize = 12,
-			TextColor3 = library.Theme.TextMuted,
-			TextTransparency = 0,
-			Position = UDim2.new(0.5, 0, 0.5, -8),
-		}, { Time = 0.4 })
-
-		bootSub.Text = windowName
-		bootSub.TextTransparency = 1
-		bootSub.Position = UDim2.new(0.5, 0, 0.5, 28)
-		Tween.Play(bootSub, {
-			TextTransparency = 0,
-			Position = UDim2.new(0.5, 0, 0.5, 8),
-			TextSize = 26,
-			TextColor3 = library.Theme.Text,
-		}, {
-			Time = 0.45,
-			EasingStyle = Enum.EasingStyle.Quint,
-			EasingDirection = Enum.EasingDirection.Out,
-		})
-
-		-- Track / status settle under title
-		Tween.Play(bootTrack, {
-			Position = UDim2.new(0.5, 0, 0.5, 48),
-			BackgroundTransparency = 0.15,
-		}, { Time = 0.3 })
-		if bootFill then
-			Tween.Play(bootFill, { Size = UDim2.fromScale(1, 1), BackgroundColor3 = library.Theme.Accent }, { Time = 0.35 })
-		end
-		Tween.Play(bootStatus, {
-			Position = UDim2.new(0.5, 0, 0.5, 62),
-			TextTransparency = 0,
-		}, { Time = 0.3 })
-		Tween.Play(bootPercent, {
-			Position = UDim2.new(0.5, 0, 0.5, 80),
-			TextTransparency = 0,
-		}, { Time = 0.3 })
-
-		bootStatus.Text = "Mounting interface…"
-		bootPercent.Text = "100%"
-
-		-- Rings fade in + spin
-		Tween.Play(ringStroke1, { Transparency = 0.72 }, { Time = 0.5 })
-		Tween.Play(ringStroke2, { Transparency = 0.82 }, { Time = 0.55 })
-		Tween.Play(ringStroke3, { Transparency = 0.9 }, { Time = 0.6 })
-		Tween.Play(bootBloom, {
-			Size = UDim2.fromOffset(560, 560),
-			BackgroundTransparency = 0.9,
-		}, { Time = 0.7 })
-
-		task.spawn(function()
-			local t = 0
-			while loadingGui.Parent do
-				t += task.wait()
-				ring1.Rotation = t * 28
-				ring2.Rotation = -t * 18
-				ring3.Rotation = t * 12
-				for i, p in particles do
-					local base = i / #particles
-					local y = (base + t * 0.04 * (0.5 + (i % 3) * 0.2)) % 1.2 - 0.1
-					local x = (0.15 + (i * 0.041) % 0.7) + math.sin(t * 0.8 + i) * 0.03
-					p.Position = UDim2.fromScale(x, y)
-					p.BackgroundTransparency = 0.35 + (y % 1) * 0.45
-				end
-			end
-		end)
-
-		local phases = {
-			{ 0.55, "Hydrating theme…" },
-			{ 0.72, "Wiring controls…" },
-			{ 0.88, "Linking config…" },
-			{ 1.00, "Ready" },
-		}
-		for _, phase in phases do
-			local value, status = phase[1], phase[2]
-			bootStatus.Text = status
-			bootPercent.Text = tostring(math.floor(value * 100)) .. "%"
-			if bootFill then
-				Tween.Play(bootFill, { Size = UDim2.fromScale(value, 1) }, {
-					Time = 0.22,
-					EasingStyle = Enum.EasingStyle.Quint,
-					EasingDirection = Enum.EasingDirection.Out,
-				})
-			end
-			Tween.Play(logoScale, { Scale = 1.03 }, { Time = 0.1 })
-			task.wait(0.1)
-			Tween.Play(logoScale, { Scale = 1 }, { Time = 0.14 })
-			task.wait(0.14)
-		end
-	end)
-
-	self._BootGui = loadingGui
-	self._BootCard = bootCard
-	self._BootStatus = bootStatus
-	self._BootFill = bootFill
-	self._BootBloom = bootBloom
-	self._BootLogoScale = logoScale
-	self._FirstReveal = true
 
 	-- ============================================
 	-- MAIN WINDOW
