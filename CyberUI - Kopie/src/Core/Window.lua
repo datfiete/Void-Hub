@@ -578,7 +578,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		end
 	end
 	loadingGui.Parent = bootParent or screenGui
-	print("[Vaxorin] Cinematic boot started")
+	print("[Vaxorin] boot started")
 
 	local bootBackdrop = Helpers.CreateFrame({
 		Name = "Backdrop",
@@ -709,7 +709,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Size = UDim2.fromOffset(520, 20),
 		Position = UDim2.new(0.5, 0, 0.5, 38),
 		AnchorPoint = Vector2.new(0.5, 0),
-		Text = "COMMAND INTERFACE",
+		Text = "Vaxorin",
 		Font = Theme.FontBold,
 		TextSize = 11,
 		TextColor3 = library.Theme.Accent,
@@ -1609,7 +1609,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Name = "ActDesc",
 		Size = UDim2.new(1, 0, 0, 14),
 		Position = UDim2.fromOffset(0, 100),
-		Text = "Vaxorin · CyberUI",
+		Text = "Vaxorin",
 		Font = Theme.Font,
 		TextSize = 10,
 		TextColor3 = library.Theme.TextMuted,
@@ -3042,7 +3042,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 				self._BootGui:Destroy()
 			end
 		end
-		print("[Vaxorin] Cinematic boot finished")
+		print("[Vaxorin] boot finished")
 		self._StartupComplete = true
 		self:SetVisible(self._Visible)
 	end))

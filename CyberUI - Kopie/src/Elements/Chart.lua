@@ -75,6 +75,7 @@ function Chart.new(section: any, data: ChartOptions?): any
 	lay.FillDirection = Enum.FillDirection.Horizontal
 	lay.VerticalAlignment = Enum.VerticalAlignment.Bottom
 	lay.HorizontalAlignment = Enum.HorizontalAlignment.Left
+	lay.HorizontalFlex = Enum.UIFlexAlignment.None
 	lay.Padding = UDim.new(0, 2)
 	lay.Parent = barsHold
 
@@ -100,6 +101,7 @@ function Chart.new(section: any, data: ChartOptions?): any
 		_MaxRef = maxRef,
 		_Color = color,
 		_BarCount = barCount,
+		_Seeded = false,
 		Instance = root,
 		Label = label,
 		ValueLabel = valueLbl,
@@ -133,13 +135,22 @@ function Chart:Set(value: any, pushHistory: boolean?)
 end
 
 function Chart:Push(value: number)
-	local n = tonumber(value)
-	if not n or not isFiniteNumber(n) then
-		n = 0
+	local n = tonumber(value) or 0
+	-- First real sample fills the whole strip so bars don't "grow" from the middle/right.
+	if not self._Seeded then
+		for i = 1, self._BarCount do
+			self._History[i] = n
+		end
+		self._Seeded = true
+	else
+		table.remove(self._History, 1)
+		table.insert(self._History, n)
 	end
-	table.remove(self._History, 1)
-	table.insert(self._History, n)
-	self.ValueLabel.Text = self:_formatValue(n)
+	local label = tostring(n)
+	if self._Data.Suffix then
+		label = label .. self._Data.Suffix
+	end
+	self.ValueLabel.Text = label
 	self:_paint()
 end
 
