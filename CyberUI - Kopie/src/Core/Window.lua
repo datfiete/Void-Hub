@@ -593,7 +593,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	local bootBloom = Helpers.CreateFrame({
 		Name = "Bloom",
 		Size = UDim2.fromOffset(120, 120),
-		Position = UDim2.fromScale(0.5, 0.48),
+		Position = UDim2.fromScale(0.5, 0.5),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundColor3 = library.Theme.Accent,
 		BackgroundTransparency = 0.96,
@@ -606,7 +606,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		local ring = Instance.new("Frame")
 		ring.Name = "Ring"
 		ring.Size = UDim2.fromOffset(size, size)
-		ring.Position = UDim2.fromScale(0.5, 0.48)
+		ring.Position = UDim2.fromScale(0.5, 0.5)
 		ring.AnchorPoint = Vector2.new(0.5, 0.5)
 		ring.BackgroundTransparency = 1
 		ring.ZIndex = z
@@ -641,37 +641,61 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		particles[i] = p
 	end
 
-	-- Center logo mark
+	-- Center stack (logo + text + bar) around screen middle
+	local bootLogoAsset = data.Logo
+	if bootLogoAsset == nil or bootLogoAsset == "" or bootLogoAsset == LEGACY_LOGO then
+		bootLogoAsset = Vaxorin_Logo
+	end
+
 	local logoWrap = Helpers.CreateFrame({
 		Name = "LogoWrap",
-		Size = UDim2.fromOffset(88, 88),
-		Position = UDim2.fromScale(0.5, 0.42),
+		Size = UDim2.fromOffset(96, 96),
+		Position = UDim2.new(0.5, 0, 0.5, -70),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundColor3 = library.Theme.Secondary,
 		BackgroundTransparency = 1,
 		Parent = bootBackdrop,
 	})
-	Helpers.Corner(logoWrap, 24)
+	Helpers.Corner(logoWrap, 28)
 	local logoStroke = Helpers.Stroke(logoWrap, library.Theme.Accent, 1.5)
 	logoStroke.Transparency = 1
 	local logoScale = Instance.new("UIScale")
 	logoScale.Scale = 0.4
 	logoScale.Parent = logoWrap
+
+	local logoImage = Instance.new("ImageLabel")
+	logoImage.Name = "Logo"
+	logoImage.BackgroundTransparency = 1
+	logoImage.Size = UDim2.fromScale(0.72, 0.72)
+	logoImage.Position = UDim2.fromScale(0.5, 0.5)
+	logoImage.AnchorPoint = Vector2.new(0.5, 0.5)
+	logoImage.Image = tostring(bootLogoAsset)
+	logoImage.ScaleType = Enum.ScaleType.Fit
+	logoImage.ImageTransparency = 1
+	logoImage.Parent = logoWrap
+
+	-- Fallback letter if image fails to load
 	local logoLetter = Helpers.CreateLabel({
-		Name = "V",
+		Name = "FallbackV",
 		Size = UDim2.fromScale(1, 1),
 		Text = "V",
 		Font = Theme.FontBold,
-		TextSize = 42,
+		TextSize = 40,
 		TextColor3 = library.Theme.Accent,
 		TextTransparency = 1,
 		Parent = logoWrap,
 	})
+	logoLetter.Visible = false
+	task.delay(0.6, function()
+		if logoImage and logoImage.Parent and logoImage.IsLoaded == false then
+			-- keep image; Roblox may still stream. Only show V if clearly empty.
+		end
+	end)
 
 	local bootTitle = Helpers.CreateLabel({
 		Name = "Title",
-		Size = UDim2.fromOffset(480, 40),
-		Position = UDim2.new(0.5, 0, 0.42, 70),
+		Size = UDim2.fromOffset(520, 40),
+		Position = UDim2.new(0.5, 0, 0.5, 0),
 		AnchorPoint = Vector2.new(0.5, 0),
 		Text = windowName,
 		Font = Theme.FontBold,
@@ -682,8 +706,8 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	})
 	local bootSub = Helpers.CreateLabel({
 		Name = "Sub",
-		Size = UDim2.fromOffset(480, 20),
-		Position = UDim2.new(0.5, 0, 0.42, 108),
+		Size = UDim2.fromOffset(520, 20),
+		Position = UDim2.new(0.5, 0, 0.5, 38),
 		AnchorPoint = Vector2.new(0.5, 0),
 		Text = "COMMAND INTERFACE",
 		Font = Theme.FontBold,
@@ -693,11 +717,10 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Parent = bootBackdrop,
 	})
 
-	-- Slim progress under title
 	local bootTrack = Helpers.CreateFrame({
 		Name = "Track",
 		Size = UDim2.fromOffset(220, 3),
-		Position = UDim2.new(0.5, 0, 0.42, 148),
+		Position = UDim2.new(0.5, 0, 0.5, 78),
 		AnchorPoint = Vector2.new(0.5, 0),
 		BackgroundColor3 = Color3.fromRGB(40, 32, 55),
 		BackgroundTransparency = 1,
@@ -714,7 +737,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	local bootStatus = Helpers.CreateLabel({
 		Name = "Status",
 		Size = UDim2.fromOffset(400, 18),
-		Position = UDim2.new(0.5, 0, 0.42, 162),
+		Position = UDim2.new(0.5, 0, 0.5, 92),
 		AnchorPoint = Vector2.new(0.5, 0),
 		Text = "Booting…",
 		Font = Theme.Font,
@@ -726,7 +749,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	local bootPercent = Helpers.CreateLabel({
 		Name = "Percent",
 		Size = UDim2.fromOffset(80, 18),
-		Position = UDim2.new(0.5, 0, 0.42, 182),
+		Position = UDim2.new(0.5, 0, 0.5, 112),
 		AnchorPoint = Vector2.new(0.5, 0),
 		Text = "0%",
 		Font = Theme.FontBold,
@@ -744,8 +767,8 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		-- Logo slam-in
 		Tween.Play(logoWrap, { BackgroundTransparency = 0.15 }, { Time = 0.35 })
 		Tween.Play(logoStroke, { Transparency = 0.25 }, { Time = 0.4 })
-		Tween.Play(logoLetter, { TextTransparency = 0 }, {
-			Time = 0.35,
+		Tween.Play(logoImage, { ImageTransparency = 0 }, {
+			Time = 0.4,
 			EasingStyle = Enum.EasingStyle.Quint,
 			EasingDirection = Enum.EasingDirection.Out,
 		})
