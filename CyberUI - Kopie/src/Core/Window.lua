@@ -559,22 +559,35 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	-- ============================================
 	-- CINEMATIC BOOT SEQUENCE
 	-- ============================================
+	-- IMPORTANT: Boot must be a TOP-LEVEL ScreenGui (not nested under the main
+	-- ScreenGui). Nested ScreenGuis often never render in executors / CoreGui.
 	local loadingGui = Instance.new("ScreenGui")
 	loadingGui.Name = "VaxorinBoot"
 	loadingGui.ResetOnSpawn = false
 	loadingGui.IgnoreGuiInset = true
-	loadingGui.DisplayOrder = 2147483647
+	loadingGui.DisplayOrder = 2147483646
 	loadingGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	loadingGui.Parent = screenGui
+	local bootParent = screenGui.Parent
+	if not bootParent then
+		bootParent = game:GetService("CoreGui")
+		pcall(function()
+			loadingGui.Parent = bootParent
+		end)
+		if not loadingGui.Parent then
+			bootParent = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+		end
+	end
+	loadingGui.Parent = bootParent or screenGui
+	print("[Vaxorin] Cinematic boot started")
 
 	local bootBackdrop = Helpers.CreateFrame({
 		Name = "Backdrop",
 		Size = UDim2.fromScale(1, 1),
 		BackgroundColor3 = Color3.fromRGB(4, 2, 10),
-		BackgroundTransparency = 1,
+		BackgroundTransparency = 0.35,
 		Parent = loadingGui,
 	})
-	Tween.Play(bootBackdrop, { BackgroundTransparency = 0.08 }, { Time = 0.35 })
+	Tween.Play(bootBackdrop, { BackgroundTransparency = 0.05 }, { Time = 0.4 })
 
 	-- Soft radial accent bloom
 	local bootBloom = Helpers.CreateFrame({
@@ -2967,7 +2980,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	-- ============================================
 	-- STARTUP COMPLETE
 	-- ============================================
-	self._Maid:GiveTask(task.delay(2.05, function()
+	self._Maid:GiveTask(task.delay(2.4, function()
 		if not self.Gui then return end
 		if self._BootGui and self._BootGui.Parent then
 			local backdrop = self._BootGui:FindFirstChild("Backdrop")
@@ -3006,6 +3019,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 				self._BootGui:Destroy()
 			end
 		end
+		print("[Vaxorin] Cinematic boot finished")
 		self._StartupComplete = true
 		self:SetVisible(self._Visible)
 	end))
