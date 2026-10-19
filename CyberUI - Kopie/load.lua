@@ -504,7 +504,9 @@ if not ok then
 	error(result, 0)
 end
 
-task.delay(0.25, function()
+-- Keep bootstrap alive for Window cinematic boot to crossfade from it.
+-- Fallback cleanup if Window never takes over.
+task.delay(8, function()
 	if sharedState.CyberUI_BootstrapLoader == bootstrap then
 		destroyBootstrapLoader()
 	end

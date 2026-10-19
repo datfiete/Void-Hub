@@ -584,10 +584,9 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Name = "Backdrop",
 		Size = UDim2.fromScale(1, 1),
 		BackgroundColor3 = Color3.fromRGB(4, 2, 10),
-		BackgroundTransparency = 0.35,
+		BackgroundTransparency = 0.05, -- match bootstrap so handoff is seamless
 		Parent = loadingGui,
 	})
-	Tween.Play(bootBackdrop, { BackgroundTransparency = 0.05 }, { Time = 0.4 })
 
 	-- Soft radial accent bloom
 	local bootBloom = Helpers.CreateFrame({
@@ -762,27 +761,28 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	-- Fake "card" ref for teardown compatibility
 	local bootCard = logoWrap
 
-	-- Intro animation timeline
+	-- Intro animation timeline (starts while bootstrap crossfades out)
 	task.spawn(function()
+		task.wait(0.08) -- let bootstrap fade begin first
 		-- Logo slam-in
-		Tween.Play(logoWrap, { BackgroundTransparency = 0.15 }, { Time = 0.35 })
-		Tween.Play(logoStroke, { Transparency = 0.25 }, { Time = 0.4 })
+		Tween.Play(logoWrap, { BackgroundTransparency = 0.15 }, { Time = 0.4 })
+		Tween.Play(logoStroke, { Transparency = 0.25 }, { Time = 0.45 })
 		Tween.Play(logoImage, { ImageTransparency = 0 }, {
-			Time = 0.4,
+			Time = 0.45,
 			EasingStyle = Enum.EasingStyle.Quint,
 			EasingDirection = Enum.EasingDirection.Out,
 		})
 		Tween.Play(logoScale, { Scale = 1 }, {
-			Time = 0.55,
+			Time = 0.6,
 			EasingStyle = Enum.EasingStyle.Back,
 			EasingDirection = Enum.EasingDirection.Out,
 		})
 		Tween.Play(bootBloom, {
 			Size = UDim2.fromOffset(520, 520),
 			BackgroundTransparency = 0.9,
-		}, { Time = 0.7 })
+		}, { Time = 0.75 })
 
-		task.wait(0.2)
+		task.wait(0.22)
 		Tween.Play(bootTitle, { TextTransparency = 0 }, { Time = 0.35 })
 		task.wait(0.08)
 		Tween.Play(bootSub, { TextTransparency = 0 }, { Time = 0.3 })
@@ -841,12 +841,30 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	self._BootLogoScale = logoScale
 	self._FirstReveal = true
 
-	-- Remove old bootstrap loader
-	local bootstrapLoader = sharedState.CyberUI_BootstrapLoader
-	sharedState.CyberUI_BootstrapLoader = nil
-	if bootstrapLoader and bootstrapLoader.Parent then
-		bootstrapLoader:Destroy()
-	end
+	-- Crossfade: keep module loader one frame longer, then dissolve under boot
+	task.spawn(function()
+		local bootstrapLoader = sharedState.CyberUI_BootstrapLoader
+		sharedState.CyberUI_BootstrapLoader = nil
+		if not (bootstrapLoader and bootstrapLoader.Parent) then
+			return
+		end
+		-- Boot already covers screen; fade bootstrap out so rings/logo of phase-2 bloom in
+		for _, child in bootstrapLoader:GetDescendants() do
+			if child:IsA("TextLabel") then
+				Tween.Play(child, { TextTransparency = 1 }, { Time = 0.35 })
+			elseif child:IsA("ImageLabel") then
+				Tween.Play(child, { ImageTransparency = 1 }, { Time = 0.35 })
+			elseif child:IsA("Frame") then
+				Tween.Play(child, { BackgroundTransparency = 1 }, { Time = 0.4 })
+			elseif child:IsA("UIStroke") then
+				Tween.Play(child, { Transparency = 1 }, { Time = 0.3 })
+			end
+		end
+		task.wait(0.42)
+		if bootstrapLoader.Parent then
+			bootstrapLoader:Destroy()
+		end
+	end)
 
 	-- ============================================
 	-- MAIN WINDOW
