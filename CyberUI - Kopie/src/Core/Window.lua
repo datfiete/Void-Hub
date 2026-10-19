@@ -761,18 +761,18 @@ task.spawn(function()
 	-- Morph brand label: "Vaxorin" shrinks into eyebrow, window title rises in
 	bootTitle.Text = "Vaxorin"
 	Tween.Play(bootTitle, {
-		TextSize = 12,
+		TextSize = 11,
 		TextColor3 = library.Theme.TextMuted,
 		TextTransparency = 0,
-		Position = UDim2.new(0.5, 0, 0.5, -8),
+		Position = UDim2.new(0.5, 0, 0.5, -22), -- above window title, clear gap
 	}, { Time = 0.4 })
 
 	bootSub.Text = windowName
 	bootSub.TextTransparency = 1
-	bootSub.Position = UDim2.new(0.5, 0, 0.5, 28)
+	bootSub.Position = UDim2.new(0.5, 0, 0.5, 24)
 	Tween.Play(bootSub, {
 		TextTransparency = 0,
-		Position = UDim2.new(0.5, 0, 0.5, 8),
+		Position = UDim2.new(0.5, 0, 0.5, 0),
 		TextSize = 26,
 		TextColor3 = library.Theme.Text,
 	}, {
@@ -781,20 +781,20 @@ task.spawn(function()
 		EasingDirection = Enum.EasingDirection.Out,
 	})
 
-	-- Track / status settle under title
+	-- Track / status under title
 	Tween.Play(bootTrack, {
-		Position = UDim2.new(0.5, 0, 0.5, 48),
+		Position = UDim2.new(0.5, 0, 0.5, 42),
 		BackgroundTransparency = 0.15,
 	}, { Time = 0.3 })
 	if bootFill then
 		Tween.Play(bootFill, { Size = UDim2.fromScale(1, 1), BackgroundColor3 = library.Theme.Accent }, { Time = 0.35 })
 	end
 	Tween.Play(bootStatus, {
-		Position = UDim2.new(0.5, 0, 0.5, 62),
+		Position = UDim2.new(0.5, 0, 0.5, 56),
 		TextTransparency = 0,
 	}, { Time = 0.3 })
 	Tween.Play(bootPercent, {
-		Position = UDim2.new(0.5, 0, 0.5, 80),
+		Position = UDim2.new(0.5, 0, 0.5, 74),
 		TextTransparency = 0,
 	}, { Time = 0.3 })
 
@@ -3085,8 +3085,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	self._NavLabel = navLabel
 	self._FooterName = footerName
 	self._FooterStatus = footerStatus
-	self._LoadingFrame = loadingGui
-	self._BootGui = loadingGui
+	self._LoadingFrame = self._BootGui
 	self._ContentArea = contentArea
 	self._TopBarHeight = topBarHeight
 	self._SidebarWidth = Theme.SidebarWidth
@@ -3255,19 +3254,22 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 			if backdrop then
 				for _, child in backdrop:GetDescendants() do
 					if child:IsA("TextLabel") then
-						Tween.Play(child, { TextTransparency = 1 }, { Time = 0.22 })
-					elseif child:IsA("Frame") and child.Name ~= "Backdrop" then
-						Tween.Play(child, { BackgroundTransparency = 1 }, { Time = 0.22 })
+						Tween.Play(child, { TextTransparency = 1 }, { Time = 0.28 })
+					elseif child:IsA("ImageLabel") then
+						Tween.Play(child, { ImageTransparency = 1 }, { Time = 0.28 })
+					elseif child:IsA("Frame") then
+						Tween.Play(child, { BackgroundTransparency = 1 }, { Time = 0.3 })
 					elseif child:IsA("UIStroke") then
-						Tween.Play(child, { Transparency = 1 }, { Time = 0.2 })
+						Tween.Play(child, { Transparency = 1 }, { Time = 0.25 })
 					end
 				end
-				Tween.Play(backdrop, { BackgroundTransparency = 1 }, { Time = 0.32 })
+				Tween.Play(backdrop, { BackgroundTransparency = 1 }, { Time = 0.35 })
 			end
-			task.wait(0.28)
-			if self._BootGui.Parent then
+			task.wait(0.38)
+			if self._BootGui and self._BootGui.Parent then
 				self._BootGui:Destroy()
 			end
+			self._BootGui = nil
 		end
 		print("[Vaxorin] boot finished")
 		self._StartupComplete = true
