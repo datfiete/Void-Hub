@@ -4645,8 +4645,53 @@ function Window:SetVisible(visible: boolean)
 		if self._IslandActivityHost then self._IslandActivityHost.Visible = false end
 		if self._IslandActivity then self._IslandActivity.Visible = true end
 		local islandBtn = self.Gui and self.Gui:FindFirstChild("Island")
-		if islandBtn then islandBtn.Visible = false end
-		if self._ClassicOpen then self._ClassicOpen.Visible = false end
+		if islandBtn and islandBtn.Visible then
+			local scale = islandBtn:FindFirstChild("IslandPopScale")
+			if not scale then
+				scale = Instance.new("UIScale")
+				scale.Name = "IslandPopScale"
+				scale.Scale = 1
+				scale.Parent = islandBtn
+			end
+			Tween.Play(scale, { Scale = 0.82 }, {
+				Time = 0.16,
+				EasingStyle = Enum.EasingStyle.Quint,
+				EasingDirection = Enum.EasingDirection.In,
+			})
+			if islandBtn:IsA("CanvasGroup") then
+				Tween.Play(islandBtn, { GroupTransparency = 1 }, { Time = 0.16 })
+			end
+			task.delay(0.17, function()
+				if islandBtn then
+					islandBtn.Visible = false
+					if scale then scale.Scale = 1 end
+					if islandBtn:IsA("CanvasGroup") then
+						islandBtn.GroupTransparency = 0
+					end
+				end
+			end)
+		elseif islandBtn then
+			islandBtn.Visible = false
+		end
+		if self._ClassicOpen and self._ClassicOpen.Visible then
+			local c = self._ClassicOpen
+			local scale = c:FindFirstChild("IslandPopScale")
+			if not scale then
+				scale = Instance.new("UIScale")
+				scale.Name = "IslandPopScale"
+				scale.Scale = 1
+				scale.Parent = c
+			end
+			Tween.Play(scale, { Scale = 0.7 }, { Time = 0.14 })
+			task.delay(0.15, function()
+				if c then
+					c.Visible = false
+					if scale then scale.Scale = 1 end
+				end
+			end)
+		elseif self._ClassicOpen then
+			self._ClassicOpen.Visible = false
+		end
 	end
 
 	local function showOpenControls()
@@ -4657,13 +4702,54 @@ function Window:SetVisible(visible: boolean)
 		if islandBtn then islandBtn.Visible = false end
 		if useIsland and islandBtn then
 			self._FloatingButton = islandBtn
-			islandBtn.Visible = true
+			local scale = islandBtn:FindFirstChild("IslandPopScale")
+			if not scale then
+				scale = Instance.new("UIScale")
+				scale.Name = "IslandPopScale"
+				scale.Parent = islandBtn
+			end
+			scale.Scale = 0.72
 			islandBtn.Size = UDim2.fromOffset(168, 34)
-			if islandBtn:IsA("CanvasGroup") then islandBtn.GroupTransparency = 0 end
+			if islandBtn:IsA("CanvasGroup") then
+				islandBtn.GroupTransparency = 1
+			end
+			islandBtn.Visible = true
+			-- soft drop-in from slightly above
+			local basePos = islandBtn.Position
+			islandBtn.Position = UDim2.new(
+				basePos.X.Scale, basePos.X.Offset,
+				basePos.Y.Scale, basePos.Y.Offset - 12
+			)
+			Tween.Play(scale, { Scale = 1 }, {
+				Time = 0.32,
+				EasingStyle = Enum.EasingStyle.Back,
+				EasingDirection = Enum.EasingDirection.Out,
+			})
+			Tween.Play(islandBtn, { Position = basePos }, {
+				Time = 0.3,
+				EasingStyle = Enum.EasingStyle.Quint,
+				EasingDirection = Enum.EasingDirection.Out,
+			})
+			if islandBtn:IsA("CanvasGroup") then
+				Tween.Play(islandBtn, { GroupTransparency = 0 }, { Time = 0.28 })
+			end
 		elseif self._ClassicOpen then
 			self._FloatingButton = self._ClassicOpen
-			self._ClassicOpen.Visible = true
-			self._ClassicOpen.Size = UDim2.fromOffset(50, 50)
+			local c = self._ClassicOpen
+			local scale = c:FindFirstChild("IslandPopScale")
+			if not scale then
+				scale = Instance.new("UIScale")
+				scale.Name = "IslandPopScale"
+				scale.Parent = c
+			end
+			scale.Scale = 0.6
+			c.Size = UDim2.fromOffset(50, 50)
+			c.Visible = true
+			Tween.Play(scale, { Scale = 1 }, {
+				Time = 0.3,
+				EasingStyle = Enum.EasingStyle.Back,
+				EasingDirection = Enum.EasingDirection.Out,
+			})
 		end
 	end
 
