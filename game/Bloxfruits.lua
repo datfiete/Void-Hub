@@ -196,6 +196,12 @@ local config = {
     autoSeaProgress = false, -- off by default until stable
     autoSecrets = false, -- Update 30 island secrets (windmill etc.)
     autoRandomFruit = false, -- Zioles / Gacha random fruit (2h CD, Lv50+)
+    autoBones = false,       -- Haunted Castle bone farm
+    autoBonesBuy = false,    -- CommF_ Bones Buy (Random Surprise)
+    autoCakePrince = false,  -- Cake Land 500 kills + drip_mama + kill Cake Prince
+    acceptQuest = true,     -- auto accept island quest while farming
+    devIslandLock = false,
+    devIslandIndex = nil,
 }
 
 -- =============================================
@@ -791,7 +797,7 @@ local islands = {
 table.sort(islands, function(a,b) return a.Min < b.Min end)
 
 -- =============================================
--- NOCLIP & FLY
+-- NOCLIP & Teleport & FLY
 -- =============================================
 BF.noclipConnection = nil
 BF._noclipParts = {}
@@ -847,6 +853,25 @@ BF.flyConnection = nil
 BF.flying = false
 BF.hoverY = nil
 BF._bossFlyUnlock = false
+
+-- Direkter Teleport (ohne Physik-Flug) – für Unterwasser / lange Distanzen
+BF.teleportCharacterTo = function(pos)
+    if not pos then return false end
+    local char = LocalPlayer.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return false end
+    local wasFlying = BF.flying
+    if wasFlying then BF.disableFly() end
+    -- Position setzen (sauberer als MoveTo bei HRP mit Velocity)
+    pcall(function()
+        hrp.CFrame = CFrame.new(pos + Vector3.new(0, 6, 0))
+        hrp.AssemblyLinearVelocity = Vector3.zero
+        hrp.AssemblyAngularVelocity = Vector3.zero
+    end)
+    task.wait(0.4)
+    if wasFlying then pcall(BF.enableFly) end
+    return true
+end
 
 BF.enableFly = function()
     if BF.flying then return end
@@ -925,6 +950,22 @@ BF.disableFly = function()
         if humanoid then humanoid.PlatformStand = false end
     end
     BF.disableNoclip()
+end
+
+-- Only land if no other fly-using mode is still active
+BF.anyFlyModeActive = function()
+    return BF.farmRunning
+        or BF.bonesRunning
+        or BF.cakePrinceRunning
+        or BF.seaProgressRunning
+        or BF.secretsRunning
+        or BF.raidRunning
+        or (BF.activeBossHuntTask ~= nil)
+end
+
+BF.safeDisableFly = function()
+    if BF.anyFlyModeActive() then return end
+    pcall(BF.disableFly)
 end
 
 BF.setFlyTarget = function(position, preserveHeight)
@@ -1126,6 +1167,36 @@ BF.autoEquipWeapon = function()
     end
 end
 
+-- Buso (Observation/Armament) + preferred weapon — for Bones / Cake / farm
+BF._lastBusoAt = 0
+BF.ensureBuso = function()
+    if os.clock() - (BF._lastBusoAt or 0) < 3 then return end
+    BF._lastBusoAt = os.clock()
+    local character = LocalPlayer.Character
+    if not character then return end
+    local humanoid = character:FindFirstChild("Humanoid")
+    if not humanoid then return end
+    -- already has buso layer
+    if humanoid:FindFirstChild("LeftHand_BusoLayer1") then return end
+    -- some builds put layers under Characters folder clone
+    local characters = Workspace:FindFirstChild("Characters")
+    local localCharacter = characters and characters:FindFirstChild(LocalPlayer.Name)
+    local busoHumanoid = (localCharacter and localCharacter:FindFirstChild("Humanoid")) or humanoid
+    if busoHumanoid and busoHumanoid:FindFirstChild("LeftHand_BusoLayer1") then return end
+    local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+    local commF = remotes and remotes:FindFirstChild("CommF_")
+    if commF then
+        pcall(function()
+            commF:InvokeServer("Buso")
+        end)
+    end
+end
+
+BF.ensureCombatReady = function()
+    pcall(BF.autoEquipWeapon)
+    pcall(BF.ensureBuso)
+end
+
 -- =============================================
 -- FRUIT NOTIFIER (SIMPLE)
 -- =============================================
@@ -1138,7 +1209,16 @@ BF._fruitEspFolder = nil
 BF._fruitEspMap = {} -- key -> {bb, label, obj}
 
 BF.fruitOwnsFly = function()
-    return BF._fruitCollectActive == true and BF._fruitTargetPos ~= nil
+    if not BF._fruitCollectActive or not BF._fruitTargetPos then
+        return false
+    end
+    -- auto-clear stuck fruit lock after 20s
+    if BF._fruitLockAt and (os.clock() - BF._fruitLockAt) > 20 then
+        BF._fruitCollectActive = false
+        BF._fruitTargetPos = nil
+        return false
+    end
+    return true
 end
 
 BF.getFruitStoreKey = function(displayName)
@@ -1558,36 +1638,37 @@ end
 
 BF.getIslandForLevel = function(level)
     local candidates = {}
+    local fallbackIsland = nil
+    -- Submerged Island is progression-locked below Lv 2600.
+    -- From 2600+ we allow it like any other island.
+    local SUBMERGED_MIN = 2600
     for _, island in ipairs(islands) do
-        if level >= island.Min and level <= island.Max then
-            if island.Pos and island.Pos.Magnitude > 0.1 then
+        local isSubmerged = island.Name and island.Name:lower():find("submerged", 1, true) ~= nil
+        local allowed = (not isSubmerged) or (level >= SUBMERGED_MIN)
+        if allowed and island.Pos and island.Pos.Magnitude > 0.1 then
+            if level >= island.Min and level <= island.Max then
                 table.insert(candidates, island)
+            end
+            if island.Max < level and (not fallbackIsland or island.Max > fallbackIsland.Max) then
+                fallbackIsland = island
             end
         end
     end
-    if #candidates == 0 then return islands[#islands] end
-
+    if #candidates == 0 then
+        return fallbackIsland or islands[1]
+    end
+    -- ... Rest bleibt identisch wie in deinem Original ...
     local bossCandidates, normalCandidates = {}, {}
     for _, island in ipairs(candidates) do
-        if island.isBoss then
-            table.insert(bossCandidates, island)
-        else
-            table.insert(normalCandidates, island)
-        end
+        if island.isBoss then table.insert(bossCandidates, island)
+        else table.insert(normalCandidates, island) end
     end
-
-    -- Boss Priority: only use boss island if that boss is actually alive
     if config.bossPriority and #bossCandidates > 0 then
         for _, island in ipairs(bossCandidates) do
             local alive = false
-            pcall(function()
-                alive = BF.findBossInWorkspace(island) ~= nil
-            end)
-            if alive then
-                return island
-            end
+            pcall(function() alive = BF.findBossInWorkspace(island) ~= nil end)
+            if alive then return island end
         end
-        -- boss not spawned -> farm normals for this level
         if #normalCandidates > 0 then
             table.sort(normalCandidates, function(a, b)
                 if a.Max ~= b.Max then return a.Max > b.Max end
@@ -1597,7 +1678,6 @@ BF.getIslandForLevel = function(level)
         end
         return bossCandidates[1]
     end
-
     local selectedList = #normalCandidates > 0 and normalCandidates or bossCandidates
     table.sort(selectedList, function(a, b)
         if a.Max ~= b.Max then return a.Max > b.Max end
@@ -1656,7 +1736,7 @@ end
 BF.activeQuestMatches = function(...)
     local active, title, body = BF.getActiveQuestInfo()
     if not active then return false end
-    local hay = string.lower(title .. " " .. body)
+    local hay = string.lower(tostring(title or "") .. " " .. tostring(body or ""))
     for i = 1, select("#", ...) do
         local n = string.lower(tostring(select(i, ...)))
         if n ~= "" and string.find(hay, n, 1, true) then return true end
@@ -1664,20 +1744,110 @@ BF.activeQuestMatches = function(...)
     return false
 end
 
+-- Does the current TrackedQuest text match this island's mobs / quest id?
+BF.questMatchesIsland = function(island, questType)
+    if not island then return false end
+    if not BF.hasActiveQuest() then return false end
+    local _, qtext = BF.getActiveQuestInfo()
+    qtext = string.lower(tostring(qtext or ""))
+    if qtext == "" then return false end
+
+    local patterns = {}
+    if questType == "boss" then
+        for _, p in ipairs(island.BossPatterns or {}) do table.insert(patterns, p) end
+        for _, p in ipairs(island.EnemyPatterns or {}) do table.insert(patterns, p) end
+    else
+        for _, p in ipairs(island.EnemyPatterns or {}) do table.insert(patterns, p) end
+    end
+    for _, p in ipairs(patterns) do
+        local pl = string.lower(tostring(p))
+        if pl ~= "" and string.find(qtext, pl, 1, true) then
+            return true
+        end
+    end
+    -- quest id e.g. BanditQuest1 / HauntedQuest1
+    local qa = BF.getQuestArgs and BF.getQuestArgs(island, questType or "normal")
+    if qa and qa[2] then
+        local id = string.lower(tostring(qa[2]))
+        if id ~= "" and string.find(qtext, id, 1, true) then
+            return true
+        end
+    end
+    return false
+end
+
+BF._lastQuestFixAt = 0
+-- Abandon wrong quest and take the right one for this island
+BF.ensureCorrectQuest = function(island, questType)
+    if config.acceptQuest == false then return false end
+    if not island then return false end
+    questType = questType or "normal"
+    local questArgs = BF.getQuestArgs and BF.getQuestArgs(island, questType)
+    if not questArgs then return false end
+
+    -- Rate limit
+    if os.clock() - (BF._lastQuestFixAt or 0) < 2.5 then
+        return BF.questMatchesIsland(island, questType)
+    end
+
+    if BF.hasActiveQuest() then
+        if BF.questMatchesIsland(island, questType) then
+            return true
+        end
+        -- Wrong quest (e.g. old island after level-up) -> drop it
+        BF._lastQuestFixAt = os.clock()
+        pcall(BF.abandonQuest)
+        BF.invalidateQuestCache()
+        task.wait(0.45)
+    end
+
+    BF._lastQuestFixAt = os.clock()
+    local ok = BF.acceptQuest(questArgs)
+    BF.invalidateQuestCache()
+    task.wait(0.35)
+    return ok
+end
+
 
 BF.resolveFarmPatterns = function(island, questType)
     local patternInfo = BF.getPatterns(island, questType or "normal")
-    if BF.hasActiveQuest() then
+    -- Prefer patterns from the active island that appear in the quest text.
+    -- Never fall back to short tokens like "pirate" (breaks "Candy Pirate").
+    if island and BF.hasActiveQuest() then
         local _, qtext = BF.getActiveQuestInfo()
-        local fromQuest = BF.getPatternsFromQuestText(qtext, patternInfo and patternInfo.patterns)
-        if fromQuest and #fromQuest > 0 then
-            return { patterns = fromQuest, includeBossAttr = false }
+        qtext = string.lower(tostring(qtext or ""))
+        if qtext ~= "" then
+            local matched = {}
+            for _, ep in ipairs(island.EnemyPatterns or {}) do
+                local epl = string.lower(tostring(ep))
+                if epl ~= "" and string.find(qtext, epl, 1, true) then
+                    table.insert(matched, ep)
+                end
+            end
+            if #matched > 0 then
+                return { patterns = matched, includeBossAttr = false }
+            end
+            for _, ep in ipairs(island.BossPatterns or {}) do
+                local epl = string.lower(tostring(ep))
+                if epl ~= "" and string.find(qtext, epl, 1, true) then
+                    table.insert(matched, ep)
+                end
+            end
+            if #matched > 0 then
+                return { patterns = matched, includeBossAttr = true }
+            end
         end
     end
-    return patternInfo
+    -- No quest / text doesn't mention island patterns -> farm island enemies
+    return patternInfo or { patterns = (island and island.EnemyPatterns) or {}, includeBossAttr = false }
 end
 
+
 BF.resolveFarmIsland = function(level)
+    -- Developer island lock
+    if config.devIslandLock and config.devIslandIndex and islands[config.devIslandIndex] then
+        return islands[config.devIslandIndex]
+    end
     if config.bossPriority then
         local bossEnemy, bossIsland = BF.findAnyPriorityBoss(level)
         if bossEnemy and bossIsland then
@@ -1687,37 +1857,84 @@ BF.resolveFarmIsland = function(level)
     return BF.getIslandForLevel(level)
 end
 
-
-BF.getPatternsFromQuestText = function(text, fallbackPatterns)
-    text = string.lower(tostring(text or ""))
-    if text == "" then return fallbackPatterns end
-    -- "Defeat 8 Brutes" / "Defeat Bandits" etc.
-    local known = {
-        "bandit", "trainee", "monkey", "gorilla", "pirate", "brute",
-        "desert bandit", "desert officer", "snow bandit", "snowman",
-        "chief petty officer", "sky bandit", "dark master", "prisoner",
-        "dangerous prisoner", "toga warrior", "gladiator",
-        "military soldier", "military spy", "fishman warrior", "fishman commando",
-        "god's guard", "shanda", "royal squad", "royal soldier",
-        "galley pirate", "galley captain", "raider", "mercenary",
-        "swan pirate", "factory staff", "marine lieutenant", "marine captain",
-        "zombie", "vampire", "snow trooper", "winter warrior",
-        "lab subordinate", "horned warrior", "magma ninja", "lava pirate",
-        "ship deckhand", "ship engineer", "ship steward", "ship officer",
-        "arctic warrior", "snow lurker", "sea soldier", "water fighter",
-    }
-    local found = {}
-    for _, name in ipairs(known) do
-        if string.find(text, name, 1, true) then
-            -- prefer longer matches: store as-is
-            table.insert(found, name)
+BF.getIslandIndex = function(island)
+    if not island then return nil end
+    for i, isl in ipairs(islands) do
+        if isl == island or isl.Name == island.Name then
+            return i
         end
     end
-    if #found == 0 then return fallbackPatterns end
-    -- use longest match first
-    table.sort(found, function(a, b) return #a > #b end)
-    return { found[1] }
+    return nil
 end
+
+BF.devShiftIsland = function(delta)
+    local level = BF.getPlayerLevel()
+    local cur = BF.resolveFarmIsland(level) or BF.getIslandForLevel(level)
+    local idx = BF.getIslandIndex(cur) or 1
+    idx = math.clamp(idx + (delta or 1), 1, #islands)
+    config.devIslandIndex = idx
+    config.devIslandLock = true
+    local isl = islands[idx]
+    BF.notifyUser("Dev", "Island: " .. tostring(isl and isl.Name or idx), 3)
+    return isl
+end
+
+BF.devAcceptQuest = function()
+    local island = BF.resolveFarmIsland(BF.getPlayerLevel())
+    if not island then
+        BF.notifyUser("Dev", "No island", 2)
+        return
+    end
+    local qt = "normal"
+    if island.isBoss and island.BossQuest then qt = "boss" end
+    pcall(function() BF.ensureCorrectQuest(island, qt) end)
+    BF.notifyUser("Dev", "Quest for " .. tostring(island.Name), 2)
+end
+
+BF.devSkipQuest = function()
+    pcall(BF.abandonQuest)
+    BF.invalidateQuestCache()
+    BF.notifyUser("Dev", "Quest abandoned", 2)
+end
+
+BF.devPrintBones = function()
+    local rem = ReplicatedStorage:FindFirstChild("Remotes")
+    local comm = rem and rem:FindFirstChild("CommF_")
+    if not comm then print("[BF] no CommF_") return end
+    local results = {}
+    for _, args in ipairs({{"Bones","Check"},{"Bones"},{"getInventory"}}) do
+        local ok, res = pcall(function() return comm:InvokeServer(unpack(args)) end)
+        print("[BF] Invoke", table.concat(args, ","), "ok=", ok, "type=", type(res), "val=", res)
+        if type(res) == "table" then
+            for k,v in pairs(res) do
+                print("  ", k, type(v), v)
+                if type(v) == "table" then
+                    for k2,v2 in pairs(v) do print("    ", k2, v2) end
+                end
+            end
+        end
+    end
+    print("[BF] getBoneCount=", BF.getBoneCount())
+end
+
+
+BF.getPatternsFromQuestText = function(text, fallbackPatterns)
+    -- Kept for compatibility; resolveFarmPatterns no longer relies on the short-token list.
+    text = string.lower(tostring(text or ""))
+    if text == "" then return fallbackPatterns end
+    if type(fallbackPatterns) == "table" then
+        local matched = {}
+        for _, ep in ipairs(fallbackPatterns) do
+            local epl = string.lower(tostring(ep))
+            if epl ~= "" and string.find(text, epl, 1, true) then
+                table.insert(matched, ep)
+            end
+        end
+        if #matched > 0 then return matched end
+    end
+    return fallbackPatterns
+end
+
 
 -- =============================================
 -- BOSS DETECTION
@@ -1830,45 +2047,27 @@ BF.enemyMatchesPatterns = function(enemy, patternInfo)
     if not enemy or not enemy:IsA("Model") then return false end
     local humanoid = enemy:FindFirstChildOfClass("Humanoid")
     local root = enemy:FindFirstChild("HumanoidRootPart")
-    local head = enemy:FindFirstChild("Head")
-    if not humanoid or humanoid.Health <= 0 or not root or not head then return false end
+    if not humanoid or humanoid.Health <= 0 or not root then return false end
 
     local lower = string.lower(enemy.Name)
-    local wantBoss = patternInfo.includeBossAttr == true
+    local patterns = (patternInfo and patternInfo.patterns) or {}
+    local wantBoss = patternInfo and patternInfo.includeBossAttr == true
 
-        if wantBoss then
-        if enemy:GetAttribute("isBoss") == true or string.find(lower, "%[boss%]") then
-            return true
-        end
-        for _, pattern in ipairs(patternInfo.patterns or {}) do
-            local p = string.lower(pattern)
-            if string.sub(lower, 1, #p) == p then
-                return true
-            end
-        end
+    local isBossName = enemy:GetAttribute("isBoss") == true
+        or string.find(lower, "[boss]", 1, true) ~= nil
+
+    if not wantBoss and isBossName then
         return false
     end
 
-        if enemy:GetAttribute("isBoss") == true then return false end
-    if string.find(lower, "%[boss%]") then return false end
+    if #patterns == 0 then
+        return wantBoss and isBossName
+    end
 
-    for _, pattern in ipairs(patternInfo.patterns or {}) do
-        local p = string.lower(pattern)
-                if string.sub(lower, 1, #p) == p then
-            local nextc = string.sub(lower, #p + 1, #p + 1)
-            if nextc == "" or nextc == " " or nextc == "[" then
-                local rest = string.sub(lower, #p + 1)
-                                if string.find(rest, "^%s+king") or string.find(rest, "^%s+lord")
-                    or string.find(rest, "^%s+admiral") or string.find(rest, "^%s+boss") then
-                                        if not string.find(p, "king") and not string.find(p, "lord")
-                        and not string.find(p, "admiral") and not string.find(p, "boss") then
-                                            else
-                        return true
-                    end
-                else
-                    return true
-                end
-            end
+    for _, pattern in ipairs(patterns) do
+        local p = string.lower(tostring(pattern or ""))
+        if p ~= "" and string.find(lower, p, 1, true) then
+            return true
         end
     end
     return false
@@ -1914,6 +2113,8 @@ BF.attackTargets = function(targets, speed, hits)
         if target and target.Parent then
             local hum = target:FindFirstChildOfClass("Humanoid")
             local head = target:FindFirstChild("Head")
+                or target:FindFirstChild("UpperTorso")
+                or target:FindFirstChild("HumanoidRootPart")
             if hum and hum.Health > 0 and head then
                 table.insert(validTargets, target)
             end
@@ -2636,6 +2837,7 @@ BF.stopActiveBossHunt = function(reason)
         BF.selectedBosses[BF.activeBossHuntName] = true
     end
     BF.activeBossHuntName = nil
+    BF.safeDisableFly()
 end
 
 BF.startBossHuntCombat = function(bossName)
@@ -3272,6 +3474,7 @@ end
 
 BF.stopSeaProgress = function()
     BF.seaProgressRunning = false
+    BF.safeDisableFly()
 end
 
 
@@ -3578,6 +3781,7 @@ end
 BF.stopAutoRaid = function()
     BF.raidRunning = false
     config.autoRaid = false
+    BF.safeDisableFly()
     BF.notifyUser("Raid", "Auto Raid OFF", 2)
 end
 
@@ -3638,6 +3842,14 @@ BF.startFarm = function()
                 continue
             end
             if BF.bossHuntOwnsFly and type(BF.bossHuntOwnsFly) == "function" and BF.bossHuntOwnsFly() then
+                task.wait(0.2)
+                continue
+            end
+            if BF.bonesOwnsFly and type(BF.bonesOwnsFly) == "function" and BF.bonesOwnsFly() then
+                task.wait(0.2)
+                continue
+            end
+            if BF.cakePrinceOwnsFly and type(BF.cakePrinceOwnsFly) == "function" and BF.cakePrinceOwnsFly() then
                 task.wait(0.2)
                 continue
             end
@@ -3759,6 +3971,7 @@ BF.startFarm = function()
                 lastLevelForStats = level
                                 if not BF.hasActiveQuest() then
                     lockedEnemy = nil
+                    BF._submergedTeleported = false
                     heightLocked = false
                     isBossTarget = false
                     underwaterEntryDone = false
@@ -3776,11 +3989,22 @@ BF.startFarm = function()
             end
 
             if state == "ISLAND" then
+                if not BF.flying then pcall(BF.enableFly) end
                 local underwater = BF.isUnderwaterIsland(island)
 
-                -- Underwater route: deliberately visit the whirlpool first rather
-                -- than BF.flying directly across the ocean to the island coordinates.
-                if underwater and not underwaterEntryDone then
+                -- Submerged 2600+: direkt hin teleportieren, kein Whirlpool-Umweg nötig
+                if underwater and level >= 2600 then
+                    if not BF._submergedTeleported then
+                        BF.notifyUser("Island", "Teleport -> Submerged", 3)
+                        BF.teleportCharacterTo(island.Pos)
+                        BF._submergedTeleported = true
+                        BF.setHoverHeight(hrp.Position.Y)
+                        task.wait(0.3)
+                        state = "QUEST"
+                        continue
+                    end
+                elseif underwater and not underwaterEntryDone then
+                    -- alter Whirlpool-Pfad nur für < 2600 (falls überhaupt noch genutzt)
                     local whirlpool = BF.findWhirlpool()
                     if whirlpool then
                         underwaterEntryStarted = true
@@ -3789,17 +4013,12 @@ BF.startFarm = function()
                             task.wait(0.08)
                             continue
                         end
-
-                        -- Stay over the whirlpool briefly so its entrance/teleport
-                        -- trigger has time to fire. Do not fly away immediately.
                         BF.setFlyTarget(whirlpool.Position + Vector3.new(0, 4, 0), false)
                         task.wait(0.6)
                         underwaterEntryDone = true
                         BF.setHoverHeight(hrp.Position.Y)
                         continue
                     else
-                        -- If the server has no named whirlpool object, fall back to
-                        -- the known island position instead of getting stuck forever.
                         underwaterEntryDone = true
                     end
                 end
@@ -3817,6 +4036,11 @@ BF.startFarm = function()
             end
 
             if state == "QUEST" then
+                if config.acceptQuest == false then
+                    state = "COMBAT"
+                    continue
+                end
+
                                 if BF.hasActiveQuest() then
                     questAccepted = true
                     state = "COMBAT"
@@ -3836,10 +4060,7 @@ BF.startFarm = function()
                         hrp.AssemblyAngularVelocity = Vector3.zero
                     end
                 end)
-                                local espWas = BF.enemyEspRunning
-                if espWas then pcall(BF.stopEnemyEsp) end
-                task.wait(0.45)
-
+                -- Do NOT disable Enemy ESP preference while accepting quest
                 local desiredType = "normal"
                 if _prioBoss and _prioIsland then
                     island = _prioIsland
@@ -3853,25 +4074,44 @@ BF.startFarm = function()
                     questAccepted = true
                     currentQuestType = "boss"
                     state = "COMBAT"
+                    pcall(BF.restartEnemyEspIfNeeded)
                     continue
                 end
 
                 _lastQuestAcceptAt = os.clock()
                 if questArgs then
-                                        local success = BF.acceptQuestWrapper(questArgs, { allowStack = false })
+                    pcall(function()
+                        BF.ensureCorrectQuest(island, desiredType)
+                    end)
                     currentQuestType = desiredType
                     questAccepted = true
                     BF.invalidateQuestCache()
-                    task.wait(0.6)
+                    task.wait(0.35)
                 end
-                if espWas and config.enemyEspEnabled then
-                    pcall(BF.startEnemyEsp)
+                pcall(BF.restartEnemyEspIfNeeded)
+                -- After taking quest, go to island first if we are far away
+                if island and island.Pos and hrp and (hrp.Position - island.Pos).Magnitude > 120 then
+                    state = "ISLAND"
+                else
+                    state = "COMBAT"
                 end
-                state = "COMBAT"
                 continue
             end
 
             if state == "COMBAT" then
+                if not BF.flying then pcall(BF.enableFly) end
+                -- Wrong quest stuck? Fix while farming (e.g. after level-up)
+                if config.acceptQuest ~= false and island and not isBossTarget then
+                    if BF.hasActiveQuest() and not BF.questMatchesIsland(island, currentQuestType or "normal") then
+                        pcall(function()
+                            BF.ensureCorrectQuest(island, currentQuestType or "normal")
+                        end)
+                    elseif not BF.hasActiveQuest() then
+                        pcall(function()
+                            BF.ensureCorrectQuest(island, currentQuestType or "normal")
+                        end)
+                    end
+                end
                                 -- updated yet.  The quest remote can succeed before the GUI becomes
                 -- visible, and at level 700+ this used to leave the farmer parked at
                 -- the waypoint instead of acquiring a Raider.
@@ -3915,12 +4155,48 @@ BF.startFarm = function()
                 else
                     isBossTarget = false
                     isBossTarget = false
-                    local patternInfo = BF.resolveFarmPatterns(island, currentQuestType)
+                    local patternInfo = BF.resolveFarmPatterns(island, "normal")
+                    if not patternInfo or not patternInfo.patterns or #patternInfo.patterns == 0 then
+                        patternInfo = { patterns = (island and island.EnemyPatterns) or {}, includeBossAttr = false }
+                    end
                     local allTargets = BF.getMatchingEnemies(island, patternInfo)
+                    -- Fallback: ignore quest text, use island patterns raw
+                    if #allTargets == 0 and island and island.EnemyPatterns then
+                        allTargets = BF.getMatchingEnemies(island, {
+                            patterns = island.EnemyPatterns,
+                            includeBossAttr = false,
+                        })
+                    end
+                    -- Last resort: any non-boss enemy near island pos
+                    if #allTargets == 0 and island and island.Pos then
+                        local near = {}
+                        local folder = Workspace:FindFirstChild("Enemies")
+                        if folder then
+                            for _, en in ipairs(folder:GetChildren()) do
+                                if en:IsA("Model") then
+                                    local hum = en:FindFirstChildOfClass("Humanoid")
+                                    local root = en:FindFirstChild("HumanoidRootPart")
+                                    local nm = string.lower(en.Name)
+                                    if hum and root and hum.Health > 0
+                                        and not string.find(nm, "[boss]", 1, true)
+                                        and (root.Position - island.Pos).Magnitude < 350 then
+                                        table.insert(near, en)
+                                    end
+                                end
+                            end
+                        end
+                        allTargets = near
+                    end
                     if #allTargets == 0 then
                         lockedEnemy = nil
+                        -- Enemies not streamed yet: fly to island, don't stand still
+                        if not BF.flying then pcall(BF.enableFly) end
+                        if island and island.Pos and island.Pos.Magnitude > 0.1 then
+                            local hover = math.clamp(config.aboveHeight or 8, 4, 14)
+                            BF.setFlyTarget(island.Pos + Vector3.new(0, hover, 0), false)
+                        end
                         state = "PATROL"
-                        task.wait(0.15)
+                        task.wait(0.2)
                         continue
                     end
 
@@ -4015,12 +4291,20 @@ BF.startFarm = function()
             end
 
             if state == "PATROL" then
-                                -- GUI is delayed, the farmer should still scan Workspace.Enemies
-                -- and immediately switch back to COMBAT when a Raider appears.
-
-                -- No enemy: stay at the current safe Y. The old code used a
-                -- target of nil plus a fixed +Y velocity, which caused the slow fall.
-                if heightLocked then
+                if not BF.flying then pcall(BF.enableFly) end
+                -- No matching enemies: path to island spawn area (don't stand still)
+                if island and island.Pos and island.Pos.Magnitude > 0.1 then
+                    local distIsland = (hrp.Position - island.Pos).Magnitude
+                    if distIsland > 80 then
+                        local hover = math.clamp(config.aboveHeight or 8, 4, 14)
+                        BF.setFlyTarget(island.Pos + Vector3.new(0, hover, 0), false)
+                    elseif heightLocked then
+                        BF.setFlyTarget(Vector3.new(hrp.Position.X, lockedY, hrp.Position.Z), false)
+                    else
+                        if not BF.hoverY then BF.hoverY = hrp.Position.Y end
+                        BF.setFlyTarget(Vector3.new(hrp.Position.X, BF.hoverY, hrp.Position.Z), false)
+                    end
+                elseif heightLocked then
                     BF.setFlyTarget(Vector3.new(hrp.Position.X, lockedY, hrp.Position.Z), false)
                 else
                     if not BF.hoverY then BF.hoverY = hrp.Position.Y end
@@ -4483,6 +4767,7 @@ end
 BF.stopAutoSecrets = function()
     BF.secretsRunning = false
     if BF.secretsTask then pcall(function() task.cancel(BF.secretsTask) end) BF.secretsTask = nil end
+    BF.safeDisableFly()
     BF.notifyUser("Secrets", "Auto Secrets OFF", 2)
 end
 
@@ -4721,6 +5006,7 @@ BF.startAutoRaid = function()
             local ok, err = pcall(function()
                 if not config.autoRaid then return end
 
+                -- DEAD: wait for respawn, do not fly to old raid
                 if BF.isPlayerDead() then
                     BF.notifyUser("Raid", "Dead - waiting respawn", 2)
                     task.wait(1)
@@ -4806,6 +5092,123 @@ BF.setupRespawnRecovery = function()
 end
 
 
+
+-- =============================================
+-- ENEMY ESP (Highlight + Billboard through walls)
+-- =============================================
+BF.enemyEspRunning = false
+BF.enemyEspTask = nil
+BF._enemyEspMap = {} -- model -> {highlight, billboard, label}
+
+BF.clearEnemyEsp = function()
+    for model, entry in pairs(BF._enemyEspMap) do
+        pcall(function()
+            if entry.highlight then entry.highlight:Destroy() end
+            if entry.billboard then entry.billboard:Destroy() end
+        end)
+    end
+    BF._enemyEspMap = {}
+end
+
+BF.updateEnemyEsp = function()
+    if not config.enemyEspEnabled then
+        BF.clearEnemyEsp()
+        return
+    end
+    local character = LocalPlayer.Character
+    local hrp = character and character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    local maxDist = config.enemyEspMaxDist or 2000
+    local folder = Workspace:FindFirstChild("Enemies")
+    if not folder then
+        BF.clearEnemyEsp()
+        return
+    end
+
+    local seen = {}
+    for _, m in ipairs(folder:GetChildren()) do
+        if m:IsA("Model") then
+            local hum = m:FindFirstChildOfClass("Humanoid")
+            local root = m:FindFirstChild("HumanoidRootPart") or m.PrimaryPart
+            if hum and root and hum.Health > 0 then
+                local dist = (hrp.Position - root.Position).Magnitude
+                if dist <= maxDist then
+                    seen[m] = true
+                    local entry = BF._enemyEspMap[m]
+                    if not entry then
+                        local hl = Instance.new("Highlight")
+                        hl.Name = "BF_EnemyESP"
+                        hl.Adornee = m
+                        hl.FillTransparency = 0.55
+                        hl.OutlineTransparency = 0
+                        hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                        hl.Parent = m
+
+                        local bb = Instance.new("BillboardGui")
+                        bb.Name = "BF_EnemyESP_BB"
+                        bb.AlwaysOnTop = true
+                        bb.Size = UDim2.new(0, 140, 0, 36)
+                        bb.StudsOffset = Vector3.new(0, 3.2, 0)
+                        bb.Adornee = root
+                        bb.Parent = m
+
+                        local label = Instance.new("TextLabel")
+                        label.Size = UDim2.new(1, 0, 1, 0)
+                        label.BackgroundTransparency = 0.4
+                        label.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+                        label.TextColor3 = Color3.fromRGB(255, 255, 255)
+                        label.Font = Enum.Font.GothamBold
+                        label.TextSize = 12
+                        label.TextStrokeTransparency = 0.4
+                        label.Parent = bb
+
+                        entry = { highlight = hl, billboard = bb, label = label }
+                        BF._enemyEspMap[m] = entry
+                    end
+
+                    local isBoss = string.find(string.lower(m.Name), "boss", 1, true)
+                        or m:GetAttribute("IsBoss")
+                        or (hum.MaxHealth and hum.MaxHealth >= 50000)
+                    if config.enemyEspBossColor and isBoss then
+                        entry.highlight.FillColor = Color3.fromRGB(255, 60, 60)
+                        entry.highlight.OutlineColor = Color3.fromRGB(255, 200, 80)
+                    else
+                        entry.highlight.FillColor = Color3.fromRGB(80, 180, 255)
+                        entry.highlight.OutlineColor = Color3.fromRGB(200, 230, 255)
+                    end
+
+                    local parts = {}
+                    if config.enemyEspShowName ~= false then
+                        table.insert(parts, m.Name)
+                    end
+                    if config.enemyEspShowHealth ~= false then
+                        table.insert(parts, string.format("%d/%d", math.floor(hum.Health), math.floor(hum.MaxHealth)))
+                    end
+                    table.insert(parts, string.format("%dm", math.floor(dist)))
+                    if entry.label then
+                        entry.label.Text = table.concat(parts, "\n")
+                    end
+                    if entry.billboard and entry.billboard.Adornee ~= root then
+                        entry.billboard.Adornee = root
+                    end
+                end
+            end
+        end
+    end
+
+    -- cleanup dead / out of range
+    for model, entry in pairs(BF._enemyEspMap) do
+        if not seen[model] then
+            pcall(function()
+                if entry.highlight then entry.highlight:Destroy() end
+                if entry.billboard then entry.billboard:Destroy() end
+            end)
+            BF._enemyEspMap[model] = nil
+        end
+    end
+end
+
 BF.startEnemyEsp = function()
     if BF.enemyEspRunning then return end
     BF.enemyEspRunning = true
@@ -4820,17 +5223,732 @@ BF.startEnemyEsp = function()
     BF.notifyUser("ESP", "Enemy ESP ON (through walls)", 2)
 end
 
-BF.stopEnemyEsp = function()
+BF.stopEnemyEsp = function(silent)
     BF.enemyEspRunning = false
-    config.enemyEspEnabled = false
+    -- only clear user preference when user toggles OFF (silent ~= true)
+    if not silent then
+        config.enemyEspEnabled = false
+    end
     if BF.enemyEspTask then pcall(function() task.cancel(BF.enemyEspTask) end) BF.enemyEspTask = nil end
-    BF.clearEnemyEsp()
-    BF.notifyUser("ESP", "Enemy ESP OFF", 2)
+    pcall(BF.clearEnemyEsp)
+    if not silent then
+        BF.notifyUser("ESP", "Enemy ESP OFF", 2)
+    end
+end
+
+BF.restartEnemyEspIfNeeded = function()
+    if config.enemyEspEnabled and not BF.enemyEspRunning then
+        pcall(BF.startEnemyEsp)
+    end
 end
 
 -- =============================================
 -- VAXORIN UI CREATION (if successful)
 -- =============================================
+
+
+-- =============================================
+-- AUTO BONES (Haunted Castle — Sea 3)
+-- Bones drop from: Reborn Skeleton, Living Zombie,
+-- Demonic Soul, Posessed Mummy (Haunted Castle)
+-- =============================================
+BF.bonesRunning = false
+BF.bonesTask = nil
+BF.BONE_POS = Vector3.new(-9504, 172, 6057)
+BF.BONE_PATTERNS = {
+    "Reborn Skeleton", "Living Zombie", "Demonic Soul",
+    "Posessed Mummy", "Possessed Mummy", "Ghost",
+}
+
+BF.bonesOwnsFly = function()
+    return BF.bonesRunning == true
+end
+
+BF.findBoneTargets = function()
+    local list = {}
+    local seen = {}
+    local function consider(m)
+        if not m or not m:IsA("Model") or seen[m] then return end
+        local hum = m:FindFirstChildOfClass("Humanoid")
+        local root = m:FindFirstChild("HumanoidRootPart")
+        if not hum or not root or hum.Health <= 0 then return end
+        local lower = string.lower(m.Name)
+        for _, p in ipairs(BF.BONE_PATTERNS) do
+            if string.find(lower, string.lower(p), 1, true) then
+                seen[m] = true
+                table.insert(list, m)
+                return
+            end
+        end
+    end
+    local folder = Workspace:FindFirstChild("Enemies")
+    if folder then
+        for _, m in ipairs(folder:GetChildren()) do
+            consider(m)
+        end
+    end
+    -- some builds keep inactive mobs in ReplicatedStorage
+    for _, m in ipairs(ReplicatedStorage:GetChildren()) do
+        consider(m)
+    end
+    return list
+end
+
+BF.buyBonesRandom = function()
+    -- Death King / Random Surprise: CommF_ "Bones","Buy",1,1
+    local rem = ReplicatedStorage:FindFirstChild("Remotes")
+    local comm = rem and rem:FindFirstChild("CommF_")
+    if not comm then return false, "no CommF_" end
+    local ok, res = pcall(function()
+        return comm:InvokeServer("Bones", "Buy", 1, 1)
+    end)
+    return ok, res
+end
+
+BF.bonesBuyRunning = false
+BF.bonesBuyTask = nil
+BF.startBonesBuy = function()
+    if BF.bonesBuyRunning then return end
+    BF.bonesBuyRunning = true
+    config.autoBonesBuy = true
+    BF.notifyUser("Bones", "Auto Buy Random Surprise ON (50 Bones)", 3)
+    BF.bonesBuyTask = task.spawn(function()
+        while BF.bonesBuyRunning do
+            local ok, err = pcall(function()
+                if not config.autoBonesBuy then return end
+                local count = 0
+                pcall(function() count = BF.getBoneCount() end)
+                -- Random Surprise costs 50 bones
+                if count >= 50 then
+                    local bought, res = BF.buyBonesRandom()
+                    if bought then
+                        -- silent / light notify
+                        pcall(function()
+                            BF.notifyUser("Bones", "Bought surprise (left ~" .. tostring(math.max(0, count - 50)) .. ")", 2)
+                        end)
+                    end
+                    task.wait(2.5) -- avoid spam / 2h limit handling by game
+                else
+                    task.wait(3)
+                end
+            end)
+            if not ok then warn("[BF BonesBuy]", err) end
+            task.wait(1.5)
+        end
+    end)
+end
+
+BF.stopBonesBuy = function()
+    BF.bonesBuyRunning = false
+    config.autoBonesBuy = false
+    if BF.bonesBuyTask then pcall(function() task.cancel(BF.bonesBuyTask) end) BF.bonesBuyTask = nil end
+    BF.notifyUser("Bones", "Auto Buy OFF", 2)
+end
+
+BF.startBonesFarm = function()
+    if BF.bonesRunning then return end
+    BF.bonesRunning = true
+    config.autoBones = true
+    BF.notifyUser("Bones", "Auto Bones ON (Haunted Castle)", 3)
+    BF.bonesTask = task.spawn(function()
+        while BF.bonesRunning do
+            local ok, err = pcall(function()
+                if not config.autoBones then return end
+                local character = LocalPlayer.Character
+                local hrp = character and character:FindFirstChild("HumanoidRootPart")
+                local hum = character and character:FindFirstChild("Humanoid")
+                if not hrp or not hum or hum.Health <= 0 then
+                    task.wait(0.5)
+                    return
+                end
+                if not BF.flying then pcall(BF.enableFly) end
+                pcall(BF.ensureCombatReady)
+
+                -- Keep correct Haunted quest (abandon wrong ones)
+                if config.acceptQuest ~= false then
+                    if BF.hasActiveQuest() then
+                        if not BF.activeQuestMatches("reborn", "skeleton", "zombie", "demonic", "mummy", "possessed", "posessed", "haunted") then
+                            pcall(BF.abandonQuest)
+                            BF.invalidateQuestCache()
+                            task.wait(0.4)
+                            pcall(function()
+                                BF.acceptQuest({"StartQuest", "HauntedQuest1", 1})
+                            end)
+                        end
+                    else
+                        pcall(function()
+                            BF.acceptQuest({"StartQuest", "HauntedQuest1", 1})
+                        end)
+                    end
+                end
+
+                local targets = BF.findBoneTargets()
+                if #targets == 0 then
+                    BF.setFlyTarget(BF.BONE_POS + Vector3.new(0, 12, 0), false)
+                    task.wait(0.25)
+                    return
+                end
+
+                -- closest target
+                local best, bestD = nil, math.huge
+                for _, t in ipairs(targets) do
+                    local r = t:FindFirstChild("HumanoidRootPart")
+                    if r then
+                        local d = (hrp.Position - r.Position).Magnitude
+                        if d < bestD then bestD = d best = t end
+                    end
+                end
+                if not best then return end
+
+                local root = best:FindFirstChild("HumanoidRootPart")
+                local above = math.clamp(config.aboveHeight or 8, 4, 14)
+                BF.setFlyTarget(root.Position + Vector3.new(0, above, 0), false)
+
+                local speed = config.attackSpeed or 0.04
+                local hits = config.hitsPerCycle or 6
+                if config.clusterEnabled then
+                    local maxN = config.maxClusterSize or 12
+                    local radius = math.max(config.clusterRange or 150, 80)
+                    local cluster = BF.collectNearbyTargets(targets, hrp, best, maxN, radius)
+                    if #cluster > 0 then
+                        if BF.clusterStackPos then
+                            BF.setFlyTarget(BF.clusterStackPos + Vector3.new(0, above, 0), false)
+                        end
+                        BF.attackTargets(cluster, speed, hits)
+                    else
+                        BF.attackEnemy(best, speed, hits)
+                    end
+                else
+                    BF.attackEnemy(best, speed, hits)
+                end
+            end)
+            if not ok then warn("[BF Bones]", err) end
+            task.wait(0.05)
+        end
+    end)
+end
+
+BF.stopBonesFarm = function()
+    BF.bonesRunning = false
+    config.autoBones = false
+    if BF.bonesTask then pcall(function() task.cancel(BF.bonesTask) end) BF.bonesTask = nil end
+    BF.safeDisableFly()
+    BF.notifyUser("Bones", "Auto Bones OFF", 2)
+end
+
+-- =============================================
+-- AUTO CAKE PRINCE (Sea of Treats / Cake Land)
+-- 1) Kill Cake Land mobs (server share of 500)
+-- 2) Talk to drip_mama -> portal / dimension
+-- 3) Kill Cake Prince when he spawns
+-- =============================================
+BF.cakePrinceRunning = false
+BF.cakePrinceTask = nil
+BF.CAKE_LAND_POS = Vector3.new(-1818, 40, -12958) -- Baking Staff avg / cake area
+BF.DRIP_MAMA_POS = Vector3.new(-2150, 50, -12400) -- approx center cake land
+BF.CAKE_MOB_PATTERNS = {
+    "Cookie Crafter", "Cake Guard", "Baking Staff", "Head Baker",
+}
+BF.CAKE_BOSS_PATTERNS = {
+    "Cake Prince", "Dough King",
+}
+
+BF.cakePrinceOwnsFly = function()
+    return BF.cakePrinceRunning == true
+end
+
+BF.findCakeMobs = function()
+    local folder = Workspace:FindFirstChild("Enemies")
+    if not folder then return {} end
+    local list = {}
+    for _, m in ipairs(folder:GetChildren()) do
+        if m:IsA("Model") then
+            local hum = m:FindFirstChildOfClass("Humanoid")
+            local root = m:FindFirstChild("HumanoidRootPart")
+            if hum and root and hum.Health > 0 then
+                local lower = string.lower(m.Name)
+                for _, p in ipairs(BF.CAKE_MOB_PATTERNS) do
+                    if string.find(lower, string.lower(p), 1, true) then
+                        table.insert(list, m)
+                        break
+                    end
+                end
+            end
+        end
+    end
+    return list
+end
+
+-- Hubs check BOTH Workspace.Enemies AND ReplicatedStorage (boss preloaded / dimension)
+BF.findCakeBoss = function()
+    local nameHits = {
+        "Cake Prince",
+        "Cake Prince [Lv. 2300] [Raid Boss]",
+        "Dough King",
+        "Dough King [Lv. 2300] [Raid Boss]",
+    }
+    local function scan(container)
+        if not container then return nil end
+        for _, n in ipairs(nameHits) do
+            local m = container:FindFirstChild(n)
+            if m and m:IsA("Model") then
+                local hum = m:FindFirstChildOfClass("Humanoid")
+                local root = m:FindFirstChild("HumanoidRootPart") or m.PrimaryPart
+                if hum and root and hum.Health > 0 then
+                    return m
+                end
+            end
+        end
+        for _, m in ipairs(container:GetChildren()) do
+            if m:IsA("Model") then
+                local lower = string.lower(m.Name)
+                if string.find(lower, "cake prince", 1, true) or string.find(lower, "dough king", 1, true) then
+                    local hum = m:FindFirstChildOfClass("Humanoid")
+                    local root = m:FindFirstChild("HumanoidRootPart") or m.PrimaryPart
+                    if hum and root and hum.Health > 0 then
+                        return m
+                    end
+                end
+            end
+        end
+        return nil
+    end
+    return scan(Workspace:FindFirstChild("Enemies"))
+        or scan(ReplicatedStorage)
+        or scan(Workspace)
+end
+
+BF.isCakePortalOpen = function()
+    local map = Workspace:FindFirstChild("Map")
+    local loaf = map and map:FindFirstChild("CakeLoaf")
+    local mirror = loaf and loaf:FindFirstChild("BigMirror")
+    local other = mirror and mirror:FindFirstChild("Other")
+    if other and other:IsA("BasePart") then
+        -- hubs: Transparency == 0 means portal open
+        return other.Transparency <= 0.05
+    end
+    return false
+end
+
+BF.getCakePortalCFrame = function()
+    -- known portal / mirror entrance from public hubs
+    return CFrame.new(-2151.82, 149.32, -12404.91)
+end
+
+BF.cakePrinceSpawnerStatus = function()
+    local rem = ReplicatedStorage:FindFirstChild("Remotes")
+    local comm = rem and rem:FindFirstChild("CommF_")
+    if not comm then return nil end
+    local ok, res = pcall(function()
+        return comm:InvokeServer("CakePrinceSpawner")
+    end)
+    if ok then return res end
+    return nil
+end
+
+BF.tryOpenCakePortal = function()
+    local rem = ReplicatedStorage:FindFirstChild("Remotes")
+    local comm = rem and rem:FindFirstChild("CommF_")
+    if not comm then return false end
+    -- Status string includes remaining kills or "open the portal now"
+    local ok, status = pcall(function()
+        return comm:InvokeServer("CakePrinceSpawner")
+    end)
+    if ok and type(status) == "string" then
+        local low = string.lower(status)
+        if string.find(low, "open the portal", 1, true) or string.find(low, "portal now", 1, true) then
+            pcall(function()
+                comm:InvokeServer("CakePrinceSpawner")
+            end)
+            return true
+        end
+    end
+    -- Force-open attempt used by many hubs after 500
+    pcall(function()
+        comm:InvokeServer("CakePrinceSpawner", true)
+    end)
+    pcall(function()
+        comm:InvokeServer("CakePrinceSpawner")
+    end)
+    return BF.isCakePortalOpen()
+end
+
+BF.findDripMama = function()
+    local names = {"drip_mama", "Drip Mama", "drip mama", "DripMama"}
+    for _, n in ipairs(names) do
+        local npc = Workspace:FindFirstChild(n, true)
+        if npc then return npc end
+    end
+    for _, inst in ipairs(Workspace:GetDescendants()) do
+        local nm = string.lower(inst.Name)
+        if string.find(nm, "drip", 1, true) and string.find(nm, "mama", 1, true) then
+            return inst
+        end
+    end
+    return nil
+end
+
+BF.tryTalkDripMama = function()
+    local npc = BF.findDripMama()
+    if not npc then return false end
+    local part = npc:IsA("BasePart") and npc
+        or npc:FindFirstChild("HumanoidRootPart")
+        or npc:FindFirstChildWhichIsA("BasePart")
+    if part then
+        pcall(function()
+            BF.setFlyTarget(part.Position + Vector3.new(0, 4, 0), false)
+        end)
+    end
+    -- Fire any proximity prompts under the NPC
+    local fired = false
+    local root = npc
+    if not npc:IsA("Model") and npc.Parent then root = npc.Parent end
+    for _, d in ipairs(root:GetDescendants()) do
+        if d:IsA("ProximityPrompt") then
+            pcall(function()
+                if fireproximityprompt then
+                    fireproximityprompt(d)
+                else
+                    d:InputHoldBegin()
+                    task.wait(d.HoldDuration or 0.1)
+                    d:InputHoldEnd()
+                end
+            end)
+            fired = true
+        end
+    end
+    -- Some builds use ClickDetector
+    for _, d in ipairs(root:GetDescendants()) do
+        if d:IsA("ClickDetector") then
+            pcall(function()
+                if fireclickdetector then fireclickdetector(d) end
+            end)
+            fired = true
+        end
+    end
+    -- Dialogue remote fallbacks used by some hubs
+    pcall(function()
+        local rem = ReplicatedStorage:FindFirstChild("Remotes")
+        local comm = rem and rem:FindFirstChild("CommF_")
+        if comm then
+            -- harmless probes; server ignores unknown
+            comm:InvokeServer("CakePrince")
+            comm:InvokeServer("TalkNpc", "drip_mama")
+        end
+    end)
+    return fired
+end
+
+BF.startCakePrince = function()
+    if BF.cakePrinceRunning then return end
+    BF.cakePrinceRunning = true
+    config.autoCakePrince = true
+    BF.notifyUser("Cake Prince", "Auto Cake Prince ON", 3)
+    local lastTalk = 0
+    BF.cakePrinceTask = task.spawn(function()
+        while BF.cakePrinceRunning do
+            local ok, err = pcall(function()
+                if not config.autoCakePrince then return end
+                local character = LocalPlayer.Character
+                local hrp = character and character:FindFirstChild("HumanoidRootPart")
+                local hum = character and character:FindFirstChild("Humanoid")
+                if not hrp or not hum or hum.Health <= 0 then
+                    task.wait(0.5)
+                    return
+                end
+                if not BF.flying then pcall(BF.enableFly) end
+                pcall(BF.ensureCombatReady)
+
+                -- 1) Boss in Enemies OR ReplicatedStorage (dimension)
+                local boss = BF.findCakeBoss()
+                if boss then
+                    local root = boss:FindFirstChild("HumanoidRootPart") or boss.PrimaryPart
+                    if root then
+                        -- Boss lives high in Dimensional Shift — always fly to HIS height
+                        local above = math.clamp(config.aboveHeight or 8, 6, 20)
+                        BF.setFlyTarget(root.Position + Vector3.new(0, above, 0), false)
+                        local dist = (hrp.Position - root.Position).Magnitude
+                        if dist <= 80 then
+                            local speed = config.bossAttackSpeed or 0.002
+                            local hits = config.bossHitsPerCycle or 35
+                            BF.attackEnemy(boss, speed, hits)
+                        end
+                    end
+                    return
+                end
+
+                -- 2) Portal open (BigMirror) but boss not found yet -> enter mirror
+                if BF.isCakePortalOpen() then
+                    local pc = BF.getCakePortalCFrame()
+                    BF.setFlyTarget(pc.Position + Vector3.new(0, 3, 0), false)
+                    -- also try to walk into Other part
+                    pcall(function()
+                        local map = Workspace:FindFirstChild("Map")
+                        local other = map and map:FindFirstChild("CakeLoaf")
+                        other = other and other:FindFirstChild("BigMirror")
+                        other = other and other:FindFirstChild("Other")
+                        if other and other:IsA("BasePart") then
+                            BF.setFlyTarget(other.Position + Vector3.new(0, 2, 0), false)
+                        end
+                    end)
+                    task.wait(0.3)
+                    return
+                end
+
+                -- 3) Ask spawner / open portal (CakePrinceSpawner remote — what hubs use)
+                if os.clock() - lastTalk > 5 then
+                    lastTalk = os.clock()
+                    BF.tryOpenCakePortal()
+                    pcall(BF.tryTalkDripMama)
+                end
+
+                -- 3) Farm cake land mobs toward 500 server kills
+                local mobs = BF.findCakeMobs()
+                if #mobs == 0 then
+                    BF.setFlyTarget(BF.CAKE_LAND_POS + Vector3.new(0, 12, 0), false)
+                    task.wait(0.25)
+                    return
+                end
+
+                local best, bestD = nil, math.huge
+                for _, t in ipairs(mobs) do
+                    local r = t:FindFirstChild("HumanoidRootPart")
+                    if r then
+                        local d = (hrp.Position - r.Position).Magnitude
+                        if d < bestD then bestD = d best = t end
+                    end
+                end
+                if not best then return end
+
+                local root = best:FindFirstChild("HumanoidRootPart")
+                local above = math.clamp(config.aboveHeight or 8, 4, 14)
+                BF.setFlyTarget(root.Position + Vector3.new(0, above, 0), false)
+
+                local speed = config.attackSpeed or 0.04
+                local hits = config.hitsPerCycle or 6
+                if config.clusterEnabled then
+                    local maxN = config.maxClusterSize or 12
+                    local radius = math.max(config.clusterRange or 150, 80)
+                    local cluster = BF.collectNearbyTargets(mobs, hrp, best, maxN, radius)
+                    if #cluster > 0 then
+                        if BF.clusterStackPos then
+                            BF.setFlyTarget(BF.clusterStackPos + Vector3.new(0, above, 0), false)
+                        end
+                        BF.attackTargets(cluster, speed, hits)
+                    else
+                        BF.attackEnemy(best, speed, hits)
+                    end
+                else
+                    BF.attackEnemy(best, speed, hits)
+                end
+            end)
+            if not ok then warn("[BF CakePrince]", err) end
+            task.wait(0.05)
+        end
+    end)
+end
+
+BF.stopCakePrince = function()
+    BF.cakePrinceRunning = false
+    config.autoCakePrince = false
+    if BF.cakePrinceTask then pcall(function() task.cancel(BF.cakePrinceTask) end) BF.cakePrinceTask = nil end
+    BF.safeDisableFly()
+    BF.notifyUser("Cake Prince", "Auto Cake Prince OFF", 2)
+end
+
+
+
+-- =============================================
+-- STATUS HELPERS (UI labels)
+-- =============================================
+BF.getBoneCount = function()
+    local rem = ReplicatedStorage:FindFirstChild("Remotes")
+    local comm = rem and rem:FindFirstChild("CommF_")
+
+    local function fromItem(item, depth)
+        depth = depth or 0
+        if depth > 4 then return nil end
+        if type(item) == "number" then return item end
+        if type(item) ~= "table" then return nil end
+        local name = string.lower(tostring(item.Name or item.name or item.Item or item.item or ""))
+        local c = item.Count or item.count or item.Amount or item.amount
+            or item.Value or item.value or item.Quantity or item.quantity
+            or item.Total or item.total or item.Bones or item.bones
+        if (name == "bones" or name == "bone" or name == "") and c ~= nil then
+            local n = tonumber(c)
+            if n then return n end
+        end
+        -- deep scan values (Bones Check sometimes returns nested table)
+        for k, v in pairs(item) do
+            local kl = string.lower(tostring(k))
+            if kl == "bones" or kl == "bone" or kl == "count" then
+                if type(v) == "number" then return v end
+            end
+            if type(v) == "table" then
+                local n = fromItem(v, depth + 1)
+                if n then return n end
+            end
+        end
+        return nil
+    end
+
+    if comm then
+        -- Hub: CommF_ "Bones","Check"
+        for _, args in ipairs({
+            {"Bones", "Check"},
+            {"Bones"},
+            {"CheckBones"},
+        }) do
+            local ok, n = pcall(function()
+                return comm:InvokeServer(unpack(args))
+            end)
+            if ok then
+                if type(n) == "number" then return n end
+                if type(n) == "string" then
+                    local num = tonumber((string.match(n, "(%d+)") or n))
+                    if num then return num end
+                end
+                if type(n) == "table" then
+                    local c = fromItem(n) or n.Count or n.Bones or n.bones
+                    if type(c) == "number" then return c end
+                end
+            end
+        end
+
+        -- Full inventory scan (array or map)
+        local ok2, inv = pcall(function()
+            return comm:InvokeServer("getInventory")
+        end)
+        if ok2 and type(inv) == "table" then
+            for key, item in pairs(inv) do
+                if type(key) == "string" and string.lower(key) == "bones" then
+                    if type(item) == "number" then return item end
+                    local c = fromItem(item)
+                    if c then return c end
+                end
+                local c = fromItem(item)
+                if c then return c end
+            end
+        end
+    end
+
+    -- LocalPlayer.Data / attributes
+    local data = LocalPlayer:FindFirstChild("Data")
+    if data then
+        for _, n in ipairs({"Bones", "Bone", "bones", "TotalBones"}) do
+            local v = data:FindFirstChild(n)
+            if v then
+                if type(v.Value) == "number" then return v.Value end
+                if typeof(v) == "NumberValue" or typeof(v) == "IntValue" then return v.Value end
+            end
+        end
+        local attr = data:GetAttribute("Bones")
+        if type(attr) == "number" then return attr end
+    end
+    local attr2 = LocalPlayer:GetAttribute("Bones")
+    if type(attr2) == "number" then return attr2 end
+
+    return 0
+end
+
+BF.getCakeEnemiesLeft = function()
+    local status = nil
+    if type(BF.cakePrinceSpawnerStatus) == "function" then
+        status = BF.cakePrinceSpawnerStatus()
+    end
+    if type(status) == "string" then
+        local n = string.match(status, "(%d+)")
+        if n then return tonumber(n) end
+        local low = string.lower(status)
+        if string.find(low, "portal", 1, true) or string.find(low, "spawn", 1, true) then
+            return 0
+        end
+    elseif type(status) == "number" then
+        return status
+    end
+    return nil
+end
+
+BF._statusLabels = BF._statusLabels or {}
+BF._statusRunning = false
+
+BF.updateStatusLabels = function()
+    local labs = BF._statusLabels
+    if not labs then return end
+
+    local function setStat(handle, value)
+        if not handle then return end
+        -- CyberUI Stat:Set(value, delta?)
+        pcall(function() handle:Set(tostring(value)) end)
+    end
+    local function setPara(handle, text)
+        if not handle then return end
+        -- CyberUI Paragraph:Set(content: string)  -- NOT a table
+        pcall(function() handle:Set(tostring(text)) end)
+    end
+
+    -- Level
+    setStat(labs.level, BF.getPlayerLevel())
+
+    -- Quest text
+    local qtext = "None"
+    pcall(function()
+        if BF.hasActiveQuest() then
+            local _, t = BF.getActiveQuestInfo()
+            qtext = (t and t ~= "" and t) or "(active)"
+        end
+    end)
+    setPara(labs.quest, qtext)
+
+    -- Enemy / island
+    local enemyName = "-"
+    pcall(function()
+        local level = BF.getPlayerLevel()
+        local island = (BF.resolveFarmIsland and BF.resolveFarmIsland(level)) or BF.getIslandForLevel(level)
+        if island then
+            local pats = island.EnemyPatterns or {}
+            enemyName = (#pats > 0 and table.concat(pats, ", ")) or island.Name or "-"
+            if island.Name and #pats > 0 then
+                enemyName = island.Name .. " → " .. table.concat(pats, ", ")
+            end
+        end
+    end)
+    setPara(labs.enemy, enemyName)
+
+    -- Cake enemies left
+    local left = BF.getCakeEnemiesLeft()
+    if left == nil then
+        setStat(labs.cakeLeft, "?")
+    elseif left <= 0 then
+        setStat(labs.cakeLeft, "0 (ready)")
+    else
+        setStat(labs.cakeLeft, left)
+    end
+
+    -- Bones
+    local bones = 0
+    pcall(function() bones = BF.getBoneCount() end)
+    setStat(labs.bones, bones)
+
+    -- Dev island
+    if labs.devIsland then
+        local isl = nil
+        pcall(function() isl = BF.resolveFarmIsland(BF.getPlayerLevel()) end)
+        local s = isl and (tostring(isl.Name) .. (config.devIslandLock and " [LOCKED]" or "")) or "-"
+        setPara(labs.devIsland, s)
+    end
+end
+
+BF.startStatusUpdater = function()
+    if BF._statusRunning then return end
+    BF._statusRunning = true
+    task.spawn(function()
+        while BF._statusRunning do
+            pcall(BF.updateStatusLabels)
+            task.wait(1.0)
+        end
+    end)
+end
 
 -- =============================================
 -- FPS BOOSTER + ISLAND FLY
@@ -4949,6 +6067,106 @@ BF.applyWhiteScreen = function(on)
     BF.notifyUser("FPS", BF._fpsWhite and "White screen ON" or "White screen OFF", 2)
 end
 
+-- =============================================
+-- ANTI AFK (4 Methoden parallel, getestet mit Real)
+-- =============================================
+BF.antiAfkEnabled = false
+BF._antiAfkConns = {}
+BF._antiAfkLoops = {}
+BF._antiAfkPulseCount = 0
+
+BF.startAntiAfk = function()
+    if BF.antiAfkEnabled then return end
+    BF.antiAfkEnabled = true
+    BF._antiAfkPulseCount = 0
+
+    -- Methode 1: Idled-Event abfangen (offizieller Roblox-Trigger)
+    pcall(function()
+        table.insert(BF._antiAfkConns, LocalPlayer.Idled:Connect(function()
+            pcall(function()
+                local vu = game:GetService("VirtualUser")
+                vu:CaptureController()
+                vu:ClickButton1(Vector2.new(0, 0))
+                vu:ClickButton2(Vector2.new(0, 0))
+            end)
+            print("[BF AntiAFK] Idled gefeuert -> Counter-Input")
+        end))
+    end)
+
+    -- Methode 2: Teleport-Puls alle 30s (CFrame + MoveTo)
+    table.insert(BF._antiAfkLoops, task.spawn(function()
+        while BF.antiAfkEnabled do
+            task.wait(30)
+            if not BF.antiAfkEnabled then break end
+            BF._antiAfkPulseCount = BF._antiAfkPulseCount + 1
+            local char = LocalPlayer.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if hrp then
+                pcall(function()
+                    local oldCF = hrp.CFrame
+                    hrp.CFrame = oldCF * CFrame.new(0, 1, 0)
+                    task.wait(0.05)
+                    hrp.CFrame = oldCF
+                end)
+                pcall(function()
+                    if hum then
+                        local oldPos = hrp.Position
+                        hum:MoveTo(oldPos + Vector3.new(0.5, 0, 0))
+                        task.wait(0.15)
+                        hum:MoveTo(oldPos)
+                    end
+                end)
+                print(string.format("[BF AntiAFK] Pulse #%d (CFrame+MoveTo)", BF._antiAfkPulseCount))
+            end
+        end
+    end))
+
+    -- Methode 3: VirtualInputManager Taste alle 45s
+    table.insert(BF._antiAfkLoops, task.spawn(function()
+        while BF.antiAfkEnabled do
+            task.wait(45)
+            if not BF.antiAfkEnabled then break end
+            pcall(function()
+                VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.LeftShift, false, game)
+                task.wait(0.05)
+                VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.LeftShift, false, game)
+            end)
+            print("[BF AntiAFK] Key-Event (LeftShift)")
+        end
+    end))
+
+    -- Methode 4: Humanoid Jump alle 60s
+    table.insert(BF._antiAfkLoops, task.spawn(function()
+        while BF.antiAfkEnabled do
+            task.wait(60)
+            if not BF.antiAfkEnabled then break end
+            pcall(function()
+                local char = LocalPlayer.Character
+                local hum = char and char:FindFirstChildOfClass("Humanoid")
+                if hum then hum.Jump = true end
+            end)
+            print("[BF AntiAFK] Jump-Event")
+        end
+    end))
+
+    BF.notifyUser("Anti-AFK", "Anti-AFK ON (4 Methoden)", 2)
+end
+
+BF.stopAntiAfk = function()
+    BF.antiAfkEnabled = false
+    for _, c in ipairs(BF._antiAfkConns) do
+        pcall(function() c:Disconnect() end)
+    end
+    BF._antiAfkConns = {}
+    for _, t in ipairs(BF._antiAfkLoops) do
+        pcall(function() task.cancel(t) end)
+    end
+    BF._antiAfkLoops = {}
+    BF.notifyUser("Anti-AFK", "Anti-AFK OFF", 2)
+end
+
+
 BF.getIslandTeleportList = function()
     local list = {}
     local seen = {}
@@ -5044,6 +6262,19 @@ if useVaxorin and window then
     local miscTab = window:CreateTab("Misc")
     local fpsSection = miscTab:CreateSection({Name = "Performance"})
     fpsSection:CreateToggle({
+        Name = "Anti-AFK",
+        CurrentValue = true, -- direkt an lassen
+        Flag = "Misc.AntiAfk",
+        Save = true,
+        Callback = function(v)
+            if v then 
+                BF.startAntiAfk() 
+            else 
+                BF.stopAntiAfk() 
+            end
+        end,
+    })
+    fpsSection:CreateToggle({
         Name = "FPS Booster",
         CurrentValue = false,
         Flag = "Misc.FPS",
@@ -5107,7 +6338,13 @@ if useVaxorin and window then
         Flag = "Raid.Enabled", Save = true,
         Callback = function(v)
             config.autoRaid = v
-            if v then BF.startAutoRaid() else BF.stopAutoRaid() end
+            pcall(function()
+                if v then
+                    if type(BF.startAutoRaid) == "function" then BF.startAutoRaid() end
+                else
+                    if type(BF.stopAutoRaid) == "function" then BF.stopAutoRaid() end
+                end
+            end)
         end,
     })
     raidSection:CreateDropdown({
@@ -5135,39 +6372,147 @@ if useVaxorin and window then
     local bossTab = window:CreateTab("Bosses")
 
     local mainSection = mainTab:CreateSection({Name = "Farm Controls"})
+    local currentSea = "Unknown"
+    pcall(function() currentSea = BF.getCurrentSea() end)
     mainSection:CreateToggle({
         Name = "Auto Farm",
         CurrentValue = false,
         Flag = "Farm.Enabled", Save = true,
         Callback = function(v)
-            if v then BF.startFarm() else BF.stopFarm() end
+            if v then
+                if type(BF.startFarm) == "function" then BF.startFarm() end
+            else
+                if type(BF.stopFarm) == "function" then BF.stopFarm() end
+            end
         end,
     })
+    -- Live status under Auto Farm (CyberUI: Stat:Set(value), Paragraph:Set(string))
+    BF._statusLabels = BF._statusLabels or {}
+    pcall(function()
+        BF._statusLabels.level = mainSection:CreateStat({ Label = "Level", Value = "..." })
+    end)
+    pcall(function()
+        BF._statusLabels.quest = mainSection:CreateParagraph({ Title = "Quest", Content = "..." })
+    end)
+    pcall(function()
+        BF._statusLabels.enemy = mainSection:CreateParagraph({ Title = "Enemy", Content = "..." })
+    end)
     mainSection:CreateToggle({
-        Name = "Auto Secrets (Sea1)",
-        CurrentValue = false,
-        Flag = "Farm.AutoSecrets", Save = true,
-        Callback = function(v)
-            config.autoSecrets = v
-            if v then BF.startAutoSecrets() else BF.stopAutoSecrets() end
-        end,
+        Name = "Accept Quest",
+        CurrentValue = config.acceptQuest ~= false,
+        Flag = "Farm.AcceptQuest", Save = true,
+        Callback = function(v) config.acceptQuest = v end,
     })
-
-    mainSection:CreateToggle({
-        Name = "Auto Sea Progress (1->2 / 2->3)",
-        CurrentValue = false,
-        Flag = "Farm.AutoSeaProgress", Save = true,
-        Callback = function(v)
-            config.autoSeaProgress = v
-            if v then BF.startSeaProgress() else BF.stopSeaProgress() end
-        end,
-    })
+    -- Sea-specific toggles
+    if currentSea == "Sea1" then
+        mainSection:CreateToggle({
+            Name = "Auto Secrets (Sea1)",
+            CurrentValue = false,
+            Flag = "Farm.AutoSecrets", Save = true,
+            Callback = function(v)
+                config.autoSecrets = v
+                pcall(function()
+                    if v then
+                        if type(BF.startAutoSecrets) == "function" then BF.startAutoSecrets() end
+                    else
+                        if type(BF.stopAutoSecrets) == "function" then BF.stopAutoSecrets() end
+                    end
+                end)
+            end,
+        })
+        mainSection:CreateToggle({
+            Name = "Auto Sea Progress (1->2)",
+            CurrentValue = false,
+            Flag = "Farm.AutoSeaProgress", Save = true,
+            Callback = function(v)
+                config.autoSeaProgress = v
+                pcall(function()
+                    if v then
+                        if type(BF.startSeaProgress) == "function" then BF.startSeaProgress() end
+                    else
+                        if type(BF.stopSeaProgress) == "function" then BF.stopSeaProgress() end
+                    end
+                end)
+            end,
+        })
+    elseif currentSea == "Sea2" then
+        mainSection:CreateToggle({
+            Name = "Auto Sea Progress (2->3)",
+            CurrentValue = false,
+            Flag = "Farm.AutoSeaProgress", Save = true,
+            Callback = function(v)
+                config.autoSeaProgress = v
+                pcall(function()
+                    if v then
+                        if type(BF.startSeaProgress) == "function" then BF.startSeaProgress() end
+                    else
+                        if type(BF.stopSeaProgress) == "function" then BF.stopSeaProgress() end
+                    end
+                end)
+            end,
+        })
+    end
     mainSection:CreateToggle({
         Name = "Boss Priority",
         CurrentValue = config.bossPriority,
         Flag = "Farm.BossPriority", Save = true,
         Callback = function(v) config.bossPriority = v end,
     })
+    if currentSea == "Sea3" then
+        mainSection:CreateToggle({
+            Name = "Auto Bones (Haunted)",
+            CurrentValue = false,
+            Flag = "Farm.AutoBones", Save = true,
+            Callback = function(v)
+                config.autoBones = v
+                pcall(function()
+                    if v then
+                        if type(BF.startBonesFarm) == "function" then BF.startBonesFarm() end
+                    else
+                        if type(BF.stopBonesFarm) == "function" then BF.stopBonesFarm() end
+                    end
+                end)
+            end,
+        })
+        pcall(function()
+            BF._statusLabels = BF._statusLabels or {}
+            BF._statusLabels.bones = mainSection:CreateStat({ Label = "Bones", Value = "..." })
+        end)
+        mainSection:CreateToggle({
+            Name = "Auto Buy Bones (Random)",
+            CurrentValue = false,
+            Flag = "Farm.AutoBonesBuy", Save = true,
+            Callback = function(v)
+                config.autoBonesBuy = v
+                pcall(function()
+                    if v then
+                        if type(BF.startBonesBuy) == "function" then BF.startBonesBuy() end
+                    else
+                        if type(BF.stopBonesBuy) == "function" then BF.stopBonesBuy() end
+                    end
+                end)
+            end,
+        })
+        mainSection:CreateToggle({
+            Name = "Auto Cake Prince",
+            CurrentValue = false,
+            Flag = "Farm.AutoCakePrince", Save = true,
+            Callback = function(v)
+                config.autoCakePrince = v
+                pcall(function()
+                    if v then
+                        if type(BF.startCakePrince) == "function" then BF.startCakePrince() end
+                    else
+                        if type(BF.stopCakePrince) == "function" then BF.stopCakePrince() end
+                    end
+                end)
+            end,
+        })
+        pcall(function()
+            BF._statusLabels = BF._statusLabels or {}
+            BF._statusLabels.cakeLeft = mainSection:CreateStat({ Label = "Enemies Left", Value = "..." })
+        end)
+    end
     mainSection:CreateToggle({
         Name = "Quest Stack (Glitch)",
         CurrentValue = config.questStack,
@@ -5268,7 +6613,13 @@ if useVaxorin and window then
         Flag = "ESP.Enemy",
         Save = true,
         Callback = function(v)
-            if v then BF.startEnemyEsp() else BF.stopEnemyEsp() end
+            pcall(function()
+                if v then
+                    if type(BF.startEnemyEsp) == "function" then BF.startEnemyEsp() end
+                else
+                    if type(BF.stopEnemyEsp) == "function" then BF.stopEnemyEsp(true) end
+                end
+            end)
         end,
     })
     enemyEspSection:CreateToggle({
@@ -5443,6 +6794,151 @@ if useVaxorin and window then
         end,
     })
 
+    -- ========== DEVELOPER ==========
+    local devTab = window:CreateTab("Developer")
+    local devSection = devTab:CreateSection({Name = "Quest / Island"})
+    pcall(function()
+        BF._statusLabels = BF._statusLabels or {}
+        BF._statusLabels.devIsland = devSection:CreateParagraph({ Title = "Island", Content = "..." })
+    end)
+    devSection:CreateButton({
+        Name = "Accept Correct Quest",
+        Callback = function()
+            pcall(BF.devAcceptQuest)
+        end,
+    })
+    devSection:CreateButton({
+        Name = "Resume Normal Quest Farming",
+        Callback = function()
+            -- Return to level-based farming; this does not grant game progression.
+            config.devIslandLock = false
+            config.devIslandIndex = nil
+            config.acceptQuest = true
+            config.bossPriority = false
+            pcall(BF.abandonQuest)
+            pcall(BF.invalidateQuestCache)
+            local level = BF.getPlayerLevel()
+            local isl = BF.getIslandForLevel(level)
+            if isl then
+                pcall(function() BF.ensureCorrectQuest(isl, "normal") end)
+                BF.notifyUser("Dev", "Normal quest farming resumed: " .. tostring(isl.Name), 3)
+            else
+                BF.notifyUser("Dev", "Normal farming enabled; no level island found", 3)
+            end
+        end,
+    })
+    devSection:CreateButton({
+        Name = "Skip / Abandon Quest",
+        Callback = function()
+            pcall(BF.devSkipQuest)
+        end,
+    })
+    devSection:CreateButton({
+        Name = "Previous Island",
+        Callback = function()
+            pcall(function() BF.devShiftIsland(-1) end)
+        end,
+    })
+    devSection:CreateButton({
+        Name = "Next Island",
+        Callback = function()
+            pcall(function() BF.devShiftIsland(1) end)
+        end,
+    })
+    devSection:CreateToggle({
+        Name = "Lock Island (ignore level)",
+        CurrentValue = false,
+        Flag = "Dev.IslandLock", Save = false,
+        Callback = function(v)
+            config.devIslandLock = v
+            if v and not config.devIslandIndex then
+                pcall(function() BF.devShiftIsland(0) end)
+            end
+            if not v then
+                config.devIslandIndex = nil
+                BF.notifyUser("Dev", "Island lock OFF", 2)
+            end
+        end,
+    })
+    devSection:CreateButton({
+        Name = "Fly to Current Island",
+        Callback = function()
+            local isl = BF.resolveFarmIsland(BF.getPlayerLevel())
+            if isl and isl.Pos then
+                pcall(BF.enableFly)
+                BF.setFlyTarget(isl.Pos + Vector3.new(0, 12, 0), false)
+                BF.notifyUser("Dev", "Flying to " .. tostring(isl.Name), 2)
+            end
+        end,
+    })
+    devSection:CreateButton({
+        Name = "Teleport to Submerged (Lv 2600+)",
+        Callback = function()
+            if BF.getPlayerLevel() < 2600 then
+                BF.notifyUser("Dev", "Need Lv 2600+", 3)
+                return
+            end
+            local sub = nil
+            for _, isl in ipairs(islands) do
+                if isl.Name:lower():find("submerged 1", 1, true) then sub = isl break end
+            end
+            if sub then
+                BF.teleportCharacterTo(sub.Pos)
+                BF.notifyUser("Dev", "Teleported to Submerged 1", 3)
+            end
+        end,
+    })
+    local devCombat = devTab:CreateSection({Name = "Combat / ESP"})
+    devCombat:CreateButton({
+        Name = "Restart Enemy ESP",
+        Callback = function()
+            config.enemyEspEnabled = true
+            pcall(function() BF.stopEnemyEsp(true) end)
+            pcall(BF.startEnemyEsp)
+        end,
+    })
+    devCombat:CreateButton({
+        Name = "Equip + Buso Now",
+        Callback = function()
+            pcall(BF.ensureCombatReady)
+        end,
+    })
+    devCombat:CreateButton({
+        Name = "Disable Fly / Land",
+        Callback = function()
+            pcall(BF.disableFly)
+        end,
+    })
+    local devDebug = devTab:CreateSection({Name = "Debug"})
+    devDebug:CreateButton({
+        Name = "Print Bones Debug (F9)",
+        Callback = function()
+            pcall(BF.devPrintBones)
+            BF.notifyUser("Dev", "Bones dump in F9 console", 2)
+        end,
+    })
+    devDebug:CreateButton({
+        Name = "Print Level / Sea / Quest",
+        Callback = function()
+            local _, qt = BF.getActiveQuestInfo()
+            print("[BF] Level", BF.getPlayerLevel(), "Sea", BF.getCurrentSea(), "Quest", qt)
+            local isl = BF.resolveFarmIsland(BF.getPlayerLevel())
+            print("[BF] Island", isl and isl.Name, isl and isl.Pos)
+            BF.notifyUser("Dev", "Printed to F9", 2)
+        end,
+    })
+    devDebug:CreateButton({
+        Name = "Force Ensure Correct Quest",
+        Callback = function()
+            local isl = BF.resolveFarmIsland(BF.getPlayerLevel())
+            if isl then
+                pcall(BF.abandonQuest)
+                task.wait(0.3)
+                pcall(function() BF.ensureCorrectQuest(isl, "normal") end)
+            end
+        end,
+    })
+
     local fruitSection = fruitTab:CreateSection({Name = "Fruit Notifier"})
     fruitSection:CreateToggle({
         Name = "Auto Random Fruit (Gacha)",
@@ -5495,6 +6991,7 @@ if useVaxorin and window then
     })
 
     window:SetWatermarkEnabled(true)
+    pcall(BF.startStatusUpdater)
     if config.bossTimersEnabled then
         pcall(BF.startBossTimers)
     end
