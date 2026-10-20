@@ -27,7 +27,7 @@ export type ChartOptions = {
 	Height: number?,
 	Max: number?,
 	Suffix: string?,
-	AutoScale: boolean?, -- if true, max grows with peaks (can make older bars jump)
+	AutoScale: boolean?,
 }
 
 function Chart.new(section: any, data: ChartOptions?): any
@@ -50,7 +50,7 @@ function Chart.new(section: any, data: ChartOptions?): any
 		Parent = section.Inner,
 	})
 
-	local label = Helpers.CreateLabel({
+	Helpers.CreateLabel({
 		Name = "Label",
 		Size = UDim2.new(1, 0, 0, 12),
 		Text = tostring(data.Label or data.Name or "Chart"),
@@ -73,16 +73,15 @@ function Chart.new(section: any, data: ChartOptions?): any
 		Parent = root,
 	})
 
-	-- Absolute bar strip (no UIListLayout — scale+padding was clipping the right side)
 	local barsHold = Helpers.CreateFrame({
 		Name = "Bars",
 		Size = UDim2.new(1, 0, 0, barAreaH),
 		Position = UDim2.fromOffset(0, 42),
 		BackgroundTransparency = 1,
-		ClipsDescendants = false,
 		Parent = root,
 	})
 
+	-- history[1] = oldest (LEFT), history[barCount] = newest (RIGHT)
 	local history = table.create(barCount, 0)
 	local bars = table.create(barCount)
 
@@ -93,8 +92,6 @@ function Chart.new(section: any, data: ChartOptions?): any
 		bar.BackgroundColor3 = color
 		bar.BackgroundTransparency = 0.55
 		bar.AnchorPoint = Vector2.new(0, 1)
-		bar.Position = UDim2.new((i - 1) / barCount, gap * 0.5, 1, 0)
-		bar.Size = UDim2.new(1 / barCount, -gap, 0, 3)
 		bar.Parent = barsHold
 		Helpers.Corner(bar, 2)
 		bars[i] = bar
@@ -111,15 +108,53 @@ function Chart.new(section: any, data: ChartOptions?): any
 		_AutoScale = data.AutoScale == true,
 		_Gap = gap,
 		_BarAreaH = barAreaH,
-		_Filled = 0, -- progressive fill count from the left
-		_Scrolling = false,
+		_Seeded = false,
 		Instance = root,
-		Label = label,
+		Label = root:FindFirstChild("Label"),
 		ValueLabel = valueLbl,
 		BarsHold = barsHold,
 	}, Chart)
 
+	local function relayout()
+		self:_layoutBars()
+		self:_paint()
+	end
+
+	barsHold:GetPropertyChangedSignal("AbsoluteSize"):Connect(relayout)
+	task.defer(relayout)
+
 	return self
+end
+
+function Chart:_layoutBars()
+	local width = self.BarsHold.AbsoluteSize.X
+	local n = self._BarCount
+	local gap = self._Gap
+	if width < 1 then
+		-- fallback to scale until AbsoluteSize is known
+		for i, bar in self._Bars do
+			bar.Position = UDim2.new((i - 1) / n, 0, 1, 0)
+			bar.Size = UDim2.new(1 / n, -gap, 0, 3)
+		end
+		return
+	end
+
+	local totalGap = gap * (n - 1)
+	local barW = math.max(1, math.floor((width - totalGap) / n))
+	-- distribute leftover pixels so the last bar touches the right edge
+	local used = barW * n + totalGap
+	local leftover = math.max(0, math.floor(width - used))
+
+	local x = 0
+	for i, bar in self._Bars do
+		local extra = if i > (n - leftover) then 1 else 0
+		local w = barW + extra
+		bar.Position = UDim2.fromOffset(x, 0)
+		bar.AnchorPoint = Vector2.new(0, 1)
+		bar.Position = UDim2.fromOffset(x, self._BarAreaH)
+		bar.Size = UDim2.fromOffset(w, math.max(bar.Size.Y.Offset, 3))
+		x += w + gap
+	end
 end
 
 function Chart:_formatValue(value: any): string
@@ -141,9 +176,6 @@ function Chart:_paint()
 		end
 	end
 	maxV = math.max(maxV, 1)
-
-	local n = self._BarCount
-	local gap = self._Gap
 	local areaH = self._BarAreaH
 
 	for i, bar in self._Bars do
@@ -152,11 +184,14 @@ function Chart:_paint()
 		local ratio = math.clamp(magnitude / maxV, 0, 1)
 		local h = if magnitude <= 0 then 2 else math.clamp(math.floor(ratio * areaH + 0.5), 3, areaH)
 
-		-- Full-width strip: each bar owns 1/n of the row; gap via offset
-		bar.Position = UDim2.new((i - 1) / n, gap * 0.5, 1, 0)
-		bar.Size = UDim2.new(1 / n, -gap, 0, h)
+		local size = bar.Size
+		bar.Size = UDim2.fromOffset(size.X.Offset, h)
+		-- if still in scale fallback mode
+		if size.X.Scale > 0 then
+			bar.Size = UDim2.new(size.X.Scale, size.X.Offset, 0, h)
+		end
 		bar.BackgroundColor3 = self._Color
-		bar.BackgroundTransparency = 0.1 + (1 - ratio) * 0.45
+		bar.BackgroundTransparency = 0.08 + (1 - ratio) * 0.5
 	end
 end
 
@@ -177,16 +212,16 @@ function Chart:Push(value: number)
 		n = 0
 	end
 
-	if not self._Scrolling then
-		-- Fill left → right first so the strip is complete before it scrolls
-		self._Filled = math.min(self._Filled + 1, self._BarCount)
-		self._History[self._Filled] = n
-		if self._Filled >= self._BarCount then
-			self._Scrolling = true
+	if not self._Seeded then
+		-- fill entire strip so newest is already on the RIGHT edge
+		for i = 1, self._BarCount do
+			self._History[i] = n
 		end
+		self._Seeded = true
 	else
+		-- scroll LEFT ← oldest drops, newest enters RIGHT
 		table.remove(self._History, 1)
-		table.insert(self._History, n)
+		self._History[self._BarCount] = n
 	end
 
 	self.ValueLabel.Text = self:_formatValue(n)
@@ -201,7 +236,9 @@ end
 
 function Chart:RefreshTheme()
 	local theme = self._Section.Tab.Window.Library.Theme
-	self.Label.TextColor3 = theme.TextMuted
+	if self.Label then
+		self.Label.TextColor3 = theme.TextMuted
+	end
 	if not self._Data.Color then
 		self._Color = theme.Accent
 		self.ValueLabel.TextColor3 = theme.Accent
