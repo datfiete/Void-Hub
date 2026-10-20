@@ -3462,7 +3462,7 @@ function Window:_createHomeTab()
 	local fpsChart = perfSec:CreateChart({
 		Label = "FPS",
 		Bars = 20,
-		Max = 60,
+		Max = 150,
 		Color = Color3.fromRGB(120, 255, 160),
 	})
 	local pingChart = perfSec:CreateChart({
