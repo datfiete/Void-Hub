@@ -178,6 +178,7 @@ local config = {
     bossPriority = true,
     autoEquip = true,
     preferredWeapon = "Melee",
+    selectedFightingStyle = "Dark Step",
     questStack = false,
     stackCount = 3,
     fruitNotifier = true,        -- fruit notifier toggle
@@ -198,6 +199,7 @@ local config = {
     autoRandomFruit = false, -- Zioles / Gacha random fruit (2h CD, Lv50+)
     autoBones = false,       -- Haunted Castle bone farm
     autoBonesBuy = false,    -- CommF_ Bones Buy (Random Surprise)
+    autoBuyAbilities = false,-- CommF_ Auto Buy Haki/Geppo/Soru/Ken
     autoCakePrince = false,  -- Cake Land 500 kills + drip_mama + kill Cake Prince
     acceptQuest = true,     -- auto accept island quest while farming
     devIslandLock = false,
@@ -412,9 +414,8 @@ BF._hitTick = 0
 BF.fireCombatHit = function(targets)
     if not targets or #targets == 0 then return false end
         BF._hitTick = (BF._hitTick or 0) + 1
-    if BF._hitTick % 2 == 1 then
-        targets = BF.expandTargetsInHitRange(targets, 70)
-    end
+    -- Only hit the explicitly selected targets. Expanding by matching name can
+    -- include unrelated enemies that are not part of the active quest.
     local primary, hits = BF.buildBladeHits(targets)
     if not primary or #hits == 0 then return false end
 
@@ -1149,6 +1150,18 @@ BF.autoEquipWeapon = function()
     local currentTool = character:FindFirstChildOfClass("Tool")
     local currentType = currentTool and currentTool:GetAttribute("WeaponType")
     local preferred = config.preferredWeapon
+
+    -- If preferred is Melee and user has a selected fighting style, keep that style equipped
+    if preferred == "Melee" and config.selectedFightingStyle and type(BF.findFightingStyleTool) == "function" then
+        local tool, isEquipped = BF.findFightingStyleTool(config.selectedFightingStyle)
+        if tool then
+            if not isEquipped then
+                humanoid:EquipTool(tool)
+            end
+            return
+        end
+    end
+
     if preferred == "Any" and currentType then return end
     if preferred ~= "Any" and currentType == preferred then return end
 
@@ -1156,11 +1169,23 @@ BF.autoEquipWeapon = function()
     if not backpack then return end
     for _, tool in ipairs(backpack:GetChildren()) do
         if tool:IsA("Tool") then
-            local wType = tool:GetAttribute("WeaponType")
+            local wType = tool:GetAttribute("WeaponType") or (tool:FindFirstChild("WeaponType") and tool.WeaponType.Value)
+            if not wType and tool:FindFirstChild("ToolTip") and tool.ToolTip == "Melee" then
+                wType = "Melee"
+            end
             if wType then
                 if preferred == "Any" or wType == preferred then
                     humanoid:EquipTool(tool)
                     return
+                end
+            elseif preferred == "Melee" and BF.styleAliases then
+                for _, aliasList in pairs(BF.styleAliases) do
+                    for _, alias in ipairs(aliasList) do
+                        if string.lower(tool.Name) == string.lower(alias) then
+                            humanoid:EquipTool(tool)
+                            return
+                        end
+                    end
                 end
             end
         end
@@ -1627,6 +1652,27 @@ BF.getPlayerLevel = function()
     return 0
 end
 
+BF.getPlayerCurrency = function(currencyName)
+    local aliases = {
+        Beli = {"Beli", "Money"},
+        Fragments = {"Fragments", "Fragment"},
+    }
+    local names = aliases[currencyName] or {currencyName}
+    for _, containerName in ipairs({"leaderstats", "Data"}) do
+        local container = LocalPlayer:FindFirstChild(containerName)
+        if container then
+            for _, valueName in ipairs(names) do
+                local value = container:FindFirstChild(valueName)
+                if value and (value:IsA("IntValue") or value:IsA("NumberValue")) then
+                    return tonumber(value.Value), value
+                end
+            end
+        end
+    end
+    local attribute = LocalPlayer:GetAttribute(currencyName)
+    return tonumber(attribute), nil
+end
+
 BF.getAvailableStatPoints = function()
     local data = LocalPlayer:FindFirstChild("Data")
     if data then
@@ -1785,11 +1831,6 @@ BF.ensureCorrectQuest = function(island, questType)
     local questArgs = BF.getQuestArgs and BF.getQuestArgs(island, questType)
     if not questArgs then return false end
 
-    -- Rate limit
-    if os.clock() - (BF._lastQuestFixAt or 0) < 2.5 then
-        return BF.questMatchesIsland(island, questType)
-    end
-
     if BF.hasActiveQuest() then
         if BF.questMatchesIsland(island, questType) then
             return true
@@ -1798,22 +1839,41 @@ BF.ensureCorrectQuest = function(island, questType)
         BF._lastQuestFixAt = os.clock()
         pcall(BF.abandonQuest)
         BF.invalidateQuestCache()
-        task.wait(0.45)
+        local abandonDeadline = os.clock() + 2
+        repeat
+            task.wait(0.1)
+            BF.invalidateQuestCache()
+        until not BF.hasActiveQuest() or os.clock() >= abandonDeadline
+        if BF.hasActiveQuest() then return false end
     end
 
+    if os.clock() - (BF._lastQuestFixAt or 0) < 1.5 then
+        return false
+    end
     BF._lastQuestFixAt = os.clock()
     local ok = BF.acceptQuest(questArgs)
     BF.invalidateQuestCache()
-    task.wait(0.35)
-    return ok
+    local acceptDeadline = os.clock() + 2
+    repeat
+        task.wait(0.1)
+        BF.invalidateQuestCache()
+        if BF.questMatchesIsland(island, questType) then return true end
+    until os.clock() >= acceptDeadline
+    return false
 end
 
 
 BF.resolveFarmPatterns = function(island, questType)
     local patternInfo = BF.getPatterns(island, questType or "normal")
+    -- An active quest is the authority for normal farming. Without a verified
+    -- matching quest, return no targets instead of farming island/random mobs.
+    if not island or not BF.hasActiveQuest()
+        or not BF.questMatchesIsland(island, questType or "normal") then
+        return { patterns = {}, includeBossAttr = false }
+    end
     -- Prefer patterns from the active island that appear in the quest text.
     -- Never fall back to short tokens like "pirate" (breaks "Candy Pirate").
-    if island and BF.hasActiveQuest() then
+    if BF.hasActiveQuest() then
         local _, qtext = BF.getActiveQuestInfo()
         qtext = string.lower(tostring(qtext or ""))
         if qtext ~= "" then
@@ -1838,8 +1898,8 @@ BF.resolveFarmPatterns = function(island, questType)
             end
         end
     end
-    -- No quest / text doesn't mention island patterns -> farm island enemies
-    return patternInfo or { patterns = (island and island.EnemyPatterns) or {}, includeBossAttr = false }
+    -- The quest is valid but its GUI text did not identify a target pattern.
+    return { patterns = {}, includeBossAttr = false }
 end
 
 
@@ -2131,7 +2191,7 @@ BF.attackTargets = function(targets, speed, hits)
     if delay < 0.025 then delay = 0.025 end
     if delay > 0.12 then delay = 0.12 end
     local n = math.max(1, math.floor(tonumber(hits) or 1))
-    if n > 10 then n = 10 end
+    if n > 50 then n = 50 end
 
     for _ = 1, n do
         local alive = {}
@@ -3260,7 +3320,6 @@ BF.startSeaProgress = function()
                 local stageLabel = tostring(BF.sea2Stage)
                 if jeremyAlive then stageLabel = stageLabel .. " | Jeremy ALIVE" end
                 if donAlive then stageLabel = stageLabel .. " | Don ALIVE" end
-                BF.notifyUser("Sea Stage", stageLabel .. " | " .. map .. " lv" .. tostring(level), 2)
 
                 -- ========== SEA1 -> SEA2 ==========
                 if level >= 700 and (sea == "" or sea == "sea1" or string.find(sea, "1"))
@@ -3709,6 +3768,59 @@ BF.raidKillLoop = function()
     return true
 end
 
+local function hasMicrochip()
+    local bp = LocalPlayer:FindFirstChild("Backpack")
+    local ch = LocalPlayer.Character
+    for _, name in ipairs({"Special Microchip", "Microchip"}) do
+        if (bp and bp:FindFirstChild(name)) or (ch and ch:FindFirstChild(name)) then
+            return true
+        end
+    end
+    return false
+end
+
+local function selectRaidType(raidName)
+    local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+    local commF = remotes and remotes:FindFirstChild("CommF_")
+    if not commF then return end
+    pcall(function()
+        commF:InvokeServer("RaidsNpc", "Select", tostring(raidName or "Flame"))
+    end)
+end
+
+local function buyRaidChip()
+    local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+    local commF = remotes and remotes:FindFirstChild("CommF_")
+    if not commF then return false end
+    selectRaidType(config.raidType or "Flame")
+    local ok = pcall(function()
+        commF:InvokeServer("RaidsNpc", "Buy")
+    end)
+    return ok
+end
+
+local function goToRaidLobby()
+    local sea = 1
+    pcall(function() sea = tonumber(BF.getCurrentSea()) or 1 end)
+    local targetPos = (sea == 3) and RAID_LAB_SEA3 or RAID_LAB_SEA2
+    if targetPos then
+        pcall(function()
+            if not BF.flying then BF.enableFly() end
+            BF.setFlyTarget(targetPos + Vector3.new(0, 10, 0), false)
+        end)
+    end
+end
+
+local function tryStartRaid()
+    local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+    local commF = remotes and remotes:FindFirstChild("CommF_")
+    if commF then
+        pcall(function()
+            commF:InvokeServer("RaidsNpc", "Start")
+        end)
+    end
+end
+
 BF.startAutoRaid = function()
     if BF.raidRunning then return end
     BF.raidRunning = true
@@ -4037,18 +4149,40 @@ BF.startFarm = function()
 
             if state == "QUEST" then
                 if config.acceptQuest == false then
-                    state = "COMBAT"
+                    -- With auto quest disabled, wait for the user to accept one.
+                    task.wait(0.2)
                     continue
                 end
 
-                                if BF.hasActiveQuest() then
+                local desiredType = "normal"
+                if _prioBoss and _prioIsland then
+                    island = _prioIsland
+                    desiredType = "boss"
+                elseif island and island.isBoss and BF.bossExists(island) then
+                    desiredType = "boss"
+                end
+                currentQuestType = desiredType
+
+                if BF.hasActiveQuest() and BF.questMatchesIsland(island, desiredType) then
                     questAccepted = true
                     state = "COMBAT"
                     continue
+                elseif BF.hasActiveQuest() then
+                    pcall(BF.abandonQuest)
+                    BF.invalidateQuestCache()
+                    local abandonDeadline = os.clock() + 2
+                    repeat
+                        task.wait(0.1)
+                        BF.invalidateQuestCache()
+                    until not BF.hasActiveQuest() or os.clock() >= abandonDeadline
+                    if BF.hasActiveQuest() then
+                        task.wait(0.2)
+                        continue
+                    end
                 end
                 if not _lastQuestAcceptAt then _lastQuestAcceptAt = 0 end
-                if (os.clock() - _lastQuestAcceptAt) < 6 then
-                                        state = "COMBAT"
+                if (os.clock() - _lastQuestAcceptAt) < 1.5 then
+                    task.wait(0.2)
                     continue
                 end
 
@@ -4061,13 +4195,6 @@ BF.startFarm = function()
                     end
                 end)
                 -- Do NOT disable Enemy ESP preference while accepting quest
-                local desiredType = "normal"
-                if _prioBoss and _prioIsland then
-                    island = _prioIsland
-                    desiredType = "boss"
-                elseif island and island.isBoss and BF.bossExists(island) then
-                    desiredType = "boss"
-                end
                 local questArgs = BF.getQuestArgs(island, desiredType)
                 -- Boss with no BossQuest: go fight immediately
                 if desiredType == "boss" and not questArgs then
@@ -4080,13 +4207,22 @@ BF.startFarm = function()
 
                 _lastQuestAcceptAt = os.clock()
                 if questArgs then
+                    local questOk = false
                     pcall(function()
-                        BF.ensureCorrectQuest(island, desiredType)
+                        questOk = BF.ensureCorrectQuest(island, desiredType)
                     end)
                     currentQuestType = desiredType
-                    questAccepted = true
+                    questAccepted = questOk == true
                     BF.invalidateQuestCache()
-                    task.wait(0.35)
+                    if not questAccepted then
+                        state = "QUEST"
+                        task.wait(0.25)
+                        continue
+                    end
+                else
+                    state = "QUEST"
+                    task.wait(0.5)
+                    continue
                 end
                 pcall(BF.restartEnemyEspIfNeeded)
                 -- After taking quest, go to island first if we are far away
@@ -4101,15 +4237,14 @@ BF.startFarm = function()
             if state == "COMBAT" then
                 if not BF.flying then pcall(BF.enableFly) end
                 -- Wrong quest stuck? Fix while farming (e.g. after level-up)
-                if config.acceptQuest ~= false and island and not isBossTarget then
-                    if BF.hasActiveQuest() and not BF.questMatchesIsland(island, currentQuestType or "normal") then
-                        pcall(function()
-                            BF.ensureCorrectQuest(island, currentQuestType or "normal")
-                        end)
-                    elseif not BF.hasActiveQuest() then
-                        pcall(function()
-                            BF.ensureCorrectQuest(island, currentQuestType or "normal")
-                        end)
+                if not isBossTarget then
+                    if not island or not BF.hasActiveQuest()
+                        or not BF.questMatchesIsland(island, currentQuestType or "normal") then
+                        lockedEnemy = nil
+                        BF.clusterStackPos = nil
+                        state = "QUEST"
+                        task.wait(0.1)
+                        continue
                     end
                 end
                                 -- updated yet.  The quest remote can succeed before the GUI becomes
@@ -4160,33 +4295,6 @@ BF.startFarm = function()
                         patternInfo = { patterns = (island and island.EnemyPatterns) or {}, includeBossAttr = false }
                     end
                     local allTargets = BF.getMatchingEnemies(island, patternInfo)
-                    -- Fallback: ignore quest text, use island patterns raw
-                    if #allTargets == 0 and island and island.EnemyPatterns then
-                        allTargets = BF.getMatchingEnemies(island, {
-                            patterns = island.EnemyPatterns,
-                            includeBossAttr = false,
-                        })
-                    end
-                    -- Last resort: any non-boss enemy near island pos
-                    if #allTargets == 0 and island and island.Pos then
-                        local near = {}
-                        local folder = Workspace:FindFirstChild("Enemies")
-                        if folder then
-                            for _, en in ipairs(folder:GetChildren()) do
-                                if en:IsA("Model") then
-                                    local hum = en:FindFirstChildOfClass("Humanoid")
-                                    local root = en:FindFirstChild("HumanoidRootPart")
-                                    local nm = string.lower(en.Name)
-                                    if hum and root and hum.Health > 0
-                                        and not string.find(nm, "[boss]", 1, true)
-                                        and (root.Position - island.Pos).Magnitude < 350 then
-                                        table.insert(near, en)
-                                    end
-                                end
-                            end
-                        end
-                        allTargets = near
-                    end
                     if #allTargets == 0 then
                         lockedEnemy = nil
                         -- Enemies not streamed yet: fly to island, don't stand still
@@ -4772,328 +4880,6 @@ BF.stopAutoSecrets = function()
 end
 
 -- =============================================
-BF.raidRunning = false
-BF.raidTask = nil
-BF.lastRaidChipAt = 0
-
-local RAID_TYPES = {
-    "Flame", "Ice", "Quake", "Light", "Dark", "Magma", "Sand",
-    "Buddha", "Spider", "Rumble", "Phoenix", "Dough",
-}
-
--- Lab / lobby approximate positions
-local RAID_LAB_SEA2 = Vector3.new(-6520, 308, -4812) -- chip insert pad (user)
-local RAID_LAB_SEA3 = Vector3.new(-5550, 314, -2980) -- Castle on the Sea (approx)
-
--- ========== RAID CORE (hub-style Locations + death/end handling) ==========
-BF.getRaidLocations = function()
-    local wo = workspace:FindFirstChild("_WorldOrigin")
-    return wo and wo:FindFirstChild("Locations")
-end
-
-BF.raidTimerVisible = function()
-    local ok, vis = pcall(function()
-        local main = LocalPlayer:FindFirstChild("PlayerGui") and LocalPlayer.PlayerGui:FindFirstChild("Main")
-        if not main then return false end
-        local timer = main:FindFirstChild("Timer")
-        if timer and timer:IsA("GuiObject") then
-            return timer.Visible == true
-        end
-        return false
-    end)
-    return ok and vis == true
-end
-
-BF.isPlayerDead = function()
-    local char = LocalPlayer.Character
-    if not char then return true end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hum or hum.Health <= 0 then return true end
-    return false
-end
-
-BF.isInRaid = function()
-    -- Timer HUD OR any Island part under Locations
-    if BF.raidTimerVisible() then return true end
-    local locs = BF.getRaidLocations()
-    if not locs then return false end
-    for _, ch in ipairs(locs:GetChildren()) do
-        local n = string.lower(ch.Name)
-        if string.find(n, "island") then
-            return true
-        end
-    end
-    return false
-end
-
-BF.getPartCFrame = function(obj)
-    if not obj then return nil end
-    local cf = nil
-    pcall(function()
-        if obj:IsA("BasePart") then
-            cf = obj.CFrame
-        elseif obj:IsA("Model") then
-            cf = obj:GetPivot()
-        else
-            local p = obj:FindFirstChildWhichIsA("BasePart", true)
-            if p then cf = p.CFrame end
-        end
-    end)
-    return cf
-end
-
--- Prefer highest Island N; also accept "Island1" / loose names
-BF.getActiveRaidIsland = function()
-    local locs = BF.getRaidLocations()
-    if not locs then return nil, 0, nil end
-
-    for i = 5, 1, -1 do
-        local island = locs:FindFirstChild("Island " .. i) or locs:FindFirstChild("Island" .. i)
-        if island then
-            local cf = BF.getPartCFrame(island)
-            if cf then return island, i, cf end
-        end
-    end
-
-    -- fallback: any child with Island in name, pick furthest from player or first
-    local best, bestI, bestCf, bestScore = nil, 0, nil, -1
-    for _, ch in ipairs(locs:GetChildren()) do
-        local n = string.lower(ch.Name)
-        if string.find(n, "island") then
-            local cf = BF.getPartCFrame(ch)
-            if cf then
-                local num = tonumber(string.match(ch.Name, "%d+")) or 1
-                if num >= bestScore then
-                    best, bestI, bestCf, bestScore = ch, num, cf, num
-                end
-            end
-        end
-    end
-    return best, bestI, bestCf
-end
-
-BF.getRaidEnemiesNear = function(pos, radius)
-    local list = {}
-    local en = workspace:FindFirstChild("Enemies")
-    if not en then return list end
-    radius = radius or 250
-    for _, m in ipairs(en:GetChildren()) do
-        local h = m:FindFirstChildOfClass("Humanoid")
-        local r = m:FindFirstChild("HumanoidRootPart")
-        if h and r and h.Health > 0 then
-            if not pos or (r.Position - pos).Magnitude <= radius then
-                table.insert(list, m)
-            end
-        end
-    end
-    return list
-end
-
-BF.getAllRaidEnemies = function()
-    return BF.getRaidEnemiesNear(nil, 1e9)
-end
-
-BF.raidOrbitAngle = 0
-BF.raidHoverY = 22
-BF.raidDodgeAmp = 35 -- side-to-side dodge distance (not stuck mid-island)
-BF.currentRaidIslandIndex = 0
-BF.raidEndedAt = 0
-local RAID_REENTRY_COOLDOWN = 8
-
--- Stay over the island, but STRAFE left/right (real dodge), not tiny circle in the center
-BF.raidFlyToPos = function(pos)
-    if not pos then return end
-    pcall(function()
-        BF._bossFlyUnlock = true
-        if not BF.flying then BF.enableFly() end
-
-        -- smooth left-right + slight forward/back (figure-8-ish)
-        BF.raidOrbitAngle = BF.raidOrbitAngle + 0.07
-        local ox = math.sin(BF.raidOrbitAngle) * BF.raidDodgeAmp
-        local oz = math.sin(BF.raidOrbitAngle * 0.5) * (BF.raidDodgeAmp * 0.45)
-        local target = Vector3.new(pos.X + ox, pos.Y + BF.raidHoverY, pos.Z + oz)
-        BF.setFlyTarget(target, false)
-
-        local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-        if hrp then
-            local flat = Vector3.new(hrp.Position.X - target.X, 0, hrp.Position.Z - target.Z)
-            if flat.Magnitude < 6 then
-                local v = hrp.AssemblyLinearVelocity
-                hrp.AssemblyLinearVelocity = Vector3.new(v.X * 0.35, v.Y * 0.5, v.Z * 0.35)
-            elseif flat.Magnitude > 160 then
-                hrp.AssemblyLinearVelocity = Vector3.zero
-                BF.setFlyTarget(target, false)
-            end
-        end
-        BF._bossFlyUnlock = false
-    end)
-end
-
-BF.raidKillLoop = function()
-    if BF.isPlayerDead() then
-        return false
-    end
-
-    BF.ensureSimRadius()
-
-    local island, idx, cf = BF.getActiveRaidIsland()
-    local focusPos = cf and cf.Position or nil
-
-    -- Fallback: no Locations parts -> use living enemies as focus (still progress raid)
-    if not focusPos then
-        local all = BF.getAllRaidEnemies()
-        if #all > 0 then
-            local sum = Vector3.zero
-            for _, m in ipairs(all) do
-                sum = sum + m.HumanoidRootPart.Position
-            end
-            focusPos = sum / #all
-            if BF.currentRaidIslandIndex ~= -1 then
-                BF.currentRaidIslandIndex = -1
-                BF.notifyUser("Raid", "No Island parts - following enemies", 2)
-            end
-        end
-    end
-
-    if not focusPos then
-        -- truly nothing: stay put briefly (island between spawns)
-        return false
-    end
-
-    if idx > 0 and idx ~= BF.currentRaidIslandIndex then
-        BF.currentRaidIslandIndex = idx
-        BF.notifyUser("Raid", "Island " .. idx, 2)
-    end
-
-    BF.raidFlyToPos(focusPos)
-
-    local aura = BF.getRaidEnemiesNear(focusPos, 250)
-    if #aura == 0 then
-        aura = BF.getAllRaidEnemies()
-    end
-    if #aura == 0 then
-        return false
-    end
-
-    pcall(function()
-        for i, m in ipairs(aura) do
-            if i > 14 then break end
-            local r = m:FindFirstChild("HumanoidRootPart")
-            if r and focusPos then
-                local d = (r.Position - focusPos).Magnitude
-                if d > 20 and d < 200 then
-                    local ang = (i - 1) * 0.55
-                    r.CFrame = CFrame.new(focusPos + Vector3.new(math.cos(ang) * 6, 2, math.sin(ang) * 6))
-                end
-            end
-        end
-    end)
-
-    pcall(function()
-        BF.attackTargets(aura, config.raidAttackSpeed or 0.001, config.raidHitsPerCycle or 40)
-    end)
-    return true
-end
-
-BF.startAutoRaid = function()
-    if BF.raidRunning then return end
-    BF.raidRunning = true
-    BF.raidEndedAt = 0
-    BF.currentRaidIslandIndex = 0
-    BF.notifyUser("Raid", "Auto Raid ON (" .. tostring(config.raidType) .. ")", 3)
-    BF.raidTask = task.spawn(function()
-        while BF.raidRunning do
-            local ok, err = pcall(function()
-                if not config.autoRaid then return end
-
-                -- DEAD: wait for respawn, do not fly to old raid
-                if BF.isPlayerDead() then
-                    BF.notifyUser("Raid", "Dead - waiting respawn", 2)
-                    task.wait(1)
-                    return
-                end
-
-                if BF.isInRaid() then
-                    BF.raidEndedAt = 0
-                    local fighting = BF.raidKillLoop()
-                    if not fighting then
-                        task.wait(0.8)
-                    end
-                    return
-                end
-
-                -- Raid ended (timer gone, no islands)
-                BF.currentRaidIslandIndex = 0
-                if BF.raidEndedAt == 0 then
-                    BF.raidEndedAt = os.clock()
-                    BF.notifyUser("Raid", "Raid ended - cooldown then new chip", 3)
-                end
-                -- short cooldown so we don't path back into a finishing raid
-                if os.clock() - BF.raidEndedAt < RAID_REENTRY_COOLDOWN then
-                    task.wait(0.5)
-                    return
-                end
-
-                if BF.getPlayerLevel() < 1100 then
-                    BF.notifyUser("Raid", "Need level 1100+", 3)
-                    task.wait(10)
-                    return
-                end
-
-                selectRaidType(config.raidType)
-                if not hasMicrochip() then
-                    buyRaidChip()
-                    if not hasMicrochip() then
-                        BF.notifyUser("Raid", "No Microchip - lobby / CD", 3)
-                        goToRaidLobby()
-                        task.wait(4)
-                        return
-                    end
-                end
-
-                BF.notifyUser("Raid", "Lobby -> start", 2)
-                goToRaidLobby()
-                tryStartRaid()
-                task.wait(2.5)
-            end)
-            if not ok then
-                warn("[BF] autoRaid:", err)
-            end
-            task.wait(0.35)
-        end
-    end)
-end
-
-BF.stopAutoRaid = function()
-    BF.raidRunning = false
-    config.autoRaid = false
-    BF.notifyUser("Raid", "Auto Raid OFF", 2)
-end
-
-
-BF.farmRunning = false
-BF.farmTask = nil
-BF.lastIslandName = ""
-BF.respawnConnection = nil
-BF.equipCheckConnection = nil
-
-BF.setupRespawnRecovery = function()
-    if BF.respawnConnection then BF.respawnConnection:Disconnect() end
-    BF.respawnConnection = LocalPlayer.CharacterAdded:Connect(function(character)
-        if not BF.farmRunning then return end
-        local humanoid = character:WaitForChild("Humanoid", 10)
-        local hrp = character:WaitForChild("HumanoidRootPart", 10)
-        if humanoid and hrp and BF.farmRunning then
-            task.wait(0.5)
-            if BF.flying then BF.disableFly() end
-            BF.enableFly()
-        end
-    end)
-end
-
-
-
--- =============================================
 -- ENEMY ESP (Highlight + Billboard through walls)
 -- =============================================
 BF.enemyEspRunning = false
@@ -5479,60 +5265,264 @@ BF.findCakeMobs = function()
     return list
 end
 
--- Hubs check BOTH Workspace.Enemies AND ReplicatedStorage (boss preloaded / dimension)
-BF.findCakeBoss = function()
+-- LIVE boss only (Workspace). ReplicatedStorage clones are preloaded and sit at Cake Loaf,
+-- so treating them as the fight target yanks the player back down to the portal.
+BF.findCakeBoss = function(includeQueued)
     local nameHits = {
         "Cake Prince",
         "Cake Prince [Lv. 2300] [Raid Boss]",
         "Dough King",
         "Dough King [Lv. 2300] [Raid Boss]",
     }
-    local function scan(container)
-        if not container then return nil end
-        for _, n in ipairs(nameHits) do
-            local m = container:FindFirstChild(n)
-            if m and m:IsA("Model") then
+    local function isCakeName(name)
+        local lower = string.lower(tostring(name or ""))
+        return string.find(lower, "cake prince", 1, true) or string.find(lower, "dough king", 1, true)
+    end
+    local function collect(container, list, seen)
+        if not container then return end
+        for _, m in ipairs(container:GetChildren()) do
+            if m:IsA("Model") and not seen[m] and isCakeName(m.Name) then
                 local hum = m:FindFirstChildOfClass("Humanoid")
                 local root = m:FindFirstChild("HumanoidRootPart") or m.PrimaryPart
                 if hum and root and hum.Health > 0 then
-                    return m
+                    seen[m] = true
+                    table.insert(list, m)
                 end
             end
         end
-        for _, m in ipairs(container:GetChildren()) do
-            if m:IsA("Model") then
-                local lower = string.lower(m.Name)
-                if string.find(lower, "cake prince", 1, true) or string.find(lower, "dough king", 1, true) then
-                    local hum = m:FindFirstChildOfClass("Humanoid")
-                    local root = m:FindFirstChild("HumanoidRootPart") or m.PrimaryPart
-                    if hum and root and hum.Health > 0 then
-                        return m
+        for _, n in ipairs(nameHits) do
+            local m = container:FindFirstChild(n)
+            if m and m:IsA("Model") and not seen[m] then
+                local hum = m:FindFirstChildOfClass("Humanoid")
+                local root = m:FindFirstChild("HumanoidRootPart") or m.PrimaryPart
+                if hum and root and hum.Health > 0 then
+                    seen[m] = true
+                    table.insert(list, m)
+                end
+            end
+        end
+    end
+    local function pickClosest(list)
+        local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if #list == 0 then return nil end
+        if not hrp then return list[1] end
+        local best, bestD, fallback, fallbackD = nil, math.huge, nil, math.huge
+        for _, m in ipairs(list) do
+            local root = m:FindFirstChild("HumanoidRootPart") or m.PrimaryPart
+            if root then
+                local d = (hrp.Position - root.Position).Magnitude
+                if d < fallbackD then
+                    fallback, fallbackD = m, d
+                end
+                -- Ignore loaf-level dummies while we are already in the sky arena.
+                if not (hrp.Position.Y > 180 and root.Position.Y < hrp.Position.Y - 70) then
+                    if d < bestD then
+                        best, bestD = m, d
                     end
                 end
             end
         end
-        return nil
+        return best or fallback
     end
-    return scan(Workspace:FindFirstChild("Enemies"))
-        or scan(ReplicatedStorage)
-        or scan(Workspace)
+
+    local seen, live = {}, {}
+    collect(Workspace:FindFirstChild("Enemies"), live, seen)
+    collect(Workspace:FindFirstChild("Characters"), live, seen)
+    collect(Workspace, live, seen)
+    local chosen = pickClosest(live)
+    if chosen then return chosen end
+    if includeQueued then
+        local queued, qSeen = {}, {}
+        collect(ReplicatedStorage, queued, qSeen)
+        return queued[1]
+    end
+    return nil
 end
 
-BF.isCakePortalOpen = function()
+BF.isCakeBossQueued = function()
+    return BF.findCakeBoss(true) ~= nil and BF.findCakeBoss(false) == nil
+end
+
+BF.getCakeMirrorPortalPart = function()
     local map = Workspace:FindFirstChild("Map")
     local loaf = map and map:FindFirstChild("CakeLoaf")
     local mirror = loaf and loaf:FindFirstChild("BigMirror")
-    local other = mirror and mirror:FindFirstChild("Other")
-    if other and other:IsA("BasePart") then
-        -- hubs: Transparency == 0 means portal open
-        return other.Transparency <= 0.05
+    if mirror then
+        local other = mirror:FindFirstChild("Other") or mirror:FindFirstChild("Portal") or mirror:FindFirstChildWhichIsA("BasePart")
+        if other then return other end
+    end
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if obj.Name == "BigMirror" then
+            local p = obj:FindFirstChild("Other") or obj:FindFirstChild("Portal") or obj:FindFirstChildWhichIsA("BasePart")
+            if p then return p end
+        end
+    end
+    return nil
+end
+
+BF.isCakePortalOpen = function()
+    local part = BF.getCakeMirrorPortalPart()
+    if part and part:IsA("BasePart") then
+        return part.Transparency <= 0.05
     end
     return false
 end
 
 BF.getCakePortalCFrame = function()
-    -- known portal / mirror entrance from public hubs
+    local part = BF.getCakeMirrorPortalPart()
+    if part and part:IsA("BasePart") then
+        return part.CFrame
+    end
     return CFrame.new(-2151.82, 149.32, -12404.91)
+end
+
+BF.getCakeArenaTeleporter = function()
+    local function fromInst(inst)
+        if not inst then return nil end
+        if inst:IsA("BasePart") then return inst end
+        return inst:FindFirstChildWhichIsA("BasePart", true)
+    end
+    local map = Workspace:FindFirstChild("Map")
+    local loaf = map and map:FindFirstChild("CakeLoaf")
+    local containers = { loaf }
+    for _, container in ipairs(containers) do
+        if container then
+            for _, inst in ipairs(container:GetDescendants()) do
+                local n = string.lower(inst.Name)
+                if n == "teleporter" or n == "teleport" or n == "cakeprinceteleporter" then
+                    local part = fromInst(inst)
+                    if part then return part end
+                end
+            end
+        end
+    end
+    return nil
+end
+
+BF.holdCakeFly = function(pos)
+    local character = LocalPlayer.Character
+    local hrp = character and character:FindFirstChild("HumanoidRootPart")
+    if not pos and hrp then
+        pos = hrp.Position + Vector3.new(0, 6, 0)
+    end
+    if pos then
+        BF.setFlyTarget(pos, false)
+    end
+end
+
+BF.isPlayerInCakeArena = function()
+    if BF._cakeNeedPortal then return false end
+    local character = LocalPlayer.Character
+    local hrp = character and character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return false end
+
+    local portal = BF.getCakeMirrorPortalPart()
+    local portalPos = (portal and portal:IsA("BasePart") and portal.Position) or Vector3.new(-2151.82, 149.32, -12404.91)
+    local horiz = Vector3.new(hrp.Position.X - portalPos.X, 0, hrp.Position.Z - portalPos.Z).Magnitude
+
+    -- Sky arena only: well above the loaf portal. Spawn/death is always at loaf height.
+    if hrp.Position.Y > portalPos.Y + 30 and horiz < 450 then
+        return true
+    end
+
+    local live = BF.findCakeBoss(false)
+    if live then
+        local root = live:FindFirstChild("HumanoidRootPart") or live.PrimaryPart
+        if root and (hrp.Position - root.Position).Magnitude < 90 then
+            return true
+        end
+    end
+    return false
+end
+
+BF.resetCakeArenaState = function()
+    BF._cakeInsideArena = false
+    BF._cakePortalEnteredAt = 0
+    BF._cakeLastY = nil
+    BF._isCakeDodging = false
+    BF._cakeNeedPortal = true
+end
+
+BF.enterCakeMirrorPortal = function(force)
+    local character = LocalPlayer.Character
+    local hrp = character and character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return false end
+
+    -- Already up in the isolated arena: never pull back down to the loaf portal.
+    if not force and not BF._cakeNeedPortal and BF.isPlayerInCakeArena() then
+        BF.holdCakeFly(hrp.Position + Vector3.new(0, 8, 0))
+        return true
+    end
+
+    local portalPart = BF.getCakeMirrorPortalPart()
+    local portalCFrame = portalPart and portalPart.CFrame or BF.getCakePortalCFrame()
+    local portalPos = portalCFrame.Position
+
+    local dist = (hrp.Position - portalPos).Magnitude
+    -- After death we snap straight to the portal instead of slowly flying up from spawn.
+    if force or BF._cakeNeedPortal or dist > 25 then
+        pcall(function()
+            hrp.CFrame = CFrame.new(portalPos + Vector3.new(0, 3, 0))
+            hrp.AssemblyLinearVelocity = Vector3.zero
+        end)
+        dist = 0
+    end
+    BF.setFlyTarget(portalPos + Vector3.new(0, 3, 0), false)
+
+    if dist < 25 then
+        pcall(function()
+            if portalPart and portalPart:IsA("BasePart") and firetouchinterest then
+                firetouchinterest(hrp, portalPart, 0)
+                task.wait(0.05)
+                firetouchinterest(hrp, portalPart, 1)
+            else
+                hrp.CFrame = portalCFrame
+            end
+        end)
+        -- Release the portal fly target so an in-game teleporter can send us up.
+        task.wait(0.15)
+        hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            BF.holdCakeFly(hrp.Position + Vector3.new(0, 8, 0))
+        end
+        BF._cakePortalEnteredAt = os.clock()
+    end
+    return true
+end
+
+BF.useCakeArenaTeleporter = function()
+    local character = LocalPlayer.Character
+    local hrp = character and character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return false end
+    if BF.isPlayerInCakeArena() then
+        -- If we are already high, do not walk back to a pad near the portal.
+        local portal = BF.getCakeMirrorPortalPart()
+        local portalY = (portal and portal:IsA("BasePart") and portal.Position.Y) or 149
+        if hrp.Position.Y > portalY + 30 then
+            return false
+        end
+    end
+    local pad = BF.getCakeArenaTeleporter()
+    if not pad then return false end
+    BF.setFlyTarget(pad.Position + Vector3.new(0, 3, 0), false)
+    if (hrp.Position - pad.Position).Magnitude < 20 then
+        pcall(function()
+            if firetouchinterest then
+                firetouchinterest(hrp, pad, 0)
+                task.wait(0.05)
+                firetouchinterest(hrp, pad, 1)
+            else
+                hrp.CFrame = pad.CFrame + Vector3.new(0, 3, 0)
+            end
+        end)
+        task.wait(0.2)
+        hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            BF.holdCakeFly(hrp.Position + Vector3.new(0, 8, 0))
+        end
+        return true
+    end
+    return true
 end
 
 BF.cakePrinceSpawnerStatus = function()
@@ -5550,7 +5540,6 @@ BF.tryOpenCakePortal = function()
     local rem = ReplicatedStorage:FindFirstChild("Remotes")
     local comm = rem and rem:FindFirstChild("CommF_")
     if not comm then return false end
-    -- Status string includes remaining kills or "open the portal now"
     local ok, status = pcall(function()
         return comm:InvokeServer("CakePrinceSpawner")
     end)
@@ -5563,7 +5552,6 @@ BF.tryOpenCakePortal = function()
             return true
         end
     end
-    -- Force-open attempt used by many hubs after 500
     pcall(function()
         comm:InvokeServer("CakePrinceSpawner", true)
     end)
@@ -5599,7 +5587,6 @@ BF.tryTalkDripMama = function()
             BF.setFlyTarget(part.Position + Vector3.new(0, 4, 0), false)
         end)
     end
-    -- Fire any proximity prompts under the NPC
     local fired = false
     local root = npc
     if not npc:IsA("Model") and npc.Parent then root = npc.Parent end
@@ -5617,7 +5604,6 @@ BF.tryTalkDripMama = function()
             fired = true
         end
     end
-    -- Some builds use ClickDetector
     for _, d in ipairs(root:GetDescendants()) do
         if d:IsA("ClickDetector") then
             pcall(function()
@@ -5626,12 +5612,10 @@ BF.tryTalkDripMama = function()
             fired = true
         end
     end
-    -- Dialogue remote fallbacks used by some hubs
     pcall(function()
         local rem = ReplicatedStorage:FindFirstChild("Remotes")
         local comm = rem and rem:FindFirstChild("CommF_")
         if comm then
-            -- harmless probes; server ignores unknown
             comm:InvokeServer("CakePrince")
             comm:InvokeServer("TalkNpc", "drip_mama")
         end
@@ -5639,10 +5623,246 @@ BF.tryTalkDripMama = function()
     return fired
 end
 
+-- V-ATTACK DODGE & COMBAT EVASION ENGINE
+BF._lastCakeDodgeAt = 0
+BF._isCakeDodging = false
+BF._cakeNeedPortal = false
+BF._cakeDodgeCooldown = 0.85
+BF._cakeDodgeMin = 0.45
+BF._cakeDodgeDuration = 1.15
+BF._cakeAttackAboveHeight = 4
+BF._cakeDodgeHeight = 95
+BF._cakeVKeywords = {
+    "barrage", "fusillade", "restless", "roller", "fusilade",
+    "ult", "aoe", "vattack", "v-attack", "move4",
+}
+BF._cakeLastHp = nil
+BF._cakeLastHpAt = 0
+
+local function cakeAnimLooksDangerous(text)
+    text = string.lower(tostring(text or ""))
+    if text == "" then return false end
+    if string.find(text, "idle") or string.find(text, "walk") or string.find(text, "run") or string.find(text, "jump") then
+        return false
+    end
+    for _, kw in ipairs(BF._cakeVKeywords) do
+        if string.find(text, kw, 1, true) then
+            return true
+        end
+    end
+    return false
+end
+
+BF.isCakeBossAttacking = function(boss)
+    if not boss then return false, false end
+    local hum = boss:FindFirstChildOfClass("Humanoid")
+    if not hum then return false, false end
+
+    local isV = false
+    local isAnyAttack = false
+
+    pcall(function()
+        local tracks = hum:GetPlayingAnimationTracks()
+        for _, t in ipairs(tracks) do
+            if t.IsPlaying and (t.Speed or 1) > 0.05 then
+                local anim = t.Animation
+                local blobs = {
+                    t.Name,
+                    anim and anim.Name,
+                }
+                for _, blob in ipairs(blobs) do
+                    local s = string.lower(tostring(blob or ""))
+                    if s ~= "" and not string.find(s, "idle") and not string.find(s, "walk") and not string.find(s, "run") then
+                        isAnyAttack = true
+                    end
+                    if cakeAnimLooksDangerous(blob) then
+                        isV = true
+                        isAnyAttack = true
+                        break
+                    end
+                end
+                if isV then break end
+            end
+        end
+    end)
+
+    -- Large aura / hitbox around the boss = Fusillade V, not random loaf props.
+    if not isV then
+        pcall(function()
+            local bRoot = boss:FindFirstChild("HumanoidRootPart") or boss.PrimaryPart
+            if not bRoot then return end
+            local bPos = bRoot.Position
+            for _, child in ipairs(Workspace:GetChildren()) do
+                if child ~= boss and child:IsA("BasePart") and child.Size.Magnitude > 55 then
+                    if (child.Position - bPos).Magnitude < 45 then
+                        isV = true
+                        isAnyAttack = true
+                        break
+                    end
+                end
+            end
+        end)
+    end
+
+    return isV, isAnyAttack
+end
+
+BF.cakeHealthSpike = function()
+    local character = LocalPlayer.Character
+    local hum = character and character:FindFirstChild("Humanoid")
+    if not hum then return false end
+    local now = os.clock()
+    local hp = hum.Health
+    local last = BF._cakeLastHp
+    BF._cakeLastHp = hp
+    local dt = now - (BF._cakeLastHpAt or 0)
+    BF._cakeLastHpAt = now
+    if last and dt > 0 and dt < 0.5 and hum.MaxHealth > 0 then
+        local drop = (last - hp) / hum.MaxHealth
+        if drop >= 0.12 then
+            return true
+        end
+    end
+    return false
+end
+
+BF.enableCakeKen = function()
+    pcall(function()
+        VirtualInputManager:SendKeyEvent(true, "E", false, game)
+        task.wait(0.05)
+        VirtualInputManager:SendKeyEvent(false, "E", false, game)
+    end)
+    pcall(function()
+        local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+        local commF = remotes and remotes:FindFirstChild("CommF_")
+        local commE = remotes and remotes:FindFirstChild("CommE")
+        if commF then commF:InvokeServer("Ken", true) end
+        if commE then commE:FireServer("Ken", true) end
+    end)
+end
+
+BF.snapCakeTo = function(pos)
+    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not hrp or not pos then return end
+    pcall(function()
+        hrp.CFrame = CFrame.new(pos)
+        hrp.AssemblyLinearVelocity = Vector3.zero
+        hrp.AssemblyAngularVelocity = Vector3.zero
+    end)
+    BF.setFlyTarget(pos, false)
+end
+
+BF.dodgeCakeBoss = function(boss, root)
+    if not boss or not root or not root.Parent then return false end
+    if BF._isCakeDodging then
+        BF.snapCakeTo(root.Position + Vector3.new(0, BF._cakeDodgeHeight, 0))
+        return true
+    end
+
+    local now = os.clock()
+    if (now - BF._lastCakeDodgeAt) < BF._cakeDodgeCooldown then
+        return false
+    end
+
+    BF._isCakeDodging = true
+    BF._lastCakeDodgeAt = now
+    pcall(BF.enableCakeKen)
+
+    local dodgeStart = os.clock()
+    while os.clock() - dodgeStart < BF._cakeDodgeDuration and BF.cakePrinceRunning and not BF._cakeNeedPortal do
+        if not root or not root.Parent then break end
+        BF.snapCakeTo(root.Position + Vector3.new(0, BF._cakeDodgeHeight, 0))
+        local elapsed = os.clock() - dodgeStart
+        local stillV = select(1, BF.isCakeBossAttacking(boss))
+        if elapsed >= BF._cakeDodgeMin and not stillV then
+            break
+        end
+        task.wait(0.04)
+    end
+
+    -- Instant drop back into melee — do not fly down slowly from dodge height.
+    if root and root.Parent then
+        BF.snapCakeTo(root.Position + Vector3.new(0, BF._cakeAttackAboveHeight, 2))
+    end
+    BF._isCakeDodging = false
+    BF._lastCakeDodgeAt = os.clock()
+    return true
+end
+
+BF.attackCakeBoss = function(boss, root)
+    if BF._isCakeDodging or BF._cakeNeedPortal then return end
+    if not boss or not root then return end
+    local character = LocalPlayer.Character
+    local hrp = character and character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    local attackPos = root.Position + Vector3.new(0, BF._cakeAttackAboveHeight, 2)
+    -- If we are still high from a dodge, snap down immediately.
+    if math.abs(hrp.Position.Y - attackPos.Y) > 12 or (hrp.Position - attackPos).Magnitude > 18 then
+        BF.snapCakeTo(attackPos)
+    else
+        BF.setFlyTarget(attackPos, false)
+    end
+
+    pcall(BF.ensureCombatReady)
+    BF.attackEnemy(boss, 0.03, 4)
+    pcall(function()
+        BF.fireVirtualClick()
+    end)
+end
+BF._cakeInsideArena = false
+BF._cakePortalEnteredAt = 0
+BF._cakeLastY = nil
+BF._cakeDiedConn = nil
+BF._cakeAddedConn = nil
+
+BF.hookCakePrinceRespawn = function()
+    if BF._cakeDiedConn then pcall(function() BF._cakeDiedConn:Disconnect() end) BF._cakeDiedConn = nil end
+    if BF._cakeAddedConn then pcall(function() BF._cakeAddedConn:Disconnect() end) BF._cakeAddedConn = nil end
+
+    local function onDied()
+        BF.resetCakeArenaState()
+        BF.notifyUser("Cake Prince", "Died — going through portal again", 2)
+    end
+
+    local function attachDied(char)
+        if BF._cakeDiedConn then
+            pcall(function() BF._cakeDiedConn:Disconnect() end)
+            BF._cakeDiedConn = nil
+        end
+        local hum = char and (char:FindFirstChild("Humanoid") or char:WaitForChild("Humanoid", 8))
+        if hum then
+            BF._cakeDiedConn = hum.Died:Connect(onDied)
+        end
+    end
+
+    if LocalPlayer.Character then
+        attachDied(LocalPlayer.Character)
+    end
+    BF._cakeAddedConn = LocalPlayer.CharacterAdded:Connect(function(char)
+        if not BF.cakePrinceRunning then return end
+        BF.resetCakeArenaState()
+        task.wait(0.7)
+        if not BF.cakePrinceRunning then return end
+        attachDied(char)
+        pcall(BF.enableFly)
+        pcall(function()
+            BF.enterCakeMirrorPortal(true)
+        end)
+    end)
+end
+
 BF.startCakePrince = function()
     if BF.cakePrinceRunning then return end
     BF.cakePrinceRunning = true
     config.autoCakePrince = true
+    BF._cakeInsideArena = false
+    BF._cakePortalEnteredAt = 0
+    BF._cakeLastY = nil
+    BF._isCakeDodging = false
+    BF._cakeNeedPortal = false
+    BF._cakeLastHp = nil
+    pcall(BF.hookCakePrinceRespawn)
     BF.notifyUser("Cake Prince", "Auto Cake Prince ON", 3)
     local lastTalk = 0
     BF.cakePrinceTask = task.spawn(function()
@@ -5653,56 +5873,119 @@ BF.startCakePrince = function()
                 local hrp = character and character:FindFirstChild("HumanoidRootPart")
                 local hum = character and character:FindFirstChild("Humanoid")
                 if not hrp or not hum or hum.Health <= 0 then
+                    BF.resetCakeArenaState()
                     task.wait(0.5)
                     return
                 end
                 if not BF.flying then pcall(BF.enableFly) end
                 pcall(BF.ensureCombatReady)
 
-                -- 1) Boss in Enemies OR ReplicatedStorage (dimension)
-                local boss = BF.findCakeBoss()
+                -- Detect the in-game pad teleporting us into the sky arena.
+                local lastY = BF._cakeLastY
+                BF._cakeLastY = hrp.Position.Y
+                if lastY and (hrp.Position.Y - lastY) > 25 then
+                    BF._cakeInsideArena = true
+                    BF._cakeNeedPortal = false
+                    BF._cakePortalEnteredAt = os.clock()
+                    BF.holdCakeFly(hrp.Position + Vector3.new(0, 8, 0))
+                end
+
+                local inArena = BF.isPlayerInCakeArena()
+                if inArena then
+                    BF._cakeInsideArena = true
+                    BF._cakeNeedPortal = false
+                end
+
+                -- After death: snap through the portal, never fly slowly up to the boss.
+                if BF._cakeNeedPortal then
+                    BF.enterCakeMirrorPortal(true)
+                    pcall(BF.useCakeArenaTeleporter)
+                    task.wait(0.2)
+                    return
+                end
+
+                -- 1) Fight the LIVE boss only (never the ReplicatedStorage dummy).
+                local boss = BF.findCakeBoss(false)
                 if boss then
                     local root = boss:FindFirstChild("HumanoidRootPart") or boss.PrimaryPart
                     if root then
-                        -- Boss lives high in Dimensional Shift — always fly to HIS height
-                        local above = math.clamp(config.aboveHeight or 8, 6, 20)
-                        BF.setFlyTarget(root.Position + Vector3.new(0, above, 0), false)
                         local dist = (hrp.Position - root.Position).Magnitude
-                        if dist <= 80 then
-                            local speed = config.bossAttackSpeed or 0.002
-                            local hits = config.bossHitsPerCycle or 35
-                            BF.attackEnemy(boss, speed, hits)
+
+                        if dist > 220 then
+                            if inArena then
+                                BF.snapCakeTo(root.Position + Vector3.new(0, 10, 0))
+                                return
+                            end
+                            BF.notifyUser("Cake Prince", "Boss spawned — entering portal", 2)
+                            BF.enterCakeMirrorPortal(true)
+                            pcall(BF.useCakeArenaTeleporter)
+                            task.wait(0.25)
+                            return
                         end
+
+                        BF._cakeInsideArena = true
+                        BF._cakeNeedPortal = false
+
+                        if hum.Health < hum.MaxHealth * 0.35 then
+                            BF.snapCakeTo(root.Position + Vector3.new(0, BF._cakeDodgeHeight, 0))
+                            if config.autoHeal then pcall(BF.heal) end
+                            task.wait(0.25)
+                            return
+                        end
+
+                        local isV = select(1, BF.isCakeBossAttacking(boss))
+                        local spike = BF.cakeHealthSpike()
+                        if isV or spike or BF._isCakeDodging then
+                            local did = BF.dodgeCakeBoss(boss, root)
+                            if not did then
+                                BF.snapCakeTo(root.Position + Vector3.new(0, BF._cakeDodgeHeight, 0))
+                            end
+                            return
+                        end
+
+                        BF.attackCakeBoss(boss, root)
                     end
                     return
                 end
 
-                -- 2) Portal open (BigMirror) but boss not found yet -> enter mirror
-                if BF.isCakePortalOpen() then
-                    local pc = BF.getCakePortalCFrame()
-                    BF.setFlyTarget(pc.Position + Vector3.new(0, 3, 0), false)
-                    -- also try to walk into Other part
+                -- 2) Inside the dimension with no live boss yet: wait / use pad. Never portal-loop.
+                if inArena or (os.clock() - (BF._cakePortalEnteredAt or 0)) < 12 then
+                    local usedPad = false
                     pcall(function()
-                        local map = Workspace:FindFirstChild("Map")
-                        local other = map and map:FindFirstChild("CakeLoaf")
-                        other = other and other:FindFirstChild("BigMirror")
-                        other = other and other:FindFirstChild("Other")
-                        if other and other:IsA("BasePart") then
-                            BF.setFlyTarget(other.Position + Vector3.new(0, 2, 0), false)
-                        end
+                        usedPad = BF.useCakeArenaTeleporter()
                     end)
-                    task.wait(0.3)
+                    if not usedPad then
+                        local hrp2 = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                        if hrp2 then
+                            BF.holdCakeFly(hrp2.Position + Vector3.new(0, 8, 0))
+                        end
+                    end
+                    task.wait(0.2)
                     return
                 end
 
-                -- 3) Ask spawner / open portal (CakePrinceSpawner remote — what hubs use)
-                if os.clock() - lastTalk > 5 then
+                -- 3) Portal open on Cake Loaf -> step in, then release fly so the pad can send us up.
+                if BF.isCakePortalOpen() or BF.isCakeBossQueued() then
+                    BF.notifyUser("Cake Prince", "Portal is OPEN! Stepping inside...", 2)
+                    BF.enterCakeMirrorPortal()
+                    pcall(BF.useCakeArenaTeleporter)
+                    task.wait(0.4)
+                    return
+                end
+
+                -- 4) Open portal / talk to Drip Mama
+                if os.clock() - lastTalk > 4 then
                     lastTalk = os.clock()
-                    BF.tryOpenCakePortal()
+                    local opened = BF.tryOpenCakePortal()
+                    if opened then
+                        BF.enterCakeMirrorPortal()
+                        return
+                    end
                     pcall(BF.tryTalkDripMama)
                 end
 
-                -- 3) Farm cake land mobs toward 500 server kills
+                -- 5) Farm Cake Land mobs toward 500 server kills
+                BF._cakeInsideArena = false
                 local mobs = BF.findCakeMobs()
                 if #mobs == 0 then
                     BF.setFlyTarget(BF.CAKE_LAND_POS + Vector3.new(0, 12, 0), false)
@@ -5743,7 +6026,7 @@ BF.startCakePrince = function()
                 end
             end)
             if not ok then warn("[BF CakePrince]", err) end
-            task.wait(0.05)
+            task.wait(0.04)
         end
     end)
 end
@@ -5751,6 +6034,11 @@ end
 BF.stopCakePrince = function()
     BF.cakePrinceRunning = false
     config.autoCakePrince = false
+    BF._isCakeDodging = false
+    BF._cakeInsideArena = false
+    BF._cakeNeedPortal = false
+    if BF._cakeDiedConn then pcall(function() BF._cakeDiedConn:Disconnect() end) BF._cakeDiedConn = nil end
+    if BF._cakeAddedConn then pcall(function() BF._cakeAddedConn:Disconnect() end) BF._cakeAddedConn = nil end
     if BF.cakePrinceTask then pcall(function() task.cancel(BF.cakePrinceTask) end) BF.cakePrinceTask = nil end
     BF.safeDisableFly()
     BF.notifyUser("Cake Prince", "Auto Cake Prince OFF", 2)
@@ -6068,93 +6356,71 @@ BF.applyWhiteScreen = function(on)
 end
 
 -- =============================================
--- ANTI AFK (4 Methoden parallel, getestet mit Real)
+-- ANTI AFK (Silent, Non-Intrusive, 100% Reliable)
 -- =============================================
 BF.antiAfkEnabled = false
 BF._antiAfkConns = {}
 BF._antiAfkLoops = {}
-BF._antiAfkPulseCount = 0
 
 BF.startAntiAfk = function()
     if BF.antiAfkEnabled then return end
     BF.antiAfkEnabled = true
-    BF._antiAfkPulseCount = 0
 
-    -- Methode 1: Idled-Event abfangen (offizieller Roblox-Trigger)
+    -- Method 1: Disable internal Roblox Idled connections (if executor supports getconnections)
     pcall(function()
-        table.insert(BF._antiAfkConns, LocalPlayer.Idled:Connect(function()
+        if getconnections then
+            for _, conn in pairs(getconnections(LocalPlayer.Idled)) do
+                if conn.Disable then
+                    conn:Disable()
+                elseif conn.Disconnect then
+                    conn:Disconnect()
+                end
+            end
+        end
+    end)
+
+    -- Method 2: Listen to LocalPlayer.Idled and counter with VirtualUser (silent click)
+    pcall(function()
+        local conn = LocalPlayer.Idled:Connect(function()
+            if not BF.antiAfkEnabled then return end
             pcall(function()
                 local vu = game:GetService("VirtualUser")
                 vu:CaptureController()
-                vu:ClickButton1(Vector2.new(0, 0))
                 vu:ClickButton2(Vector2.new(0, 0))
             end)
-            print("[BF AntiAFK] Idled gefeuert -> Counter-Input")
-        end))
+        end)
+        table.insert(BF._antiAfkConns, conn)
     end)
 
-    -- Methode 2: Teleport-Puls alle 30s (CFrame + MoveTo)
-    table.insert(BF._antiAfkLoops, task.spawn(function()
+    -- Method 3: Silent heartbeat every 90 seconds (never moves character, jumps, or presses keys)
+    local loop = task.spawn(function()
         while BF.antiAfkEnabled do
-            task.wait(30)
-            if not BF.antiAfkEnabled then break end
-            BF._antiAfkPulseCount = BF._antiAfkPulseCount + 1
-            local char = LocalPlayer.Character
-            local hrp = char and char:FindFirstChild("HumanoidRootPart")
-            local hum = char and char:FindFirstChildOfClass("Humanoid")
-            if hrp then
-                pcall(function()
-                    local oldCF = hrp.CFrame
-                    hrp.CFrame = oldCF * CFrame.new(0, 1, 0)
-                    task.wait(0.05)
-                    hrp.CFrame = oldCF
-                end)
-                pcall(function()
-                    if hum then
-                        local oldPos = hrp.Position
-                        hum:MoveTo(oldPos + Vector3.new(0.5, 0, 0))
-                        task.wait(0.15)
-                        hum:MoveTo(oldPos)
-                    end
-                end)
-                print(string.format("[BF AntiAFK] Pulse #%d (CFrame+MoveTo)", BF._antiAfkPulseCount))
-            end
-        end
-    end))
-
-    -- Methode 3: VirtualInputManager Taste alle 45s
-    table.insert(BF._antiAfkLoops, task.spawn(function()
-        while BF.antiAfkEnabled do
-            task.wait(45)
+            task.wait(90)
             if not BF.antiAfkEnabled then break end
             pcall(function()
-                VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.LeftShift, false, game)
-                task.wait(0.05)
-                VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.LeftShift, false, game)
+                local vu = game:GetService("VirtualUser")
+                vu:CaptureController()
+                vu:ClickButton2(Vector2.new(0, 0))
             end)
-            print("[BF AntiAFK] Key-Event (LeftShift)")
         end
-    end))
+    end)
+    table.insert(BF._antiAfkLoops, loop)
 
-    -- Methode 4: Humanoid Jump alle 60s
-    table.insert(BF._antiAfkLoops, task.spawn(function()
-        while BF.antiAfkEnabled do
-            task.wait(60)
-            if not BF.antiAfkEnabled then break end
-            pcall(function()
-                local char = LocalPlayer.Character
-                local hum = char and char:FindFirstChildOfClass("Humanoid")
-                if hum then hum.Jump = true end
-            end)
-            print("[BF AntiAFK] Jump-Event")
-        end
-    end))
-
-    BF.notifyUser("Anti-AFK", "Anti-AFK ON (4 Methoden)", 2)
+    BF.notifyUser("Anti-AFK", "Anti-AFK active (silent mode)", 2)
 end
 
 BF.stopAntiAfk = function()
     BF.antiAfkEnabled = false
+    -- Re-enable idled connections if disabled
+    pcall(function()
+        if getconnections then
+            for _, conn in pairs(getconnections(LocalPlayer.Idled)) do
+                if conn.Enable then
+                    conn:Enable()
+                end
+            end
+        end
+    end)
     for _, c in ipairs(BF._antiAfkConns) do
         pcall(function() c:Disconnect() end)
     end
@@ -6256,6 +6522,412 @@ BF.redeemAllCodes = function()
     end)
 end
 
+-- =============================================
+-- FIGHTING STYLE SHOP & ABILITIES (CommF_)
+-- =============================================
+BF.styleRemoteNames = {
+    ["Dark Step"]       = "BuyBlackLeg",
+    ["Electro"]         = "BuyElectro",
+    ["Water Kung Fu"]   = "BuyFishmanKarate",
+    ["Dragon Breath"]   = "DragonClaw",
+    ["Superhuman"]      = "BuySuperhuman",
+    ["Death Step"]      = "BuyDeathStep",
+    ["Sharkman Karate"] = "BuySharkmanKarate",
+    ["Electric Claw"]   = "BuyElectricClaw",
+    ["Dragon Talon"]    = "BuyDragonTalon",
+    ["Godhuman"]        = "BuyGodhuman",
+    ["Sanguine Art"]    = "BuySanguineArt",
+}
+
+BF.styleAliases = {
+    ["Dark Step"]       = {"Dark Step", "DarkStep", "Black Leg", "BlackLeg"},
+    ["Electro"]         = {"Electro", "Electric"},
+    ["Water Kung Fu"]   = {"Water Kung Fu", "WaterKungFu", "Fishman Karate", "FishmanKarate"},
+    ["Dragon Breath"]   = {"Dragon Breath", "DragonBreath", "Dragon Claw", "DragonClaw"},
+    ["Superhuman"]      = {"Superhuman"},
+    ["Death Step"]      = {"Death Step", "DeathStep"},
+    ["Sharkman Karate"] = {"Sharkman Karate", "SharkmanKarate"},
+    ["Electric Claw"]   = {"Electric Claw", "ElectricClaw"},
+    ["Dragon Talon"]    = {"Dragon Talon", "DragonTalon"},
+    ["Godhuman"]        = {"Godhuman"},
+    ["Sanguine Art"]    = {"Sanguine Art", "SanguineArt"},
+    ["Combat"]          = {"Combat"},
+}
+
+BF.styleMinimumBeli = {
+    ["Dark Step"] = 150000,
+    ["Electro"] = 550000,
+    ["Water Kung Fu"] = 750000,
+    ["Superhuman"] = 3000000,
+    ["Death Step"] = 2500000,
+    ["Sharkman Karate"] = 2500000,
+    ["Electric Claw"] = 3000000,
+    ["Dragon Talon"] = 3000000,
+    ["Godhuman"] = 5000000,
+    ["Sanguine Art"] = 5000000,
+}
+
+BF.findFightingStyleTool = function(styleName)
+    local char = LocalPlayer.Character
+    local backpack = LocalPlayer:FindFirstChild("Backpack")
+    local aliases = BF.styleAliases[styleName] or {styleName}
+
+    -- 1. Check Character (already equipped)
+    if char then
+        for _, child in ipairs(char:GetChildren()) do
+            if child:IsA("Tool") then
+                for _, alias in ipairs(aliases) do
+                    if string.lower(child.Name) == string.lower(alias) or string.find(string.lower(child.Name), string.lower(alias), 1, true) then
+                        return child, true
+                    end
+                end
+            end
+        end
+    end
+
+    -- 2. Check Backpack
+    if backpack then
+        for _, child in ipairs(backpack:GetChildren()) do
+            if child:IsA("Tool") then
+                for _, alias in ipairs(aliases) do
+                    if string.lower(child.Name) == string.lower(alias) or string.find(string.lower(child.Name), string.lower(alias), 1, true) then
+                        return child, false
+                    end
+                end
+            end
+        end
+    end
+
+    return nil, false
+end
+
+BF.isFightingStyleOwned = function(styleName)
+    if BF.findFightingStyleTool(styleName) then return true end
+    -- The current style may be saved in player data while its Tool is not
+    -- parented to Character/Backpack during respawn or a switch.
+    local aliases = BF.styleAliases[styleName] or {styleName}
+    local containers = {
+        LocalPlayer:FindFirstChild("Data"),
+        LocalPlayer:FindFirstChild("PlayerData"),
+        ReplicatedStorage:FindFirstChild("PlayerData"),
+    }
+    for _, container in ipairs(containers) do
+        if container then
+            for _, item in ipairs(container:GetDescendants()) do
+                if item:IsA("BoolValue") and item.Value then
+                    local lowerName = string.lower(item.Name)
+                    for _, alias in ipairs(aliases) do
+                        local aliasLower = string.lower(alias)
+                        if lowerName == aliasLower or lowerName == aliasLower .. "owned" then
+                            return true
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return false
+end
+
+BF.equipFightingStyle = function(styleName)
+    local char = LocalPlayer.Character
+    if not char then return false end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return false end
+
+    -- 1. Check if tool is already in Character or Backpack
+    local tool, isEquipped = BF.findFightingStyleTool(styleName)
+    if tool then
+        if not isEquipped then
+            local equipEvent = tool:FindFirstChild("EquipEvent")
+            if equipEvent and equipEvent:IsA("RemoteEvent") then
+                pcall(function() equipEvent:FireServer(false) end)
+            else
+                hum:EquipTool(tool)
+            end
+        end
+        config.selectedFightingStyle = styleName
+        return true
+    end
+
+    -- 2. Not in inventory: invoke the style purchase/equip action.
+    local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+    local commF = remotes and remotes:FindFirstChild("CommF_")
+    if not commF then return false end
+
+    local remoteName = BF.styleRemoteNames[styleName]
+    if not remoteName then return false end
+
+    -- The style purchase remote also switches to/equips the style when owned.
+    pcall(function() commF:InvokeServer(remoteName, true) end)
+    task.wait(0.75)
+
+    -- Check if tool arrived in inventory
+    tool, isEquipped = BF.findFightingStyleTool(styleName)
+    if tool then
+        if not isEquipped then
+            hum:EquipTool(tool)
+        end
+        config.selectedFightingStyle = styleName
+        return true
+    end
+
+    return false
+end
+
+BF.buyFightingStyle = function(styleName, autoEquip)
+    local remoteName = BF.styleRemoteNames[styleName]
+    if not remoteName then
+        BF.notifyUser("Style", "Unknown style: " .. tostring(styleName), 3)
+        return false
+    end
+    local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+    local commF = remotes and remotes:FindFirstChild("CommF_")
+    if not commF then
+        BF.notifyUser("Style", "CommF_ not found", 3)
+        return false
+    end
+
+    local existingTool, existingEquipped = BF.findFightingStyleTool(styleName)
+    if existingTool then
+        if autoEquip ~= false and not existingEquipped then
+            local char = LocalPlayer.Character
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if hum then hum:EquipTool(existingTool) end
+        end
+        BF.notifyUser("Style", styleName .. " is already owned; equipped it.", 4)
+        return true
+    end
+
+    local beliBefore, beliValue = BF.getPlayerCurrency("Beli")
+    local minBeli = BF.styleMinimumBeli[styleName]
+    if minBeli and beliBefore and beliBefore < minBeli then
+        BF.notifyUser("Style", styleName .. " needs " .. tostring(minBeli) .. " Beli; current: " .. tostring(beliBefore), 5)
+        return false
+    end
+
+    -- Fighting style purchase commands are invoked with the command name only.
+    -- A second argument changes the server action and can return 0 without buying.
+    local commands
+    if styleName == "Dragon Breath" then
+        commands = {
+            {"BlackbeardReward", "DragonClaw", "1"},
+            {"BlackbeardReward", "DragonClaw", "2"},
+            {"BuyDragonBreath"},
+        }
+    else
+        commands = {{remoteName, true}}
+    end
+
+    local callSucceeded = false
+    local responses = {}
+    for _, args in ipairs(commands) do
+        local ok, result = pcall(function()
+            return commF:InvokeServer(unpack(args))
+        end)
+        callSucceeded = callSucceeded or ok
+        table.insert(responses, tostring(result))
+        task.wait(0.25)
+        local owned = BF.isFightingStyleOwned(styleName)
+        if owned then break end
+    end
+
+    -- Give the server a moment to replicate the newly granted tool.
+    local tool, isEquipped
+    local deadline = os.clock() + 2
+    repeat
+        tool, isEquipped = BF.findFightingStyleTool(styleName)
+        if tool or BF.isFightingStyleOwned(styleName) then break end
+        task.wait(0.1)
+    until os.clock() >= deadline
+
+    if tool then
+        if autoEquip ~= false and not isEquipped then
+            local char = LocalPlayer.Character
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if hum then hum:EquipTool(tool) end
+        end
+        config.selectedFightingStyle = styleName
+        BF.notifyUser("Style", styleName .. " purchased", 3)
+        return true
+    end
+
+    if BF.isFightingStyleOwned(styleName) then
+        BF.notifyUser("Style", styleName .. " is already owned; equip it from your fighting style/NPC interaction.", 5)
+        return false
+    end
+
+    if styleName == "Dark Step" and beliBefore then
+        local liveBeli = BF.getPlayerCurrency("Beli")
+        local beliAfter = liveBeli or (beliValue and tonumber(beliValue.Value)) or beliBefore
+        if beliAfter < beliBefore then
+            -- Ownership may replicate after the currency deduction.
+            local verifyDeadline = os.clock() + 2
+            repeat
+                tool, isEquipped = BF.findFightingStyleTool(styleName)
+                if tool then break end
+                task.wait(0.1)
+            until os.clock() >= verifyDeadline
+            if tool then
+                if autoEquip ~= false and not isEquipped then
+                    local char = LocalPlayer.Character
+                    local hum = char and char:FindFirstChildOfClass("Humanoid")
+                    if hum then hum:EquipTool(tool) end
+                end
+                BF.notifyUser("Style", "Dark Step purchased", 3)
+                return true
+            end
+        end
+        table.insert(responses, "Beli " .. tostring(beliBefore) .. " -> " .. tostring(beliAfter))
+    end
+    -- Remote responses vary between game versions. Do not treat an arbitrary
+    -- non-nil response as proof of purchase; report requirements if no tool arrived.
+    local responseText = table.concat(responses, " | ")
+    if not callSucceeded then responseText = "remote call failed" end
+    local beliAfter = BF.getPlayerCurrency("Beli")
+    local beliDelta = (beliBefore and beliAfter) and (beliBefore - beliAfter) or nil
+    local detail = beliDelta and (" Beli change: " .. tostring(beliDelta) .. ".") or ""
+    BF.notifyUser("Style", styleName .. " was not confirmed (server: " .. responseText .. ")." .. detail .. " Stand next to its teacher and use the in-game interaction to see the exact requirement.", 7)
+    local char = LocalPlayer.Character
+    local backpack = LocalPlayer:FindFirstChild("Backpack")
+    local tools = {}
+    for _, container in ipairs({char, backpack}) do
+        if container then
+            for _, child in ipairs(container:GetChildren()) do
+                if child:IsA("Tool") then
+                    local mastery = child:FindFirstChild("Level")
+                    table.insert(tools, child.Name .. (mastery and (" [" .. tostring(mastery.Value) .. "]") or ""))
+                end
+            end
+        end
+    end
+    print("[BF Style]", styleName, "not confirmed; responses:", responseText,
+        "Beli before/after:", beliBefore, beliAfter,
+        "current tools:", table.concat(tools, ", "))
+    return false
+end
+
+BF.buyAllFightingStyles = function()
+    BF.notifyUser("Style", "Buying all styles (requirements needed)...", 3)
+    task.spawn(function()
+        for name in pairs(BF.styleRemoteNames) do
+            pcall(function() BF.buyFightingStyle(name, false) end)
+            task.wait(0.4)
+        end
+        BF.notifyUser("Style", "All style buy attempts sent", 4)
+    end)
+end
+
+-- Ability Teacher purchases
+BF.buyBusoHaki = function()
+    return BF.buyShopItem("BuyHaki", "Buso")
+end
+
+BF.buyGeppo = function()
+    return BF.buyShopItem("BuyHaki", "Geppo")
+end
+
+BF.buySoru = function()
+    return BF.buyShopItem("BuyHaki", "Soru")
+end
+
+BF.buyObservationHaki = function()
+    return BF.buyShopItem("KenTalk", "Buy")
+end
+
+BF.buyAllAbilities = function()
+    BF.notifyUser("Abilities", "Buying Geppo, Buso, Soru, Ken...", 3)
+    task.spawn(function()
+        BF.buyGeppo()
+        task.wait(0.3)
+        BF.buyBusoHaki()
+        task.wait(0.3)
+        BF.buySoru()
+        task.wait(0.3)
+        BF.buyObservationHaki()
+        BF.notifyUser("Abilities", "Ability purchases completed", 3)
+    end)
+end
+
+-- Auto Buy Abilities background task
+BF.autoBuyAbilitiesRunning = false
+BF.startAutoBuyAbilities = function()
+    if BF.autoBuyAbilitiesRunning then return end
+    BF.autoBuyAbilitiesRunning = true
+    task.spawn(function()
+        while BF.autoBuyAbilitiesRunning do
+            if config.autoBuyAbilities then
+                pcall(function()
+                    local lvl = BF.getPlayerLevel()
+                    local leaderstats = LocalPlayer:FindFirstChild("leaderstats")
+                    local beli = leaderstats and leaderstats:FindFirstChild("Beli") and leaderstats.Beli.Value or 0
+
+                    if lvl >= 20 and beli >= 10000 then BF.buyGeppo() end
+                    if lvl >= 20 and beli >= 25000 then BF.buyBusoHaki() end
+                    if lvl >= 100 and beli >= 100000 then BF.buySoru() end
+                    if lvl >= 300 and beli >= 750000 then BF.buyObservationHaki() end
+                end)
+            end
+            task.wait(20)
+        end
+    end)
+end
+
+-- Generic CommF_ purchase supporting arbitrary arguments
+BF.buyShopItem = function(...)
+    local args = {...}
+    if #args == 0 then return false end
+    local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+    local commF = remotes and remotes:FindFirstChild("CommF_")
+    if not commF then
+        BF.notifyUser("Shop", "CommF_ not found", 3)
+        return false
+    end
+    local ok, ret = pcall(function()
+        return commF:InvokeServer(unpack(args))
+    end)
+    local itemName = tostring(args[2] or args[1])
+    if ok and ret ~= false then
+        BF.notifyUser("Shop", "Bought " .. itemName .. " (" .. tostring(ret) .. ")", 3)
+        print("[BF Shop]", unpack(args), "->", ret)
+        return true, ret
+    else
+        BF.notifyUser("Shop", "Shop call " .. itemName .. ": " .. tostring(ret), 4)
+        return false, ret
+    end
+end
+
+-- Server utilities (Rejoin & Server Hop)
+BF.rejoinServer = function()
+    local TeleportService = game:GetService("TeleportService")
+    BF.notifyUser("Server", "Rejoining server...", 3)
+    pcall(function()
+        TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer)
+    end)
+end
+
+BF.serverHop = function()
+    local TeleportService = game:GetService("TeleportService")
+    local HttpService = game:GetService("HttpService")
+    BF.notifyUser("Server", "Finding new server...", 3)
+    task.spawn(function()
+        pcall(function()
+            local url = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"
+            local res = game:HttpGet(url)
+            local data = HttpService:JSONDecode(res)
+            if data and data.data then
+                for _, server in ipairs(data.data) do
+                    if type(server) == "table" and server.playing and server.maxPlayers and server.playing < server.maxPlayers and server.id ~= game.JobId then
+                        TeleportService:TeleportToPlaceInstance(game.PlaceId, server.id, LocalPlayer)
+                        return
+                    end
+                end
+            end
+            TeleportService:Teleport(game.PlaceId, LocalPlayer)
+        end)
+    end)
+end
+
 if useVaxorin and window then
     local mainTab = window:CreateTab("Farm")
 
@@ -6326,9 +6998,10 @@ if useVaxorin and window then
     })
 
     local espTab = window:CreateTab("ESP")
+    local fruitTab = window:CreateTab("Fruits")
+    local ShopTab = window:CreateTab("Shop")
     local MoneyTab = window:CreateTab("Auto Money")
     local combatTab = window:CreateTab("Combat")
-    local fruitTab = window:CreateTab("Fruits")
 
     local raidTab = window:CreateTab("Raid")
     local raidSection = raidTab:CreateSection({Name = "Auto Raid (Microchip)"})
@@ -6355,7 +7028,9 @@ if useVaxorin and window then
         Callback = function(v)
             if type(v) == "table" then v = v[1] end
             config.raidType = tostring(v or "Flame")
-            selectRaidType(config.raidType)
+            if type(selectRaidType) == "function" then
+                pcall(selectRaidType, config.raidType)
+            end
         end,
     })
     raidSection:CreateToggle({
@@ -6642,6 +7317,320 @@ if useVaxorin and window then
         Flag = "ESP.EnemyDist",
         Save = true,
         Callback = function(v) config.enemyEspMaxDist = v end,
+    })
+    -- ========== SHOP TAB ==========
+    -- 1) ABILITIES & HAKI (ABILITY TEACHER)
+    local abilitySection = ShopTab:CreateSection({Name = "Abilities & Haki (Teacher)"})
+    abilitySection:CreateButton({
+        Name = "Buy Aura / Buso Haki ($25,000)",
+        Callback = function()
+            BF.buyBusoHaki()
+        end,
+    })
+    abilitySection:CreateButton({
+        Name = "Buy Sky Jump / Geppo ($10,000)",
+        Callback = function()
+            BF.buyGeppo()
+        end,
+    })
+    abilitySection:CreateButton({
+        Name = "Buy Flash Step / Soru ($100,000)",
+        Callback = function()
+            BF.buySoru()
+        end,
+    })
+    abilitySection:CreateButton({
+        Name = "Buy Instinct / Ken Haki ($750,000 | Lv 300+)",
+        Callback = function()
+            BF.buyObservationHaki()
+        end,
+    })
+    abilitySection:CreateButton({
+        Name = "Buy ALL Basic Abilities (Geppo, Buso, Soru)",
+        Callback = function()
+            BF.buyAllAbilities()
+        end,
+    })
+    abilitySection:CreateToggle({
+        Name = "Auto Buy Abilities (when money/level ready)",
+        CurrentValue = config.autoBuyAbilities or false,
+        Flag = "Shop.AutoBuyAbilities",
+        Save = true,
+        Callback = function(v)
+            config.autoBuyAbilities = v
+            if v then
+                BF.startAutoBuyAbilities()
+                BF.notifyUser("Shop", "Auto Buy Abilities ON", 2)
+            else
+                BF.autoBuyAbilitiesRunning = false
+                BF.notifyUser("Shop", "Auto Buy Abilities OFF", 2)
+            end
+        end,
+    })
+
+    -- 2) FIGHTING STYLES (BUY & QUICK SWITCH)
+    local styleSection = ShopTab:CreateSection({Name = "Fighting Styles"})
+    styleSection:CreateParagraph({
+        Title = "Fighting Styles Info & Requirements",
+        Content = "Sea 1: Dark Step ($150k), Electro ($500k), Water Kung Fu ($750k)\nSea 2: Dragon Breath (1.5k Frags), Superhuman ($3M), Death Step ($2.5M+5k F), Sharkman Karate ($2.5M+5k F)\nSea 3: Electric Claw ($3M+5k F), Dragon Talon ($3M+5k F), Godhuman ($5M+5k F), Sanguine Art ($5M+5k F)",
+    })
+
+    local STYLES_LIST = {
+        {Name = "Dark Step ($150,000 | Sea 1)",            Key = "Dark Step"},
+        {Name = "Electro ($500,000 | Sea 1)",              Key = "Electro"},
+        {Name = "Water Kung Fu ($750,000 | Sea 1)",        Key = "Water Kung Fu"},
+        {Name = "Dragon Breath (1,500 Frags | Sea 2)",     Key = "Dragon Breath"},
+        {Name = "Superhuman ($3,000,000 | Sea 2)",         Key = "Superhuman"},
+        {Name = "Death Step ($2.5M + 5k Frags | Sea 2)",   Key = "Death Step"},
+        {Name = "Sharkman Karate ($2.5M + 5k F | Sea 2)",  Key = "Sharkman Karate"},
+        {Name = "Electric Claw ($3,000,000 + 5k F | Sea 3)", Key = "Electric Claw"},
+        {Name = "Dragon Talon ($3,000,000 + 5k F | Sea 3)", Key = "Dragon Talon"},
+        {Name = "Godhuman ($5,000,000 + 5k Frags | Sea 3)", Key = "Godhuman"},
+        {Name = "Sanguine Art ($5M + 5k Frags | Sea 3)",   Key = "Sanguine Art"},
+    }
+
+    for _, style in ipairs(STYLES_LIST) do
+        styleSection:CreateButton({
+            Name = "Buy " .. style.Name,
+            Callback = function()
+                BF.buyFightingStyle(style.Key)
+            end,
+        })
+    end
+
+    styleSection:CreateButton({
+        Name = "Buy ALL Styles (Throttled)",
+        Callback = function()
+            BF.buyAllFightingStyles()
+        end,
+    })
+
+    local selectedSwitchStyle = "Dark Step"
+    styleSection:CreateDropdown({
+        Name = "Quick Switch Fighting Style",
+        Options = {
+            "Dark Step", "Electro", "Water Kung Fu", "Dragon Breath",
+            "Superhuman", "Death Step", "Sharkman Karate",
+            "Electric Claw", "Dragon Talon", "Godhuman", "Sanguine Art"
+        },
+        CurrentOption = "Dark Step",
+        Flag = "Shop.SwitchStyle",
+        Save = false,
+        Callback = function(v)
+            if type(v) == "table" then v = v[1] end
+            selectedSwitchStyle = tostring(v or "Dark Step")
+        end,
+    })
+
+    styleSection:CreateButton({
+        Name = "Equip Selected Fighting Style",
+        Callback = function()
+            local success = BF.equipFightingStyle(selectedSwitchStyle)
+            if success then
+                BF.notifyUser("Style", selectedSwitchStyle .. " equipped!", 2)
+            else
+                BF.notifyUser("Style", "Could not equip " .. selectedSwitchStyle .. " (check if unlocked)", 3)
+            end
+        end,
+    })
+
+    -- 3) SWORDS DEALER
+    local swordSection = ShopTab:CreateSection({Name = "Swords Dealer"})
+    local SWORD_PURCHASES = {
+        {Name = "Katana ($1,000 | Sea 1)",              Args = {"BuyItem", "Katana"}},
+        {Name = "Cutlass ($1,000 | Sea 1)",             Args = {"BuyItem", "Cutlass"}},
+        {Name = "Dual Katana ($12,000 | Sea 1)",        Args = {"BuyItem", "Dual Katana"}},
+        {Name = "Iron Mace ($25,000 | Sea 1)",          Args = {"BuyItem", "Iron Mace"}},
+        {Name = "Triple Katana ($60,000 | Sea 1)",      Args = {"BuyItem", "Triple Katana"}},
+        {Name = "Pipe ($100,000 | Sea 1)",              Args = {"BuyItem", "Pipe"}},
+        {Name = "Dual-Headed Blade ($400,000 | Sea 1)", Args = {"BuyItem", "Dual-Headed Blade"}},
+        {Name = "Soul Cane ($750,000 | Sea 1)",         Args = {"BuyItem", "Soul Cane"}},
+        {Name = "Bisento ($1,000,000 | Sea 1)",         Args = {"BuyItem", "Bisento"}},
+        {Name = "True Triple Katana ($2,000,000 | Sea 2)", Args = {"BuyTrueTripleKatana"}},
+    }
+    for _, item in ipairs(SWORD_PURCHASES) do
+        swordSection:CreateButton({
+            Name = "Buy " .. item.Name,
+            Callback = function()
+                BF.buyShopItem(unpack(item.Args))
+            end,
+        })
+    end
+
+    -- 4) GUNS DEALER
+    local gunSection = ShopTab:CreateSection({Name = "Guns Dealer"})
+    local GUN_PURCHASES = {
+        {Name = "Slingshot ($5,000 | Sea 1)",           Args = {"BuyItem", "Slingshot"}},
+        {Name = "Flintlock ($10,500 | Sea 1)",          Args = {"BuyItem", "Flintlock"}},
+        {Name = "Refined Slingshot ($30,000 | Sea 1)",  Args = {"BuyItem", "Refined Slingshot"}},
+        {Name = "Refined Flintlock ($65,000 | Sea 1)",  Args = {"BuyItem", "Refined Flintlock"}},
+        {Name = "Musket ($8,000 | Sea 1)",              Args = {"BuyItem", "Musket"}},
+        {Name = "Dual Flintlock ($175,000 | Sea 1)",    Args = {"BuyItem", "Dual Flintlock"}},
+        {Name = "Cannon ($100,000 | Sea 1)",            Args = {"BuyItem", "Cannon"}},
+        {Name = "Kabucha (1,500 Frags | Sea 2)",        Args = {"BlackbeardReward", "Slingshot", "2"}},
+    }
+    for _, item in ipairs(GUN_PURCHASES) do
+        gunSection:CreateButton({
+            Name = "Buy " .. item.Name,
+            Callback = function()
+                BF.buyShopItem(unpack(item.Args))
+            end,
+        })
+    end
+
+    -- 5) ACCESSORIES DEALER
+    local accessorySection = ShopTab:CreateSection({Name = "Accessories Dealer"})
+    local ACCESSORY_PURCHASES = {
+        {Name = "Black Cape ($50,000 | Sea 1 Lv 50+)",  Args = {"BuyItem", "Black Cape"}},
+        {Name = "Swordsman Hat ($150,000 | Sea 1)",     Args = {"BuyItem", "Swordsman Hat"}},
+        {Name = "Tomoe Ring ($500,000 | Sea 1 Lv 450+)",Args = {"BuyItem", "Tomoe Ring"}},
+    }
+    for _, item in ipairs(ACCESSORY_PURCHASES) do
+        accessorySection:CreateButton({
+            Name = "Buy " .. item.Name,
+            Callback = function()
+                BF.buyShopItem(unpack(item.Args))
+            end,
+        })
+    end
+
+    -- 6) BOATS DEALER
+    local boatSection = ShopTab:CreateSection({Name = "Boats Dealer"})
+    local BOAT_PURCHASES = {
+        {Name = "Dinghy (Free)",          Args = {"BuyBoat", "Dinghy"}},
+        {Name = "Sloop ($300)",           Args = {"BuyBoat", "Sloop"}},
+        {Name = "Caravel ($1,000)",       Args = {"BuyBoat", "Caravel"}},
+        {Name = "Galleon ($3,000)",       Args = {"BuyBoat", "Galleon"}},
+        {Name = "Brigade ($10,000 | Sea 2)", Args = {"BuyBoat", "Brigade"}},
+        {Name = "Flying Boat (Enel)",     Args = {"BuyBoat", "FlyingBoat"}},
+    }
+    for _, item in ipairs(BOAT_PURCHASES) do
+        boatSection:CreateButton({
+            Name = "Buy " .. item.Name,
+            Callback = function()
+                BF.buyShopItem(unpack(item.Args))
+            end,
+        })
+    end
+
+    -- 7) STATS, RACES & DEATH KING
+    local resetSection = ShopTab:CreateSection({Name = "Stats, Races & Death King"})
+    resetSection:CreateButton({
+        Name = "Stat Reset (Plokster | 2,500 Frags)",
+        Callback = function()
+            BF.buyShopItem("BlackbeardReward", "Refund", "1")
+            task.wait(0.2)
+            BF.buyShopItem("BlackbeardReward", "Refund", "2")
+        end,
+    })
+    resetSection:CreateButton({
+        Name = "Race Reroll (Tort | 3,000 Frags)",
+        Callback = function()
+            BF.buyShopItem("BlackbeardReward", "Reroll", "1")
+            task.wait(0.2)
+            BF.buyShopItem("BlackbeardReward", "Reroll", "2")
+        end,
+    })
+    resetSection:CreateButton({
+        Name = "Random Surprise (50 Bones | Death King)",
+        Callback = function()
+            BF.buyShopItem("Bones", "Buy", 1, 1)
+        end,
+    })
+    resetSection:CreateButton({
+        Name = "Stat Reset (150 Bones | Death King)",
+        Callback = function()
+            BF.buyShopItem("Bones", "Buy", 2, 1)
+        end,
+    })
+    resetSection:CreateButton({
+        Name = "Race Reroll (300 Bones | Death King)",
+        Callback = function()
+            BF.buyShopItem("Bones", "Buy", 3, 1)
+        end,
+    })
+    resetSection:CreateToggle({
+        Name = "Auto Gamble Bones (when 50+ Bones)",
+        CurrentValue = config.autoBonesBuy or false,
+        Flag = "Shop.AutoBonesBuy",
+        Save = true,
+        Callback = function(v)
+            config.autoBonesBuy = v
+            if v then
+                if type(BF.startBonesBuy) == "function" then BF.startBonesBuy() end
+            else
+                if type(BF.stopBonesBuy) == "function" then BF.stopBonesBuy() end
+            end
+        end,
+    })
+
+    -- 8) DEVIL FRUIT GACHA & INVENTORY
+    local gachaSection = ShopTab:CreateSection({Name = "Fruit Gacha & Storage"})
+    gachaSection:CreateButton({
+        Name = "Roll Zioles Gacha Once",
+        Callback = function()
+            BF.buyRandomFruitOnce()
+        end,
+    })
+    gachaSection:CreateToggle({
+        Name = "Auto Roll Gacha (when 2h CD ready)",
+        CurrentValue = config.autoRandomFruit or false,
+        Flag = "Shop.AutoRandomFruit",
+        Save = true,
+        Callback = function(v)
+            config.autoRandomFruit = v
+            if v then
+                BF.startAutoRandomFruit()
+            else
+                BF.stopAutoRandomFruit()
+            end
+        end,
+    })
+    gachaSection:CreateButton({
+        Name = "Store Held Fruits in Inventory",
+        Callback = function()
+            pcall(function()
+                if type(BF.storeFruitInInventory) == "function" then
+                    local oldVal = config.fruitStoreAfterCollect
+                    config.fruitStoreAfterCollect = true
+                    BF.storeFruitInInventory()
+                    config.fruitStoreAfterCollect = oldVal
+                    BF.notifyUser("Fruit", "Stored fruits in inventory", 3)
+                end
+            end)
+        end,
+    })
+
+    -- 9) RAID MICROCHIPS
+    local raidChipSection = ShopTab:CreateSection({Name = "Raid Microchips"})
+    raidChipSection:CreateButton({
+        Name = "Buy Normal Microchip ($100,000 / 1 Fruit)",
+        Callback = function()
+            BF.buyShopItem("RaidsNpc", "Select", config.raidType or "Flame")
+            task.wait(0.2)
+            BF.buyShopItem("RaidsNpc", "Buy")
+        end,
+    })
+    raidChipSection:CreateButton({
+        Name = "Buy Special Microchip (Dough/Phoenix)",
+        Callback = function()
+            BF.buyShopItem("RaidsNpc", "SpecialMicrochip")
+        end,
+    })
+
+    -- 10) SERVER UTILITIES
+    local serverSection = ShopTab:CreateSection({Name = "Server Utilities"})
+    serverSection:CreateButton({
+        Name = "Rejoin Current Server",
+        Callback = function()
+            BF.rejoinServer()
+        end,
+    })
+    serverSection:CreateButton({
+        Name = "Server Hop (Find New Server)",
+        Callback = function()
+            BF.serverHop()
+        end,
     })
 
     local RadarSection = MoneyTab:CreateSection({Name = "Radar Chests nearby"})
@@ -6992,16 +7981,24 @@ if useVaxorin and window then
 
     window:SetWatermarkEnabled(true)
     pcall(BF.startStatusUpdater)
+    pcall(BF.startAntiAfk)
     if config.bossTimersEnabled then
         pcall(BF.startBossTimers)
+    end
+    if config.autoBuyAbilities then
+        pcall(BF.startAutoBuyAbilities)
     end
     local seaName = "?"
     pcall(function() seaName = tostring(BF.getCurrentSea()) end)
     BF.notifyUser("Loaded", "Vaxorin UI active. Sea: " .. seaName)
 else
     BF.notifyUser("Loaded", "Fallback UI active. Use the button to start/stop.")
+    pcall(BF.startAntiAfk) 
     if config.bossTimersEnabled then
         pcall(BF.startBossTimers)
+    end
+    if config.autoBuyAbilities then
+        pcall(BF.startAutoBuyAbilities)
     end
 end
 

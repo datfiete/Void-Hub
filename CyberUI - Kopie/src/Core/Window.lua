@@ -16,7 +16,8 @@ local Stats = game:GetService("Stats")
 
 local GUI_NAME = "Vaxorin"
 local VERSION = "5.0"
-local Vaxorin_Logo = "rbxassetid://135320038058277"
+local Old_Vaxorin_Logo = "rbxassetid://135320038058277"
+local Vaxorin_Logo = "rbxassetid://132857255558778"
 local LEGACY_LOGO = "rbxassetid://128228297210141"
 
 
