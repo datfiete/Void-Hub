@@ -14,7 +14,6 @@ print("[BF] load ok - full autofarm script")
 
 local BF = {}
 
-
 -- Load Vaxorin (or fallback UI)
 local useVaxorin = false
 local window = nil
@@ -75,7 +74,7 @@ local success, err = pcall(function()
         window = Vaxorin:CreateWindow({
             Title = "Blox Fruits",
             Subtitle = "by Fietewoozle",
-            Logo = "rbxassetid://135320038058277",
+            Logo = Vaxorin_Logo,
             Badges = {{Text = "Vaxorin | v1.0"}, {Text = "Executor : " .. Executor}},
             Footer = {Username = LocalPlayer.Name, Status = "Ready"},
             DiscordLink = "https://discord.gg/example",
