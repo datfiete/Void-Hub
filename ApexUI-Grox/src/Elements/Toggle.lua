@@ -1,0 +1,291 @@
+--!strict
+
+local Theme = require(script.Parent.Parent.Core.Theme)
+local Maid = require(script.Parent.Parent.Utils.Maid)
+local Helpers = require(script.Parent.Parent.Utils.Helpers)
+local Tween = require(script.Parent.Parent.Utils.Tween)
+
+local Toggle = {}
+Toggle.__index = Toggle
+
+export type ToggleOptions = {
+	Name: string,
+	CurrentValue: boolean?,
+	Default: boolean?,
+	Flag: string?,
+	Save: boolean?,
+	Callback: ((value: boolean) -> ())?,
+}
+
+export type ToggleHandle = {
+	Set: (self: ToggleHandle, value: boolean) -> (),
+	Get: (self: ToggleHandle) -> boolean,
+	OnChanged: (self: ToggleHandle, callback: (value: boolean) -> ()) -> RBXScriptConnection,
+	Destroy: (self: ToggleHandle) -> (),
+}
+
+function Toggle.new(section: any, data: ToggleOptions): ToggleHandle
+	local self = setmetatable({
+		_Section = section,
+		_Data = data,
+		_Maid = Maid.new(),
+		_Value = data.CurrentValue == true or data.Default == true,
+		_Changed = Instance.new("BindableEvent"),
+	}, Toggle)
+
+	local library = section.Tab.Window.Library
+	local defaultValue = self._Value
+	local savedRaw = nil
+	if data.Flag and library:_shouldSaveFlag(data.Flag, data.Save) and library.Config then
+		savedRaw = library.Config:Get(`Flags.{data.Flag}`)
+	end
+	self._Value = library:_getSavedFlag(data.Flag, defaultValue, data.Save)
+
+	local row = Helpers.CreateFrame({
+		Name = "Toggle",
+		Size = UDim2.new(1, 0, 0, Theme.ElementHeight),
+		BackgroundColor3 = library.Theme.ElementBackground or library.Theme.Background,
+		Parent = section.Inner,
+	})
+	Helpers.Corner(row, Theme.CornerRadiusSmall)
+	local rowStroke = Helpers.Stroke(row, library.Theme.Border, 1)
+	rowStroke.Transparency = 0.18
+	local pop = Instance.new("UIScale")
+	pop.Scale = 0.94
+	pop.Parent = row
+	task.defer(function()
+		Tween.Play(pop, { Scale = 1 }, { Time = 0.18, EasingStyle = Enum.EasingStyle.Back })
+	end)
+
+	local hasFlag = type(data.Flag) == "string" and data.Flag ~= ""
+	local label = Helpers.CreateLabel({
+		Name = "Label",
+		Size = UDim2.new(1, if hasFlag then -88 else -56, 1, 0),
+		Position = UDim2.new(0, 12, 0, 0),
+		Text = data.Name,
+		Parent = row,
+	})
+
+	local starBtn = nil
+	if hasFlag then
+		starBtn = Instance.new("TextButton")
+		starBtn.Name = "FavStar"
+		starBtn.Size = UDim2.fromOffset(22, 22)
+		starBtn.Position = UDim2.new(1, -62, 0.5, 0)
+		starBtn.AnchorPoint = Vector2.new(1, 0.5)
+		starBtn.BackgroundTransparency = 1
+		starBtn.Text = "★"
+		starBtn.Font = Theme.FontBold
+		starBtn.TextSize = 14
+		starBtn.AutoButtonColor = false
+		starBtn.ZIndex = 4
+		starBtn.Parent = row
+		local favOn = library.IsFavorite and library:IsFavorite(data.Flag)
+		starBtn.TextColor3 = if favOn then Color3.fromRGB(255, 200, 60) else (library.Theme.TextMuted or Color3.fromRGB(120, 120, 130))
+		starBtn.TextTransparency = if favOn then 0 else 0.35
+		starBtn.MouseButton1Click:Connect(function()
+			if not library.ToggleFavorite then return end
+			local on = library:ToggleFavorite(data.Flag)
+			starBtn.TextColor3 = if on then Color3.fromRGB(255, 200, 60) else (library.Theme.TextMuted or Color3.fromRGB(120, 120, 130))
+			starBtn.TextTransparency = if on then 0 else 0.35
+			pcall(function()
+				local win = section.Tab and section.Tab.Window
+				if win and win.Notify then
+					win:Notify({
+						Title = if on then "Favorited" else "Unfavorited",
+						Content = tostring(data.Name or data.Flag),
+						Type = "Info",
+						Duration = 1.5,
+					})
+				end
+			end)
+		end)
+	end
+
+	-- Apex-style pill toggle: taller, glowing track, soft glass look
+	local switch = Helpers.CreateFrame({
+		Name = "Switch",
+		Size = UDim2.fromOffset(48, 26),
+		Position = UDim2.new(1, -14, 0.5, 0),
+		AnchorPoint = Vector2.new(1, 0.5),
+		BackgroundColor3 = library.Theme.Border,
+		Parent = row,
+	})
+	Helpers.Corner(switch, 999)
+	local switchStroke = Helpers.Stroke(switch, library.Theme.BorderStrong or library.Theme.Border, 1.2)
+	local switchGlow = Helpers.Glow(switch, library.Theme.Accent, 10, 0.90)
+	switchGlow.ZIndex = 0
+
+	local knob = Helpers.CreateFrame({
+		Name = "Knob",
+		Size = UDim2.fromOffset(20, 20),
+		Position = UDim2.new(0, 3, 0.5, 0),
+		AnchorPoint = Vector2.new(0, 0.5),
+		BackgroundColor3 = library.Theme.Text,
+		ZIndex = 2,
+		Parent = switch,
+	})
+	Helpers.Corner(knob, 999)
+	-- subtle inner highlight on the knob
+	local knobHighlight = Instance.new("UIGradient")
+	knobHighlight.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(200, 210, 230)),
+	})
+	knobHighlight.Rotation = 90
+	knobHighlight.Parent = knob
+
+	local clickTarget = Helpers.CreateButton({
+		Name = "ClickTarget",
+		Size = UDim2.fromScale(1, 1),
+		Text = "",
+		BackgroundTransparency = 1,
+		ZIndex = 3,
+		Parent = row,
+	})
+
+	self.Instance = row
+	self.Label = label
+	self.Switch = switch
+	self.Knob = knob
+	self.SwitchGlow = switchGlow
+	self.Star = starBtn
+
+	function self:_applyVisual(value: boolean, animate: boolean?)
+		local onColor = library.Theme.Accent
+		local offColor = library.Theme.Border
+		local targetPosition = if value then UDim2.new(1, -23, 0.5, 0) else UDim2.new(0, 3, 0.5, 0)
+		local targetColor = if value then onColor else offColor
+
+		if animate then
+			Tween.Play(knob, { Position = targetPosition }, { Time = 0.22, EasingStyle = Enum.EasingStyle.Quad })
+			Tween.Play(switch, { BackgroundColor3 = targetColor }, { Time = 0.22 })
+			Tween.Play(switchStroke, {
+				Color = if value then library.Theme.Accent else (library.Theme.BorderStrong or library.Theme.Border),
+				Transparency = if value then 0.25 else 0.7,
+			}, { Time = 0.22 })
+			if switchGlow and switchGlow:IsA("ImageLabel") then
+				Tween.Play(switchGlow, { ImageTransparency = if value then 0.78 else 1 }, { Time = 0.25 })
+			end
+		else
+			knob.Position = targetPosition
+			switch.BackgroundColor3 = targetColor
+			switchStroke.Color = if value then library.Theme.Accent else (library.Theme.BorderStrong or library.Theme.Border)
+			switchStroke.Transparency = if value then 0.25 else 0.7
+			if switchGlow then
+				switchGlow.ImageColor3 = library.Theme.Accent
+				switchGlow.ImageTransparency = if value then 0.78 else 1
+			end
+		end
+	end
+
+	function self:_commit(value: boolean, fireCallback: boolean?)
+		self._Value = value
+		self:_applyVisual(value, true)
+		library:_setFlag(data.Flag, value, data.Save)
+		self._Changed:Fire(value)
+
+		if fireCallback ~= false and type(data.Callback) == "function" then
+			task.spawn(function()
+				-- Ignore callbacks that were queued before a rapid UI restart or
+				-- superseded by a newer toggle state.
+				if library._Destroyed or self._Value ~= value then
+					return
+				end
+				local ok, err = pcall(data.Callback, value)
+				if not ok then
+					pcall(function() local lib = self._Section.Tab.Window.Library; if lib and lib.ReportError then lib:ReportError("Toggle", err) end end)
+				warn("[Vaxorin] Toggle callback error:", err)
+				end
+			end)
+		end
+	end
+
+	self._Maid:Give(self._Changed)
+	self._Maid:GiveTask(clickTarget.MouseButton1Click:Connect(function()
+		self:_commit(not self._Value)
+	end))
+
+	if data.Flag then
+		library:_setFlag(data.Flag, self._Value, data.Save)
+		if library._bindFlagControl then
+			library:_bindFlagControl(data.Flag, self)
+		end
+	end
+
+	self:_applyVisual(self._Value, false)
+
+	-- Config restored the value but did not run the feature callback — fire once on load.
+	if type(data.Callback) == "function" and data.FireOnLoad ~= false and savedRaw ~= nil then
+		task.defer(function()
+			if library._Destroyed or self._Value ~= (savedRaw == true) then
+				return
+			end
+			local ok, err = pcall(data.Callback, self._Value)
+			if not ok then
+				warn("[Vaxorin] Toggle FireOnLoad error:", err)
+			end
+		end)
+	end
+
+	return self :: any
+end
+
+function Toggle:RefreshTheme()
+	local theme = self._Section.Tab.Window.Library.Theme
+	Tween.Play(self.Instance, { BackgroundColor3 = theme.ElementBackground or theme.Background }, { Time = 0.22 })
+	local rootStroke = self.Instance:FindFirstChildOfClass("UIStroke")
+	if rootStroke then
+		Tween.Play(rootStroke, { Color = theme.Border }, { Time = 0.22 })
+	end
+	if self.Label then
+		Tween.Play(self.Label, { TextColor3 = theme.Text }, { Time = 0.22 })
+	end
+	Tween.Play(self.Switch, { BackgroundColor3 = if self._Value then theme.Accent else theme.Border }, { Time = 0.22 })
+	-- VaxorinGlow is an ImageLabel (Helpers.Glow), not UIStroke
+	if self.SwitchGlow then
+		if self.SwitchGlow:IsA("ImageLabel") then
+			self.SwitchGlow.ImageColor3 = theme.Accent
+			self.SwitchGlow.ImageTransparency = if self._Value then 0.84 else 1
+		elseif self.SwitchGlow:IsA("UIStroke") then
+			self.SwitchGlow.Color = theme.Accent
+			self.SwitchGlow.Transparency = if self._Value then 0.84 else 1
+		end
+	end
+	local switchStroke = self.Switch:FindFirstChildOfClass("UIStroke")
+	if switchStroke then
+		switchStroke.Color = if self._Value then theme.Accent else (theme.BorderStrong or theme.Border)
+		switchStroke.Transparency = if self._Value then 0.35 else 0.65
+	end
+	self.Knob.BackgroundColor3 = theme.Text
+
+	-- Favorite stars are separate from the toggle's main visual tree, so they
+	-- must be refreshed explicitly when the theme changes.
+	if self.Star and self.Star.Parent then
+		local favorite = false
+		local library = self._Section.Tab.Window.Library
+		if library and library.IsFavorite and self._Data.Flag then
+			favorite = library:IsFavorite(self._Data.Flag)
+		end
+		self.Star.TextColor3 = if favorite then Color3.fromRGB(255, 200, 60) else theme.TextMuted
+		self.Star.TextTransparency = if favorite then 0 else 0.35
+	end
+end
+
+function Toggle:Set(value: boolean, fireCallback: boolean?)
+	self:_commit(value, fireCallback == true)
+end
+
+function Toggle:Get(): boolean
+	return self._Value
+end
+
+function Toggle:OnChanged(callback: (value: boolean) -> ()): RBXScriptConnection
+	return self._Changed.Event:Connect(callback)
+end
+
+function Toggle:Destroy()
+	self._Maid:DoCleaning()
+end
+
+return Toggle
