@@ -566,14 +566,15 @@ local islands = {
     {Name = "Marine Fortress",    Min = 120, Max = 150, Pos = Vector3.new(-4809, 13, 4302), Quest = {"StartQuest","MarineQuest2",1}, EnemyPatterns = {"Chief Petty Officer"}, isBoss = false},
     {Name = "Sky 1",              Min = 150, Max = 175, Pos = Vector3.new(-5092, 281, -1019), Quest = {"StartQuest","SkyQuest",1}, EnemyPatterns = {"Sky Bandit"}, isBoss = false},
     {Name = "Sky 2",              Min = 175, Max = 190, Pos = Vector3.new(-5293, 505, -351), Quest = {"StartQuest","SkyQuest",2}, EnemyPatterns = {"Dark Master"}, isBoss = false},
-    {Name = "Prison 1",           Min = 190, Max = 210, Pos = Vector3.new(5270, 9, 470), Quest = {"StartQuest","PrisonerQuest",1}, EnemyPatterns = {"Prisoner"}, isBoss = false},
-    {Name = "Prison 2",           Min = 210, Max = 230, Pos = Vector3.new(5330, 20, 750), Quest = {"StartQuest","PrisonerQuest",2}, EnemyPatterns = {"Ruthless Prisoner","Dangerous Prisoner"}, isBoss = false},
+    {Name = "Prison 1",           Min = 190, Max = 209, Pos = Vector3.new(5270, 9, 470), Quest = {"StartQuest","PrisonerQuest",1}, EnemyPatterns = {"Prisoner"}, isBoss = false},
+    {Name = "Prison 2",           Min = 210, Max = 224, Pos = Vector3.new(5330, 20, 750), Quest = {"StartQuest","PrisonerQuest",2}, EnemyPatterns = {"Dangerous Prisoner"}, isBoss = false},
+    {Name = "Prison 3 (Ruthless Prisoners)", Min = 220, Max = 229, Pos = Vector3.new(5330, 20, 750), Quest = {"StartQuest","ImpelQuest",1}, EnemyPatterns = {"Ruthless Prisoner"}, isBoss = false},
     {Name = "Colosseum 1",        Min = 250, Max = 300, Pos = Vector3.new(-1745, 10, -2705), Quest = {"StartQuest","ColosseumQuest",1}, EnemyPatterns = {"Toga Warrior"}, isBoss = false},
     --{Name = "Colosseum 2",        Min = 275, Max = 300, Pos = Vector3.new(-1175, 12, -3214), Quest = {"StartQuest","ColosseumQuest",2}, EnemyPatterns = {"Gladiator"}, isBoss = false},
     {Name = "Magma 1",            Min = 300, Max = 325, Pos = Vector3.new(-5468, 17, 8450), Quest = {"StartQuest","MagmaQuest",1}, EnemyPatterns = {"Military Soldier"}, isBoss = false},
     {Name = "Magma 2",            Min = 325, Max = 350, Pos = Vector3.new(-5842, 77, 8773), Quest = {"StartQuest","MagmaQuest",2}, EnemyPatterns = {"Military Spy"}, isBoss = false},
     {Name = "Fishman 1",          Min = 375, Max = 400, Pos = Vector3.new(60793, 24, 1362), Quest = {"StartQuest","FishmanQuest",1}, EnemyPatterns = {"Fishman Warrior"}, isBoss = false},
-    {Name = "Fishman 2",          Min = 400, Max = 425, Pos = Vector3.new(61928, 25, 1331), Quest = {"StartQuest","FishmanQuest",2}, EnemyPatterns = {"Fishman Commando"}, isBoss = false},
+    {Name = "Fishman 2",          Min = 400, Max = 450, Pos = Vector3.new(61928, 25, 1331), Quest = {"StartQuest","FishmanQuest",2}, EnemyPatterns = {"Fishman Commando"}, isBoss = false},
     {Name = "Sky Upper 1",        Min = 450, Max = 475, Pos = Vector3.new(-4241, 1089, -404), Quest = {"StartQuest","SkyExp1Quest",1}, EnemyPatterns = {"God's Guard"}, isBoss = false},
     {Name = "Sky Upper 2",        Min = 475, Max = 500, Pos = Vector3.new(-5959, 5469, 1831), Quest = {"StartQuest","SkyExp1Quest",2}, EnemyPatterns = {"Shanda"}, isBoss = false},
     {Name = "Sky Upper 3",        Min = 525, Max = 550, Pos = Vector3.new(-6798, 5552, 1214), Quest = {"StartQuest","SkyExp2Quest",1}, EnemyPatterns = {"Royal Squad"}, isBoss = false},
@@ -598,26 +599,14 @@ local islands = {
         Quest = {"StartQuest","MarineQuest2",1}, EnemyPatterns = {"Chief Petty Officer"},
         BossQuest = {"StartQuest","MarineQuest2",2}, BossPatterns = {"Vice Admiral"},
         isBoss = true},
-    {Name = "Warden", Min = 220, Max = 240, Pos = Vector3.new(5592, 2, 729),
-        Quest = {"StartQuest","PrisonerQuest",2}, EnemyPatterns = {"Dangerous Prisoner","Ruthless Prisoner"},
-        BossQuest = nil, BossPatterns = {"Warden"},
-        isBoss = true},
-    {Name = "Chief Warden", Min = 230, Max = 250, Pos = Vector3.new(5117, 2, 483),
-        Quest = {"StartQuest","PrisonerQuest",2}, EnemyPatterns = {"Dangerous Prisoner"},
-        BossQuest = {"StartQuest","ImpelQuest",2}, BossPatterns = {"Chief Warden"},
-        isBoss = true},
-    {Name = "Swan", Min = 240, Max = 250, Pos = Vector3.new(5117, 2, 483),
-        Quest = {"StartQuest","PrisonerQuest",2}, EnemyPatterns = {"Dangerous Prisoner"},
-        BossQuest = {"StartQuest","ImpelQuest",3}, BossPatterns = {"Swan"},
+    {Name = "Warden", Min = 230, Max = 249, Pos = Vector3.new(5592, 2, 729),
+        Quest = {"StartQuest","ImpelQuest",1}, EnemyPatterns = {"Ruthless Prisoner"},
+        BossQuest = {"StartQuest","ImpelQuest",2}, BossPatterns = {"Warden"},
         isBoss = true},
     -- Dump name is Magma General (not Admiral)
     {Name = "Magma General", Min = 350, Max = 375, Pos = Vector3.new(-5626, 55, 8623),
         Quest = {"StartQuest","MagmaQuest",2}, EnemyPatterns = {"Military Spy"},
         BossQuest = {"StartQuest","MagmaQuest",3}, BossPatterns = {"Magma General", "Magma Admiral"},
-        isBoss = true},
-    {Name = "Fishman Lord", Min = 425, Max = 450, Pos = Vector3.new(61353, 67, 1029),
-        Quest = {"StartQuest","FishmanQuest",2}, EnemyPatterns = {"Fishman Commando"},
-        BossQuest = {"StartQuest","FishmanQuest",3}, BossPatterns = {"Fishman Lord"},
         isBoss = true},
     {Name = "Sky Warlord", Min = 500, Max = 525, Pos = Vector3.new(-6272, 5473, 1888),
         Quest = {"StartQuest","SkyExp1Quest",2}, EnemyPatterns = {"Shanda"},
@@ -769,9 +758,11 @@ local islands = {
         Quest = {"StartQuest","SubmergedQuest1",2}, EnemyPatterns = {"Coral Pirate"}, isBoss = false},
     {Name = "Submerged 3",        Min = 2650, Max = 2674, Pos = Vector3.new(10628, -2078, 10072),
         Quest = {"StartQuest","SubmergedQuest2",1}, EnemyPatterns = {"Sea Chanter","Ocean Prophet"}, isBoss = false},
-    {Name = "Submerged 4",        Min = 2675, Max = 2699, Pos = Vector3.new(9827, -1995, 9745),
-        Quest = {"StartQuest","SubmergedQuest3",1}, EnemyPatterns = {"High Disciple","Ocean Prophet"}, isBoss = false},
-    {Name = "Submerged 5",        Min = 2700, Max = 2800, Pos = Vector3.new(9610, -1993, 9926),
+    {Name = "Submerged 4 (Ocean Prophet)", Min = 2675, Max = 2699, Pos = Vector3.new(9827, -1995, 9745),
+        Quest = {"StartQuest","SubmergedQuest2",2}, EnemyPatterns = {"Ocean Prophet"}, isBoss = false},
+    {Name = "Submerged 5 (High Disciple)", Min = 2700, Max = 2724, Pos = Vector3.new(9827, -1995, 9745),
+        Quest = {"StartQuest","SubmergedQuest3",1}, EnemyPatterns = {"High Disciple"}, isBoss = false},
+    {Name = "Submerged 6 (Grand Devotee)", Min = 2725, Max = 2800, Pos = Vector3.new(9610, -1993, 9926),
         Quest = {"StartQuest","SubmergedQuest3",2}, EnemyPatterns = {"Grand Devotee"}, isBoss = false},
 
     -- Sea3 bosses (from dump + markers)
@@ -1076,8 +1067,46 @@ end
 
 BF.isUnderwaterIsland = function(island)
     if not island then return false end
-    return island.Name:lower():find("underwater", 1, true) ~= nil
-        or island.Name:lower():find("submerged", 1, true) ~= nil
+    local name = island.Name:lower()
+    return name:find("underwater", 1, true) ~= nil
+        or name:find("submerged", 1, true) ~= nil
+        or name:find("fishman", 1, true) ~= nil
+end
+
+-- Use the known requestEntrance destination and only verify the resulting
+-- teleport. Do not steer toward this coordinate; it can route toward the exit.
+BF.UNDERWATER_CITY_REQUEST_POS = Vector3.new(61163.8515625, 11.680007934570312, 1819.7840576171875)
+BF.enterUnderwaterCity = function(timeout)
+    timeout = timeout or 6
+    local remoteFolder = ReplicatedStorage:FindFirstChild("Remotes")
+    local commF = remoteFolder and remoteFolder:FindFirstChild("CommF_")
+    if not commF then return false end
+    local expectedCity = Vector3.new(61165.19140625, 0.18704631924629211, 1897.379150390625)
+    local deadline = os.clock() + timeout
+    local character = LocalPlayer.Character
+    local hrp = character and character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return false end
+    local startPosition = hrp.Position
+    if BF.flying then BF.disableFly() end
+    repeat
+        if not BF.farmRunning then return false end
+        pcall(function()
+            commF:InvokeServer("requestEntrance", BF.UNDERWATER_CITY_REQUEST_POS)
+        end)
+        task.wait(0.2)
+        character = LocalPlayer.Character
+        local hrp = character and character:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            local inCity = (hrp.Position - expectedCity).Magnitude < 30
+            local teleported = (hrp.Position - startPosition).Magnitude > 1000
+            if inCity or teleported then
+                if BF.flying then BF.disableFly() end
+                return true
+            end
+        end
+        task.wait(0.1)
+    until os.clock() >= deadline
+    return false
 end
 
 -- =============================================
@@ -1146,6 +1175,17 @@ BF.autoEquipWeapon = function()
     if not character then return end
     local humanoid = character:FindFirstChild("Humanoid")
     if not humanoid then return end
+    -- Keep the Detective's Key equipped throughout the Detective -> Ice Door
+    -- handoff, even when Auto Melee prefers a fighting style.
+    if BF.seaProgressRunning and config.autoSeaProgress
+        and (BF.sea1Stage == "detective" or BF.sea1Stage == "door") then
+        local backpack = LocalPlayer:FindFirstChild("Backpack")
+        local key = character:FindFirstChild("Key") or (backpack and backpack:FindFirstChild("Key"))
+        if key then
+            if key.Parent ~= character then pcall(function() humanoid:EquipTool(key) end) end
+            return
+        end
+    end
     local currentTool = character:FindFirstChildOfClass("Tool")
     local currentType = currentTool and currentTool:GetAttribute("WeaponType")
     local preferred = config.preferredWeapon
@@ -1193,20 +1233,32 @@ end
 
 -- Buso (Observation/Armament) + preferred weapon — for Bones / Cake / farm
 BF._lastBusoAt = 0
+BF._busoAttemptCharacter = nil
 BF.ensureBuso = function()
-    if os.clock() - (BF._lastBusoAt or 0) < 3 then return end
-    BF._lastBusoAt = os.clock()
     local character = LocalPlayer.Character
     if not character then return end
-    local humanoid = character:FindFirstChild("Humanoid")
-    if not humanoid then return end
-    -- already has buso layer
-    if humanoid:FindFirstChild("LeftHand_BusoLayer1") then return end
-    -- some builds put layers under Characters folder clone
+    -- Buso layers are usually parented to body parts, not directly to Humanoid.
+    -- Searching descendants prevents repeatedly toggling Buso off after enabling it.
+    if character:FindFirstChild("LeftHand_BusoLayer1", true)
+        or character:FindFirstChild("RightHand_BusoLayer1", true)
+        or character:FindFirstChild("LeftArm_BusoLayer1", true)
+        or character:FindFirstChild("RightArm_BusoLayer1", true) then
+        BF._busoAttemptCharacter = character
+        return
+    end
+    -- CommF_ "Buso" is a toggle. Only issue it once per character because
+    -- client-side aura visuals may replicate after a delay or under another rig.
+    if BF._busoAttemptCharacter == character then return end
+    BF._busoAttemptCharacter = character
+    BF._lastBusoAt = os.clock()
     local characters = Workspace:FindFirstChild("Characters")
     local localCharacter = characters and characters:FindFirstChild(LocalPlayer.Name)
-    local busoHumanoid = (localCharacter and localCharacter:FindFirstChild("Humanoid")) or humanoid
-    if busoHumanoid and busoHumanoid:FindFirstChild("LeftHand_BusoLayer1") then return end
+    if localCharacter and (localCharacter:FindFirstChild("LeftHand_BusoLayer1", true)
+        or localCharacter:FindFirstChild("RightHand_BusoLayer1", true)
+        or localCharacter:FindFirstChild("LeftArm_BusoLayer1", true)
+        or localCharacter:FindFirstChild("RightArm_BusoLayer1", true)) then
+        return
+    end
     local remotes = ReplicatedStorage:FindFirstChild("Remotes")
     local commF = remotes and remotes:FindFirstChild("CommF_")
     if commF then
@@ -1746,9 +1798,35 @@ BF.getTrackedQuestLabel = function()
     local header = frame and frame:FindFirstChild("header")
     local label = header and (header:FindFirstChild("textLabel") or header:FindFirstChild("TextLabel"))
     if label and (label:IsA("TextLabel") or label:IsA("TextButton")) then
-        return label
+        local text = string.lower(tostring(label.ContentText or label.Text or ""))
+        if string.find(text, "defeat", 1, true) then return label end
     end
-        return nil
+
+    local bestLabel = nil
+    for _, item in ipairs(tqf:GetDescendants()) do
+        if item:IsA("TextLabel") or item:IsA("TextButton") then
+            local text = tostring(item.ContentText or item.Text or "")
+            if text ~= "" then
+                local visible = true
+                local ancestor = item
+                while ancestor and ancestor ~= tqf do
+                    if ancestor:IsA("GuiObject") and not ancestor.Visible then
+                        visible = false
+                        break
+                    end
+                    ancestor = ancestor.Parent
+                end
+                if visible then
+                    local lower = string.lower(text)
+                    if string.find(lower, "defeat", 1, true) then
+                        return item
+                    end
+                    if not bestLabel then bestLabel = item end
+                end
+            end
+        end
+    end
+    return bestLabel
 end
 
 BF.hasActiveQuest = function()
@@ -1758,7 +1836,17 @@ BF.hasActiveQuest = function()
     end
     BF._questCacheAt = now
     local pg = LocalPlayer:FindFirstChild("PlayerGui")
-    BF._questCacheHas = pg ~= nil and pg:FindFirstChild("TrackedQuestFrame") ~= nil
+    local tqf = pg and pg:FindFirstChild("TrackedQuestFrame")
+    local visible = tqf ~= nil
+    if visible and tqf:IsA("ScreenGui") and not tqf.Enabled then
+        visible = false
+    end
+    if visible and tqf:IsA("GuiObject") and not tqf.Visible then
+        visible = false
+    end
+    local label = visible and BF.getTrackedQuestLabel() or nil
+    local text = label and string.lower(tostring(label.ContentText or label.Text or "")) or ""
+    BF._questCacheHas = visible and string.find(text, "defeat", 1, true) ~= nil
     return BF._questCacheHas
 end
 
@@ -1800,7 +1888,6 @@ BF.questMatchesIsland = function(island, questType)
     local patterns = {}
     if questType == "boss" then
         for _, p in ipairs(island.BossPatterns or {}) do table.insert(patterns, p) end
-        for _, p in ipairs(island.EnemyPatterns or {}) do table.insert(patterns, p) end
     else
         for _, p in ipairs(island.EnemyPatterns or {}) do table.insert(patterns, p) end
     end
@@ -1849,6 +1936,30 @@ BF.ensureCorrectQuest = function(island, questType)
     if os.clock() - (BF._lastQuestFixAt or 0) < 1.5 then
         return false
     end
+
+    -- Fishman quests must be started at King Neptune, not at the enemy spawn.
+    -- Move there before invoking StartQuest; other islands keep their existing flow.
+    if tostring(questArgs[2]) == "FishmanQuest" then
+        local giverPosition = Vector3.new(61122.65234375, 18.497442245483, 1569.3997802734)
+        local character = LocalPlayer.Character
+        local hrp = character and character:FindFirstChild("HumanoidRootPart")
+        if hrp and (hrp.Position - giverPosition).Magnitude > 14 then
+            if not BF.flying then BF.enableFly() end
+            BF.setFlyTarget(giverPosition + Vector3.new(0, 3, 0), false)
+            local arrivalDeadline = os.clock() + 35
+            repeat
+                task.wait(0.1)
+                character = LocalPlayer.Character
+                hrp = character and character:FindFirstChild("HumanoidRootPart")
+            until not hrp or (hrp.Position - giverPosition).Magnitude <= 14
+                or os.clock() >= arrivalDeadline
+            if not hrp or (hrp.Position - giverPosition).Magnitude > 14 then
+                return false
+            end
+            if BF.flying then BF.disableFly() end
+        end
+    end
+
     BF._lastQuestFixAt = os.clock()
     local ok = BF.acceptQuest(questArgs)
     BF.invalidateQuestCache()
@@ -2144,6 +2255,87 @@ BF.getMatchingEnemies = function(island, patternInfo)
     return enemies
 end
 
+-- Read known mob spawn points from the replicated spawn folder, then use
+-- them as a patrol route when no matching enemy is currently streamed in.
+BF.getFarmSpawnPositions = function(patternInfo)
+    local patterns = patternInfo and patternInfo.patterns or {}
+    if #patterns == 0 then return {} end
+
+    local positions, seen = {}, {}
+    local function labelMatches(label)
+        label = string.lower(tostring(label or ""))
+        if BF.stripEnemyLabel then label = string.lower(BF.stripEnemyLabel(label)) end
+        for _, pattern in ipairs(patterns) do
+            local needle = string.lower(tostring(pattern or ""))
+            -- Spawn labels are canonical mob names. Exact matching avoids a
+            -- "Raider" quest accidentally routing to "Fishman Raider" points.
+            if needle ~= "" and label == needle then
+                return true
+            end
+        end
+        return false
+    end
+    local function addPosition(pos)
+        if typeof(pos) ~= "Vector3" then return end
+        local key = string.format("%d:%d:%d", math.floor(pos.X + 0.5), math.floor(pos.Y + 0.5), math.floor(pos.Z + 0.5))
+        if not seen[key] then
+            seen[key] = true
+            table.insert(positions, pos)
+        end
+    end
+    local function readNode(node)
+        if node:IsA("BasePart") then
+            addPosition(node.Position)
+        elseif node:IsA("Attachment") then
+            addPosition(node.WorldPosition)
+        elseif node:IsA("CFrameValue") then
+            addPosition(node.Value.Position)
+        elseif node:IsA("Vector3Value") then
+            addPosition(node.Value)
+        elseif node:IsA("Model") then
+            local ok, pivot = pcall(function() return node:GetPivot() end)
+            if ok then addPosition(pivot.Position) end
+        end
+    end
+
+    local replicated = game:GetService("ReplicatedStorage")
+    local folder = replicated:FindFirstChild("FortBuilderReplicatedSpawnPositionsFolder")
+    if folder then
+        for _, node in ipairs(folder:GetChildren()) do
+            local displayName = node:GetAttribute("DisplayName") or node.Name
+            if labelMatches(displayName) then
+                local before = #positions
+                readNode(node)
+                if #positions == before then
+                    for _, descendant in ipairs(node:GetDescendants()) do
+                        if descendant:IsA("BasePart") or descendant:IsA("Attachment")
+                            or descendant:IsA("CFrameValue") or descendant:IsA("Vector3Value") then
+                            readNode(descendant)
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    -- Some game versions also expose normal mob spawn markers here.
+    local origin = workspace:FindFirstChild("_WorldOrigin")
+    local enemySpawns = origin and origin:FindFirstChild("EnemySpawns")
+    if enemySpawns then
+        for _, node in ipairs(enemySpawns:GetChildren()) do
+            local displayName = node:GetAttribute("DisplayName") or node.Name
+            if labelMatches(displayName) then readNode(node) end
+        end
+    end
+
+    table.sort(positions, function(a, b)
+        if a.X ~= b.X then return a.X < b.X end
+        if a.Z ~= b.Z then return a.Z < b.Z end
+        return a.Y < b.Y
+    end)
+    return positions
+end
+
 -- =============================================
 -- FAST REMOTE ATTACK (no mouse)
 -- =============================================
@@ -2288,14 +2480,11 @@ local BOSS_CATALOG = {
         "Vice Admiral",
         "Saber Expert",
         "Warden",
-        "Fishman Lord",
         "Sky Warlord",
         "Lightning God",
         "Cyborg",
         "Ice Admiral",
         -- extras / markers (may not always be in EnemySpawns):
-        "Chief Warden",
-        "Swan",
         "Magma General",
         "Sky Warlord",
         "Lightning God",
@@ -3221,15 +3410,71 @@ BF._seaFly = function(pos)
     task.wait(3)
 end
 
+-- Keep the sea progression in control until a waypoint is actually reached.
+-- This avoids advancing the quest state after a fixed sleep while still in flight.
+BF._seaFlyTo = function(pos, radius, timeout)
+    if not pos then return false end
+    radius = radius or 8
+    timeout = timeout or 45
+    local deadline = os.clock() + timeout
+    while BF.seaProgressRunning and config.autoSeaProgress and os.clock() < deadline do
+        local character = LocalPlayer.Character
+        local hrp = character and character:FindFirstChild("HumanoidRootPart")
+        if BF.sea1Stage == "detective" or BF.sea1Stage == "door" then
+            if BF._seaHasTool("Key") then BF._seaEquipTool("Key") end
+        end
+        if not hrp then
+            task.wait(0.2)
+        elseif (hrp.Position - pos).Magnitude <= radius then
+            return true
+        else
+            if not BF.flying then pcall(BF.enableFly) end
+            pcall(function() BF.setFlyTarget(pos, false) end)
+            task.wait(0.15)
+        end
+    end
+    return false
+end
+
+BF._seaHasTool = function(toolName)
+    local character = LocalPlayer.Character
+    local backpack = LocalPlayer:FindFirstChild("Backpack")
+    return (character and character:FindFirstChild(toolName)) ~= nil
+        or (backpack and backpack:FindFirstChild(toolName)) ~= nil
+end
+
+BF._seaEquipTool = function(toolName)
+    local character = LocalPlayer.Character
+    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+    local backpack = LocalPlayer:FindFirstChild("Backpack")
+    local tool = (character and character:FindFirstChild(toolName))
+        or (backpack and backpack:FindFirstChild(toolName))
+    if humanoid and tool and tool.Parent == backpack then
+        pcall(function() humanoid:EquipTool(tool) end)
+    end
+    return tool ~= nil
+end
+
+BF._seaIceDoor = function()
+    local map = workspace:FindFirstChild("Map")
+    local ice = map and map:FindFirstChild("Ice")
+    return ice and ice:FindFirstChild("Door")
+end
+
+BF._seaIceDoorOpen = function()
+    local door = BF._seaIceDoor()
+    return door and door:IsA("BasePart") and not door.CanCollide and door.Transparency >= 0.9
+end
+
 BF._seaComm = function(...)
     local args = { ... }
     local r = ReplicatedStorage:FindFirstChild("Remotes")
     local f = r and r:FindFirstChild("CommF_")
     if f then
-        pcall(function()
-            f:InvokeServer(unpack(args))
-        end)
+        local ok, result = pcall(function() return f:InvokeServer(unpack(args)) end)
+        return ok, result
     end
+    return false, "CommF_ missing"
 end
 
 -- returns true if we saw the target alive and then it died / despawned
@@ -3242,6 +3487,21 @@ BF._seaFindAlive = function(nameSub)
             if h and h.Health > 0 then
                 return m
             end
+        end
+    end
+    return nil
+end
+
+-- Find a live world NPC by its displayed model name. Used for NPCs whose
+-- positions can change between game updates (for example Mr. Captain).
+BF._seaFindNpc = function(nameSub)
+    local needle = string.lower(nameSub or "")
+    if needle == "" then return nil end
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("Model") and string.find(string.lower(obj.Name), needle, 1, true) then
+            local root = obj:FindFirstChild("HumanoidRootPart") or obj.PrimaryPart
+                or obj:FindFirstChildWhichIsA("BasePart", true)
+            if root then return obj, root end
         end
     end
     return nil
@@ -3293,6 +3553,31 @@ BF.startSeaProgress = function()
                 local jeremyAlive = BF._seaFindAlive("Jeremy") ~= nil
                 local donAlive = BF._seaFindAlive("Don Swan") ~= nil
                 local indraAlive = (BF._seaFindAlive("indra") or BF._seaFindAlive("rip_indra") or BF._seaFindAlive("rip indra")) ~= nil
+                local bartiloOk, bartiloProgress = false, nil
+                if string.find(sea, "2", 1, true) then
+                    bartiloOk, bartiloProgress = BF._seaComm("BartiloQuestProgress", "Bartilo")
+                end
+                if bartiloOk and type(bartiloProgress) == "number" then
+                    -- Reconcile with the server's quest state after deaths,
+                    -- reloads, or a stage mismatch.
+                    if bartiloProgress >= 3 then
+                        if BF.sea2Stage == "idle" or BF.sea2Stage == "swan"
+                            or BF.sea2Stage == "j" or BF.sea2Stage == "prisoners" then
+                            BF.sea2Stage = "don"
+                        end
+                    elseif bartiloProgress == 2 then
+                        if BF.sea2Stage == "idle" or BF.sea2Stage == "swan" or BF.sea2Stage == "j" then
+                            BF.sea2Stage = "prisoners"
+                        end
+                    elseif bartiloProgress == 1 then
+                        if BF.sea2Stage == "idle" or BF.sea2Stage == "swan" or BF.sea2Stage == "prisoners" then
+                            BF.sea2Stage = "j"
+                        end
+                    elseif bartiloProgress == 0 and BF.sea2Stage ~= "idle"
+                        and BF.sea2Stage ~= "swan" then
+                        BF.sea2Stage = "swan"
+                    end
+                end
                 local onSwanQuest = BF.activeQuestMatches("swan", "50") and BF.activeQuestMatches("pirate", "swan", "bartilo")
                 -- softer swan quest detect
                 if BF.activeQuestMatches("swan") and BF.activeQuestMatches("50") then
@@ -3321,33 +3606,133 @@ BF.startSeaProgress = function()
                 if donAlive then stageLabel = stageLabel .. " | Don ALIVE" end
 
                 -- ========== SEA1 -> SEA2 ==========
-                if level >= 700 and (sea == "" or sea == "sea1" or string.find(sea, "1"))
-                    and not string.find(sea, "2") and not string.find(sea, "3")
+                -- A successful map switch ends this toggle's job; do not let
+                -- the Sea 2 -> 3 state machine accidentally start at level 700.
+                if string.find(sea, "2", 1, true)
+                    and (BF.sea1Stage == "captain" or BF.sea1Stage == "report") then
+                    BF.sea1Stage = "done"
+                    config.autoSeaProgress = false
+                    BF.seaProgressRunning = false
+                    BF.notifyUser("Sea", "Sea 2 reached. Auto Sea Progress stopped.", 4)
+                    return
+                end
+
+                if level >= 700 and (sea == "" or sea == "sea1" or string.find(sea, "1", 1, true))
+                    and not string.find(sea, "2", 1, true) and not string.find(sea, "3", 1, true)
                     and BF.sea1Stage ~= "done" then
+                    local detectivePos = Vector3.new(4851.8, 6, 718.5)
+                    local iceDoorFallback = Vector3.new(1347.7, 37.4, -1325.6)
+                    local captainPos = Vector3.new(-1163.1, 7, 1727.9)
+
                     if BF.sea1Stage == "idle" then
-                        BF.notifyUser("Sea", "Sea1: Detective", 3)
-                        BF._seaFly(Vector3.new(4850, 20, 750))
-                        BF._seaComm("TalkDetective")
-                        BF.sea1Stage = "ice"
+                        BF.sea1Stage = "detective"
+                    elseif BF.sea1Stage == "detective" then
+                        BF.notifyUser("Sea", "Sea 1: going to Military Detective", 3)
+                        if BF._seaFlyTo(detectivePos, 12, 60) then
+                            local ok, result = BF._seaComm("DressrosaQuestProgress", "Detective")
+                            task.wait(0.75)
+                            if BF._seaHasTool("Key") or BF._seaIceDoorOpen() then
+                                BF.sea1Stage = "door"
+                                BF.notifyUser("Sea", "Detective step confirmed; going to Ice Door", 3)
+                            else
+                                BF.notifyUser("Sea", "Detective did not grant Key yet; retrying", 3)
+                                warn("[BF Sea] Detective response:", ok, result, "Key:", BF._seaHasTool("Key"))
+                            end
+                        else
+                            BF.notifyUser("Sea", "Could not reach Military Detective", 3)
+                        end
+                    elseif BF.sea1Stage == "door" then
+                        if not BF._seaHasTool("Key") and not BF._seaIceDoorOpen() then
+                            BF.sea1Stage = "detective"
+                            return
+                        end
+                        if BF._seaHasTool("Key") then BF._seaEquipTool("Key") end
+                        local door = BF._seaIceDoor()
+                        local doorPos = (door and door:IsA("BasePart") and door.Position) or iceDoorFallback
+                        BF.notifyUser("Sea", "Sea 1: opening Ice Admiral door", 3)
+                        if BF._seaFlyTo(doorPos, 3.5, 60) then
+                            task.wait(1)
+                            if BF._seaIceDoorOpen() then
+                                BF.sea1Stage = "ice"
+                            else
+                                BF.notifyUser("Sea", "Ice door still locked; retrying Detective/Key", 3)
+                                BF.sea1Stage = "detective"
+                            end
+                        else
+                            BF.notifyUser("Sea", "Could not reach Ice Admiral door", 3)
+                        end
                     elseif BF.sea1Stage == "ice" then
-                        BF._seaFly(Vector3.new(-1166, 13, -2447))
-                        BF._seaKill("Ice Admiral", 90)
-                        BF.sea1Stage = "cap"
-                    elseif BF.sea1Stage == "cap" then
-                        BF._seaFly(Vector3.new(-285, 9, 5360))
-                        BF._seaComm("TravelDressrosa")
-                        BF._seaComm("TravelToSea2")
-                        task.wait(2)
-                        map = tostring(workspace:GetAttribute("MAP") or "")
-                        if string.find(string.lower(map), "2") then
-                            BF.sea1Stage = "done"
-                            BF.notifyUser("Sea", "Sea 2!", 4)
+                        if not BF._seaIceDoorOpen() then
+                            BF.sea1Stage = "door"
+                            return
+                        end
+                        local iceBoss = BF._seaFindAlive("Ice Admiral")
+                        if not iceBoss then
+                            BF.notifyUser("Sea", "Ice Admiral not spawned yet; waiting at the unlocked door", 3)
+                            local door = BF._seaIceDoor()
+                            local doorPos = (door and door:IsA("BasePart") and door.Position) or iceDoorFallback
+                            BF._seaFlyTo(doorPos, 8, 30)
+                            return
+                        end
+                        BF.notifyUser("Sea", "Sea 1: fighting Ice Admiral", 3)
+                        if BF._seaKill("Ice Admiral", 120) then
+                            BF._seaComm("DressrosaQuestProgress", "Ice Admiral")
+                            BF.sea1Stage = "report"
+                        else
+                            BF.notifyUser("Sea", "Ice Admiral still alive; staying on this step", 3)
+                        end
+                    elseif BF.sea1Stage == "report" then
+                        BF.notifyUser("Sea", "Sea 1: reporting to Military Detective", 3)
+                        if BF._seaFlyTo(detectivePos, 12, 60) then
+                            BF._seaComm("DressrosaQuestProgress", "Ice Admiral")
+                            local ok, result = BF._seaComm("DressrosaQuestProgress", "Detective")
+                            BF._seaComm("DressrosaQuestProgress", "Dressrosa")
+                            task.wait(0.5)
+                            BF.sea1Stage = "captain"
+                            warn("[BF Sea] Detective report:", ok, result)
+                        else
+                            BF.notifyUser("Sea", "Could not reach Detective to report Ice Admiral", 3)
+                        end
+                    elseif BF.sea1Stage == "captain" then
+                        BF.notifyUser("Sea", "Sea 1: going to Experienced Captain", 3)
+                        if BF._seaFlyTo(captainPos, 14, 60) then
+                            -- Repeat the completion dialogue on retry; this is
+                            -- harmless after completion and repairs missed reports.
+                            BF._seaComm("DressrosaQuestProgress", "Ice Admiral")
+                            BF._seaComm("DressrosaQuestProgress", "Detective")
+                            BF._seaComm("DressrosaQuestProgress", "Dressrosa")
+                            local ok, result = BF._seaComm("TravelDressrosa")
+                            warn("[BF Sea] TravelDressrosa:", ok, result)
+                            local travelDeadline = os.clock() + 12
+                            repeat
+                                task.wait(0.25)
+                                map = string.lower(tostring(workspace:GetAttribute("MAP") or ""))
+                            until string.find(map, "2", 1, true) or os.clock() >= travelDeadline
+                            if string.find(map, "2", 1, true) then
+                                BF.sea1Stage = "done"
+                                config.autoSeaProgress = false
+                                BF.seaProgressRunning = false
+                                BF.notifyUser("Sea", "Sea 2 reached. Auto Sea Progress stopped.", 4)
+                            else
+                                BF.notifyUser("Sea", "Captain did not travel yet; staying here and retrying", 3)
+                            end
+                        else
+                            BF.notifyUser("Sea", "Could not reach Experienced Captain", 3)
                         end
                     end
                     return
                 end
 
                 -- ========== SEA2 -> SEA3 ==========
+                -- Third Sea access is level-gated at 1,500. Keep this
+                -- toggle armed but do not move/farm or request progression early.
+                if string.find(sea, "2", 1, true) and BF.sea2Stage ~= "done" and level < 1500 then
+                    if not BF._sea2LevelNoticeAt or os.clock() - BF._sea2LevelNoticeAt > 30 then
+                        BF._sea2LevelNoticeAt = os.clock()
+                        BF.notifyUser("Sea", "Auto Sea 2->3 waiting for level 1500 (current: " .. tostring(level) .. ")", 4)
+                    end
+                    return
+                end
                 if not (string.find(sea, "2") or sea == "") then
                     if string.find(sea, "3") then
                         BF.sea2Stage = "done"
@@ -3400,37 +3785,18 @@ BF.startSeaProgress = function()
                     end
 
                 elseif BF.sea2Stage == "prisoners" then
-                    -- Colosseum / free gladiators / King cell - STAY HERE, don't skip
-                    local colPos = Vector3.new(-1836, 7, -2742)
-                    BF.notifyUser("Sea", "Stage prisoners: BF.flying to Colosseum", 2)
+                    -- Colosseum puzzle stage. Only the server's Bartilo
+                    -- progress confirms completion; being near the cell or
+                    -- firing unrelated ClickDetectors is not enough.
+                    local colPos = Vector3.new(-1836, 11, 1714)
+                    BF.notifyUser("Sea", "Stage prisoners: Colosseum quest", 2)
                     BF._seaFly(colPos)
-                    -- verify we moved roughly near colosseum
-                    pcall(function()
-                        local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                        if hrp and (hrp.Position - colPos).Magnitude > 200 then
-                            BF._seaFly(colPos)
-                            task.wait(2)
-                        end
-                    end)
-                    pcall(function()
-                        if fireclickdetector then
-                            for _, d in ipairs(workspace:GetDescendants()) do
-                                if d:IsA("ClickDetector") then
-                                    local p = d.Parent
-                                    if p and p:IsA("BasePart") and (p.Position - colPos).Magnitude < 150 then
-                                        fireclickdetector(d)
-                                        task.wait(0.05)
-                                    end
-                                end
-                            end
-                        end
-                    end)
-                    BF._seaComm("StartQuest", "BartiloQuest", 3)
-                    task.wait(4)
-                    -- only leave prisoners when Jeremy is gone AND we've spent time at colosseum
-                    if not jeremyAlive then
+                    local progressOk, progress = BF._seaComm("BartiloQuestProgress", "Bartilo")
+                    if progressOk and type(progress) == "number" and progress >= 3 then
                         BF.sea2Stage = "don"
-                        BF.notifyUser("Sea", "-> stage don (Don Swan)", 3)
+                        BF.notifyUser("Sea", "Colosseum quest confirmed -> Don Swan", 3)
+                    else
+                        BF.notifyUser("Sea", "Complete the Colosseum puzzle; waiting for server confirmation", 3)
                     end
 
                 elseif BF.sea2Stage == "don" then
@@ -3450,15 +3816,11 @@ BF.startSeaProgress = function()
                             BF.notifyUser("Sea", "Don Swan dead -> stage king", 3)
                         end
                     else
-                        BF.notifyUser("Sea", "Don Swan not spawned (fruit door?)", 2)
-                        if level >= 1500 then
-                            -- allow try king if already killed before on this account
-                            BF.sea2Stage = "king"
-                        end
+                        BF.notifyUser("Sea", "Don Swan not spawned or room locked; staying on this step", 3)
                     end
 
                 elseif BF.sea2Stage == "king" then
-                    local colPos = Vector3.new(-1836, 7, -2742)
+                    local colPos = Vector3.new(-1836, 11, 1714)
                     BF.notifyUser("Sea", "Stage king: King Red Head", 2)
                     BF._seaFly(colPos)
                     BF._seaComm("KingRedHead")
@@ -3480,8 +3842,14 @@ BF.startSeaProgress = function()
                         end
                     end)
                     task.wait(3)
-                    BF.sea2Stage = "indra"
-                    BF.notifyUser("Sea", "-> stage indra", 3)
+                    local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    if indraAlive or (hrp and (hrp.Position - colPos).Magnitude > 500) then
+                        BF.sea2Stage = "indra"
+                        BF._seaSawIndra = indraAlive or BF._seaSawIndra
+                        BF.notifyUser("Sea", "King Red Head step confirmed -> rip_indra", 3)
+                    else
+                        BF.notifyUser("Sea", "King Red Head has not started the Indra step yet; retrying", 3)
+                    end
 
                 elseif BF.sea2Stage == "indra" then
                     BF.notifyUser("Sea", "Stage indra: rip_indra", 2)
@@ -3502,23 +3870,41 @@ BF.startSeaProgress = function()
                         end
                     else
                         local deadish = BF._seaKill("indra", 40)
-                        if deadish or not (BF._seaFindAlive("indra") or BF._seaFindAlive("rip")) then
+                        if deadish then BF._seaSawIndra = true end
+                        if deadish or (BF._seaSawIndra and not (BF._seaFindAlive("indra") or BF._seaFindAlive("rip"))) then
                             BF.sea2Stage = "captain"
                             BF.notifyUser("Sea", "-> stage captain", 3)
+                        else
+                            BF.notifyUser("Sea", "rip_indra not found; staying on this step", 3)
                         end
                     end
 
                 elseif BF.sea2Stage == "captain" then
                     BF.notifyUser("Sea", "Stage captain: Mr Captain", 2)
-                    BF._seaFly(Vector3.new(-3350, 73, -1010))
-                    BF._seaComm("TravelZou")
-                    BF._seaComm("TravelToSea3")
-                    BF._seaComm("MrCaptain")
-                    task.wait(2)
-                    map = tostring(workspace:GetAttribute("MAP") or "")
-                    if string.find(string.lower(map), "3") then
-                        BF.sea2Stage = "done"
-                        BF.notifyUser("Sea", "Sea 3 unlocked!", 4)
+                    local captain, captainRoot = BF._seaFindNpc("Mr. Captain")
+                    if not captain then captain, captainRoot = BF._seaFindNpc("Mr Captain") end
+                    if captain and captainRoot then
+                        BF._seaFly(captainRoot.Position)
+                        local prompt = captain:FindFirstChildWhichIsA("ProximityPrompt", true)
+                        local click = captain:FindFirstChildWhichIsA("ClickDetector", true)
+                        if prompt and fireproximityprompt then
+                            pcall(function() fireproximityprompt(prompt) end)
+                        elseif click and fireclickdetector then
+                            pcall(function() fireclickdetector(click) end)
+                        else
+                            BF._seaComm("MrCaptain")
+                        end
+                        -- The game's travel action used by common Sea 2 -> 3
+                        -- flows is TravelZou; only invoke it at the located NPC.
+                        BF._seaComm("TravelZou")
+                        task.wait(2)
+                        map = tostring(workspace:GetAttribute("MAP") or "")
+                        if string.find(string.lower(map), "3", 1, true) then
+                            BF.sea2Stage = "done"
+                            BF.notifyUser("Sea", "Sea 3 unlocked!", 4)
+                        end
+                    else
+                        BF.notifyUser("Sea", "Mr. Captain not found in the world; waiting instead of flying to a guessed point", 3)
                     end
                 end
             end)
@@ -3902,6 +4288,20 @@ BF.farmTask = nil
 BF.lastIslandName = ""
 BF.respawnConnection = nil
 BF.equipCheckConnection = nil
+BF.BUILD_ID = "VoidHub-BF-Fixed-2026-10-22-FarmStatus-1"
+BF.farmStatusSnapshot = { State = "Idle", Reason = "Auto Farm is stopped" }
+
+BF.getFarmStatusStats = function()
+    local snapshot = BF.farmStatusSnapshot or {}
+    local stats = {
+        Build = BF.BUILD_ID,
+        Farm = BF.farmRunning and "Running" or "Stopped",
+    }
+    for key, value in pairs(snapshot) do
+        stats[key] = value
+    end
+    return stats
+end
 
 BF.setupRespawnRecovery = function()
     if BF.respawnConnection then BF.respawnConnection:Disconnect() end
@@ -3943,8 +4343,13 @@ BF.startFarm = function()
         local currentQuestType = "normal"
         local lastLevelForStats = currentLevel
         local isBossTarget = false
+        local lastFarmCharacter = LocalPlayer.Character
         local underwaterEntryDone = false
         local underwaterEntryStarted = false
+        local underwaterPortalPending = false
+        local lastFarmStatusAt = 0
+        local patrolSpawnKey, patrolSpawnPositions = nil, {}
+        local patrolSpawnIndex, patrolReachedAt, patrolRefreshAt = 1, nil, 0
 
         while BF.farmRunning do
             -- Boss hunt (UP/?) fully owns movement + combat; farm waits
@@ -3964,24 +4369,30 @@ BF.startFarm = function()
                 task.wait(0.2)
                 continue
             end
+            -- Auto Sea Progress owns movement only when the current sea and
+            -- level make a transition eligible. Otherwise normal level farm
+            -- must keep running (for example Sea 2 below Lv. 1500).
+            local progressMap = string.lower(tostring(workspace:GetAttribute("MAP") or ""))
+            local progressLevel = BF.getPlayerLevel()
+            local sea1ProgressActive = progressLevel >= 700
+                and (progressMap == "" or string.find(progressMap, "1", 1, true) ~= nil)
+                and not string.find(progressMap, "2", 1, true)
+                and not string.find(progressMap, "3", 1, true)
+            local sea2ProgressActive = progressLevel >= 1500
+                and string.find(progressMap, "2", 1, true) ~= nil
+            if BF.seaProgressRunning and config.autoSeaProgress
+                and (sea1ProgressActive or sea2ProgressActive) then
+                task.wait(0.15)
+                continue
+            end
             local character = LocalPlayer.Character
             if not character then task.wait(0.5) continue end
+            local respawned = character ~= lastFarmCharacter
             local humanoid = character:FindFirstChild("Humanoid")
             if not humanoid or humanoid.Health <= 0 then task.wait(0.5) continue end
             if not BF.flying then BF.enableFly() end
             if config.autoHeal then BF.heal() end
-            if not _lastBusoAt then _lastBusoAt = 0 end
-            if os.clock() - _lastBusoAt > 3 then
-                _lastBusoAt = os.clock()
-                local characters = workspace:FindFirstChild("Characters")
-                local localCharacter = characters and characters:FindFirstChild(LocalPlayer.Name)
-                local busoHumanoid = localCharacter and localCharacter:FindFirstChild("Humanoid")
-                if busoHumanoid and not busoHumanoid:FindFirstChild("LeftHand_BusoLayer1") then
-                    local remotes = ReplicatedStorage:FindFirstChild("Remotes")
-                    local commF = remotes and remotes:FindFirstChild("CommF_")
-                    if commF then pcall(function() commF:InvokeServer("Buso") end) end
-                end
-            end
+            pcall(BF.ensureBuso)
 
             local level = BF.getPlayerLevel()
             local island = BF.resolveFarmIsland(level)
@@ -4003,9 +4414,102 @@ BF.startFarm = function()
             end
             if not hrp then task.wait(0.5) continue end
 
+            if os.clock() - lastFarmStatusAt >= 0.75 then
+                lastFarmStatusAt = os.clock()
+                local hasQuest, questTitle = false, "None"
+                pcall(function()
+                    hasQuest, questTitle = BF.getActiveQuestInfo()
+                end)
+                local expectedQuest = "None"
+                local loadedTargets = 0
+                pcall(function()
+                    local args = BF.getQuestArgs(island, currentQuestType)
+                    if args then
+                        expectedQuest = tostring(args[2]) .. " / " .. tostring(args[3] or "")
+                    end
+                    local patterns = BF.resolveFarmPatterns(island, currentQuestType)
+                    loadedTargets = #BF.getMatchingEnemies(island, patterns)
+                end)
+                local targetName = lockedEnemy and lockedEnemy.Parent and lockedEnemy.Name or "None"
+                local moveTarget = BF.flyTarget
+                local moveDistance = moveTarget and math.floor((hrp.Position - moveTarget).Magnitude) or "—"
+                local moveTargetText = "None"
+                if typeof(moveTarget) == "Vector3" then
+                    moveTargetText = string.format("(%.0f, %.0f, %.0f)", moveTarget.X, moveTarget.Y, moveTarget.Z)
+                end
+                local reason = state
+                if state == "ISLAND" then
+                    reason = "Traveling to island / quest giver"
+                elseif state == "QUEST" then
+                    reason = hasQuest and "Checking quest target" or "Accepting expected quest"
+                elseif state == "COMBAT" then
+                    reason = targetName ~= "None" and ("Attacking " .. tostring(targetName)) or "Selecting a target"
+                elseif state == "PATROL" then
+                    reason = "No matching enemy loaded; scanning island"
+                end
+                BF.farmStatusSnapshot = {
+                    State = tostring(state),
+                    Reason = tostring(reason),
+                    Sea = tostring(BF.getCurrentSea()),
+                    Level = tostring(level),
+                    Island = tostring(island and island.Name or "Unknown"),
+                    Quest = hasQuest and tostring(questTitle or "Active") or "None",
+                    ExpectedQuest = expectedQuest,
+                    TargetsLoaded = tostring(loadedTargets),
+                    Target = tostring(targetName),
+                    MoveTarget = moveTargetText,
+                    MoveDistance = tostring(moveDistance),
+                }
+            end
+
+            -- A respawn outside Underwater City must go through the whirlpool
+            -- again. Keep the portal result only when the new character is
+            -- still inside the city.
+            if respawned then
+                lastFarmCharacter = character
+                lockedEnemy = nil
+                isBossTarget = false
+                questAccepted = false
+                local respawnInUnderwaterCity = hrp.Position.X > 60000
+                    and hrp.Position.Z > 800 and hrp.Position.Z < 4000
+                if level >= 375 and level <= 450 and not respawnInUnderwaterCity then
+                    underwaterEntryDone = false
+                    underwaterEntryStarted = false
+                    underwaterPortalPending = false
+                    currentQuestType = "normal"
+                    state = "ISLAND"
+                elseif respawnInUnderwaterCity then
+                    underwaterEntryDone = true
+                end
+                pcall(BF.ensureCombatReady)
+                if underwaterEntryDone and BF.hasActiveQuest() and BF.questMatchesIsland(island, currentQuestType) then
+                    state = "COMBAT"
+                elseif underwaterEntryDone then
+                    state = "ISLAND"
+                end
+            end
+
+            -- Underwater level range requires the city entrance before normal
+            -- island and quest handling begins.
+            local mustEnterUnderwater = level >= 375 and level <= 450 and not underwaterEntryDone
+            if mustEnterUnderwater then
+                local underwaterIsland = nil
+                for _, candidate in ipairs(islands) do
+                    if not candidate.isBoss and BF.isUnderwaterIsland(candidate)
+                        and level >= candidate.Min and level <= candidate.Max then
+                        underwaterIsland = candidate
+                        break
+                    end
+                end
+                if underwaterIsland and BF.isUnderwaterIsland(underwaterIsland) then
+                    island = underwaterIsland
+                    state = "ISLAND"
+                end
+            end
+
             -- ===== BOSS SHORT-CIRCUIT (no quest needed) =====
             -- Same approach as boss-timer hunt: fly above boss + attackEnemy
-            if config.bossPriority then
+            if config.bossPriority and not mustEnterUnderwater then
                 local liveBoss, liveIsl = _prioBoss, _prioIsland
                 if not liveBoss then
                     liveBoss, liveIsl = BF.findLiveBossSimple(level)
@@ -4020,11 +4524,12 @@ BF.startFarm = function()
                         currentQuestType = "boss"
                         state = "COMBAT"
 
-                        -- optional boss quest (never blocks attack)
+                        -- Accept the exact boss quest, replacing a normal quest
+                        -- from the same quest giver if one is currently active.
                         if liveIsl and liveIsl.BossQuest and (os.clock() - (_lastQuestAcceptAt or 0)) > 6 then
                             _lastQuestAcceptAt = os.clock()
                             pcall(function()
-                                BF.acceptQuestWrapper(liveIsl.BossQuest, { allowStack = false })
+                                BF.ensureCorrectQuest(liveIsl, "boss")
                             end)
                         end
 
@@ -4085,8 +4590,6 @@ BF.startFarm = function()
                     BF._submergedTeleported = false
                     heightLocked = false
                     isBossTarget = false
-                    underwaterEntryDone = false
-                    underwaterEntryStarted = false
                     questAccepted = false
                     currentQuestType = "normal"
                     state = "ISLAND"
@@ -4115,22 +4618,39 @@ BF.startFarm = function()
                         continue
                     end
                 elseif underwater and not underwaterEntryDone then
-                    -- alter Whirlpool-Pfad nur für < 2600 (falls überhaupt noch genutzt)
-                    local whirlpool = BF.findWhirlpool()
-                    if whirlpool then
-                        underwaterEntryStarted = true
-                        if whirlpool.Distance > 65 then
-                            BF.setFlyTarget(whirlpool.Position + Vector3.new(0, 6, 0), false)
-                            task.wait(0.08)
-                            continue
-                        end
-                        BF.setFlyTarget(whirlpool.Position + Vector3.new(0, 4, 0), false)
-                        task.wait(0.6)
+                    underwaterEntryStarted = true
+                    BF.notifyUser("Underwater City", "Entering through whirlpool...", 3)
+                    local entered = BF.enterUnderwaterCity(6)
+                    if entered then
                         underwaterEntryDone = true
-                        BF.setHoverHeight(hrp.Position.Y)
+                        underwaterPortalPending = false
+                        -- Match the working developer action so a stale quest
+                        -- does not leave farming suspended after the portal.
+                        lockedEnemy = nil
+                        isBossTarget = false
+                        questAccepted = false
+                        currentQuestType = "normal"
+                        config.devIslandLock = false
+                        config.devIslandIndex = nil
+                        config.acceptQuest = true
+                        config.bossPriority = false
+                        pcall(BF.abandonQuest)
+                        pcall(BF.invalidateQuestCache)
+                        pcall(BF.ensureCombatReady)
+                        pcall(function() BF.ensureCorrectQuest(island, "normal") end)
+                        state = "QUEST"
                         continue
                     else
-                        underwaterEntryDone = true
+                        -- Never mark the portal as passed on a timeout. Retry
+                        -- in place rather than flying away toward the quest giver.
+                        underwaterEntryStarted = false
+                        BF.disableFly()
+                        pcall(function()
+                            hrp.AssemblyLinearVelocity = Vector3.zero
+                            hrp.AssemblyAngularVelocity = Vector3.zero
+                        end)
+                        task.wait(1.5)
+                        continue
                     end
                 end
 
@@ -4268,7 +4788,8 @@ BF.startFarm = function()
                     lockedEnemy = bossEnemy
                     isBossTarget = true
                     currentQuestType = "boss"
-                    -- Optional: try boss quest once, never block combat
+                    -- Ensure the boss objective is active; this also abandons
+                    -- a normal quest from the same quest family when needed.
                     if island and island.BossQuest and (os.clock() - (_lastQuestAcceptAt or 0)) > 5 then
                         local _, qtext = BF.getActiveQuestInfo()
                         local qlow = string.lower(tostring(qtext or ""))
@@ -4282,7 +4803,7 @@ BF.startFarm = function()
                         if not hasBossQ then
                             _lastQuestAcceptAt = os.clock()
                             pcall(function()
-                                BF.acceptQuestWrapper(island.BossQuest, { allowStack = false })
+                                BF.ensureCorrectQuest(island, "boss")
                             end)
                         end
                     end
@@ -4399,25 +4920,6 @@ BF.startFarm = function()
 
             if state == "PATROL" then
                 if not BF.flying then pcall(BF.enableFly) end
-                -- No matching enemies: path to island spawn area (don't stand still)
-                if island and island.Pos and island.Pos.Magnitude > 0.1 then
-                    local distIsland = (hrp.Position - island.Pos).Magnitude
-                    if distIsland > 80 then
-                        local hover = math.clamp(config.aboveHeight or 8, 4, 14)
-                        BF.setFlyTarget(island.Pos + Vector3.new(0, hover, 0), false)
-                    elseif heightLocked then
-                        BF.setFlyTarget(Vector3.new(hrp.Position.X, lockedY, hrp.Position.Z), false)
-                    else
-                        if not BF.hoverY then BF.hoverY = hrp.Position.Y end
-                        BF.setFlyTarget(Vector3.new(hrp.Position.X, BF.hoverY, hrp.Position.Z), false)
-                    end
-                elseif heightLocked then
-                    BF.setFlyTarget(Vector3.new(hrp.Position.X, lockedY, hrp.Position.Z), false)
-                else
-                    if not BF.hoverY then BF.hoverY = hrp.Position.Y end
-                    BF.setFlyTarget(Vector3.new(hrp.Position.X, BF.hoverY, hrp.Position.Z), false)
-                end
-
                 local bossEnemy = _prioBoss
                 if not bossEnemy and config.bossPriority then
                     bossEnemy = select(1, BF.findAnyPriorityBoss(level))
@@ -4436,7 +4938,57 @@ BF.startFarm = function()
                     if #enemies > 0 then
                         state = "COMBAT"
                     else
-                        task.wait(0.2)
+                        local patternKey = table.concat(patternInfo.patterns or {}, "|")
+                        local spawnKey = tostring(island and island.Name or "") .. ":" .. patternKey
+                        if patrolSpawnKey ~= spawnKey then
+                            patrolSpawnKey = spawnKey
+                            patrolSpawnPositions = BF.getFarmSpawnPositions(patternInfo)
+                            patrolSpawnIndex, patrolReachedAt = 1, nil
+                            patrolRefreshAt = os.clock()
+                            if #patrolSpawnPositions > 0 then
+                                local nearestDistance = math.huge
+                                for i, pos in ipairs(patrolSpawnPositions) do
+                                    local distance = (hrp.Position - pos).Magnitude
+                                    if distance < nearestDistance then
+                                        nearestDistance = distance
+                                        patrolSpawnIndex = i
+                                    end
+                                end
+                            end
+                        elseif #patrolSpawnPositions == 0 and os.clock() - patrolRefreshAt >= 5 then
+                            patrolSpawnPositions = BF.getFarmSpawnPositions(patternInfo)
+                            patrolRefreshAt = os.clock()
+                        end
+
+                        if #patrolSpawnPositions > 0 then
+                            local spawnPos = patrolSpawnPositions[patrolSpawnIndex]
+                            local hover = math.clamp(config.aboveHeight or 8, 4, 14)
+                            local targetPos = spawnPos + Vector3.new(0, hover, 0)
+                            local distance = (hrp.Position - targetPos).Magnitude
+                            BF.setFlyTarget(targetPos, false)
+                            if distance <= 28 then
+                                patrolReachedAt = patrolReachedAt or os.clock()
+                                -- Give the server time to stream the NPC before
+                                -- moving to the next known spawn location.
+                                if os.clock() - patrolReachedAt >= 1.25 then
+                                    patrolSpawnIndex = (patrolSpawnIndex % #patrolSpawnPositions) + 1
+                                    patrolReachedAt = nil
+                                end
+                            else
+                                patrolReachedAt = nil
+                            end
+                        elseif island and island.Pos and island.Pos.Magnitude > 0.1 then
+                            -- Preserve the old island waypoint fallback when
+                            -- this quest has no known spawn markers available.
+                            local hover = math.clamp(config.aboveHeight or 8, 4, 14)
+                            BF.setFlyTarget(island.Pos + Vector3.new(0, hover, 0), false)
+                        elseif heightLocked then
+                            BF.setFlyTarget(Vector3.new(hrp.Position.X, lockedY, hrp.Position.Z), false)
+                        else
+                            if not BF.hoverY then BF.hoverY = hrp.Position.Y end
+                            BF.setFlyTarget(Vector3.new(hrp.Position.X, BF.hoverY, hrp.Position.Z), false)
+                        end
+                        task.wait(0.15)
                     end
                 end
                 continue
@@ -6628,6 +7180,18 @@ BF.isFightingStyleOwned = function(styleName)
     return false
 end
 
+BF.equipStyleTool = function(tool)
+    if not tool then return false end
+    local equipEvent = tool:FindFirstChild("EquipEvent")
+    if equipEvent and equipEvent:IsA("RemoteEvent") then
+        return pcall(function() equipEvent:FireServer(false) end)
+    end
+    local character = LocalPlayer.Character
+    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return false end
+    return pcall(function() humanoid:EquipTool(tool) end)
+end
+
 BF.equipFightingStyle = function(styleName)
     local char = LocalPlayer.Character
     if not char then return false end
@@ -6638,12 +7202,7 @@ BF.equipFightingStyle = function(styleName)
     local tool, isEquipped = BF.findFightingStyleTool(styleName)
     if tool then
         if not isEquipped then
-            local equipEvent = tool:FindFirstChild("EquipEvent")
-            if equipEvent and equipEvent:IsA("RemoteEvent") then
-                pcall(function() equipEvent:FireServer(false) end)
-            else
-                hum:EquipTool(tool)
-            end
+            BF.equipStyleTool(tool)
         end
         config.selectedFightingStyle = styleName
         return true
@@ -6665,7 +7224,7 @@ BF.equipFightingStyle = function(styleName)
     tool, isEquipped = BF.findFightingStyleTool(styleName)
     if tool then
         if not isEquipped then
-            hum:EquipTool(tool)
+            BF.equipStyleTool(tool)
         end
         config.selectedFightingStyle = styleName
         return true
@@ -6690,9 +7249,7 @@ BF.buyFightingStyle = function(styleName, autoEquip)
     local existingTool, existingEquipped = BF.findFightingStyleTool(styleName)
     if existingTool then
         if autoEquip ~= false and not existingEquipped then
-            local char = LocalPlayer.Character
-            local hum = char and char:FindFirstChildOfClass("Humanoid")
-            if hum then hum:EquipTool(existingTool) end
+            BF.equipStyleTool(existingTool)
         end
         BF.notifyUser("Style", styleName .. " is already owned; equipped it.", 4)
         return true
@@ -6742,9 +7299,7 @@ BF.buyFightingStyle = function(styleName, autoEquip)
 
     if tool then
         if autoEquip ~= false and not isEquipped then
-            local char = LocalPlayer.Character
-            local hum = char and char:FindFirstChildOfClass("Humanoid")
-            if hum then hum:EquipTool(tool) end
+            BF.equipStyleTool(tool)
         end
         config.selectedFightingStyle = styleName
         BF.notifyUser("Style", styleName .. " purchased", 3)
@@ -6769,9 +7324,7 @@ BF.buyFightingStyle = function(styleName, autoEquip)
             until os.clock() >= verifyDeadline
             if tool then
                 if autoEquip ~= false and not isEquipped then
-                    local char = LocalPlayer.Character
-                    local hum = char and char:FindFirstChildOfClass("Humanoid")
-                    if hum then hum:EquipTool(tool) end
+                    BF.equipStyleTool(tool)
                 end
                 BF.notifyUser("Style", "Dark Step purchased", 3)
                 return true
@@ -7785,6 +8338,36 @@ if useVaxorin and window then
     -- ========== DEVELOPER ==========
     local devTab = window:CreateTab("Developer")
     local devSection = devTab:CreateSection({Name = "Quest / Island"})
+    local farmStatusPanel = nil
+    local farmStatusRefreshId = 0
+    devSection:CreateButton({
+        Name = "Open Live Auto Farm Status",
+        Callback = function()
+            farmStatusRefreshId += 1
+            local refreshId = farmStatusRefreshId
+            if farmStatusPanel then
+                pcall(function() farmStatusPanel:Close() end)
+            end
+            farmStatusPanel = window:CreateDeveloperWindow({
+                Title = "Auto Farm Status",
+                Width = 430,
+                Height = 430,
+                Stats = BF.getFarmStatusStats(),
+            })
+            local panel = farmStatusPanel
+            task.spawn(function()
+                while refreshId == farmStatusRefreshId and farmStatusPanel == panel do
+                    if type(panel.IsOpen) == "function" then
+                        local openOk, isOpen = pcall(function() return panel:IsOpen() end)
+                        if not openOk or not isOpen then break end
+                    end
+                    local updateOk = pcall(function() panel:SetStats(BF.getFarmStatusStats()) end)
+                    if not updateOk then break end
+                    task.wait(0.75)
+                end
+            end)
+        end,
+    })
     pcall(function()
         BF._statusLabels = BF._statusLabels or {}
         BF._statusLabels.devIsland = devSection:CreateParagraph({ Title = "Island", Content = "..." })

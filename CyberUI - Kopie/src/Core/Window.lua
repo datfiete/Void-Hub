@@ -21,9 +21,6 @@ local Bad_Vaxorin_Logo = "rbxassetid://132857255558778"
 local Vaxorin_Logo = "rbxassetid://89182255271217"
 local LEGACY_LOGO = "rbxassetid://128228297210141"
 
-
--- Inline weather (no separate module — works with older load.lua MODULE_PATHS)
-
 local function createWeather(parent: Instance)
 	local RunService = game:GetService("RunService")
 	local layer = Instance.new("Frame")
@@ -36,7 +33,6 @@ local function createWeather(parent: Instance)
 	layer.Active = false
 	layer.Parent = parent
 
-	-- Deep-Fishing style particles use soft glow sprites, not solid rectangles
 	local STAR = "rbxassetid://99851851"
 	local GLOW = "rbxassetid://6014261993"
 
@@ -235,16 +231,11 @@ local function createWeather(parent: Instance)
 end
 
 
--- Soft 9-slice drop shadow, used behind the main window for real depth instead
--- of a flat card floating on nothing.
 local SHADOW_IMAGE = "rbxassetid://6014261993"
 local SHADOW_SLICE_CENTER = Rect.new(49, 49, 450, 450)
 
--- Short, unobtrusive UI click. Toggleable via Options -> Sound Effects.
 local CLICK_SOUND_ID = "rbxassetid://876939830"
 local function cleanDisplayName(name: string): string
-    -- Keep the visible tab label free of emoji/symbol prefixes that may render
-    -- as empty squares on some executor/Roblox font combinations.
     local cleaned = name
     cleaned = cleaned:gsub("^[%s%c]+", "")
     for _, prefix in {
@@ -322,6 +313,7 @@ export type WindowOptions = {
 export type DeveloperPanelHandle = {
 	SetStats: (self: DeveloperPanelHandle, stats: { [string]: any }) -> (),
 	SetContent: (self: DeveloperPanelHandle, content: string) -> (),
+	IsOpen: (self: DeveloperPanelHandle) -> boolean,
 	Close: (self: DeveloperPanelHandle) -> (),
 	Open: (self: DeveloperPanelHandle) -> (),
 }
@@ -363,8 +355,6 @@ local function getExecutorName(): string
 	return "Unknown"
 end
 
-
--- Extracted from Window.new so the compiler stays under the 200 local-register limit.
 local function startCinematicBoot(ctx)
 	local library = ctx.Library
 	local data = ctx.Data
@@ -377,6 +367,7 @@ local function startCinematicBoot(ctx)
 -- Reuses the module-loader GUI when present so the logo never blinks out.
 -- ============================================
 local bootLogoAsset = data.Logo
+
 if bootLogoAsset == nil or bootLogoAsset == "" or bootLogoAsset == LEGACY_LOGO then
 	bootLogoAsset = Vaxorin_Logo
 end
@@ -4453,6 +4444,10 @@ function Window:CreateDeveloperWindow(options: any?): DeveloperPanelHandle
 			developerGui.Parent = parent
 		end
 		developerGui.Enabled = true
+	end
+
+	function panelHandle:IsOpen(): boolean
+		return developerGui.Parent ~= nil and developerGui.Enabled
 	end
 
 	-- Simple drag support for the header.
