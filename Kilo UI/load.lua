@@ -261,6 +261,304 @@ end
 
 local bootstrap = createBootstrapLoader()
 
+-- ============================================================
+-- KEY SYSTEM HOOKS
+-- Configure via sharedState.KiloUI_Config before running loadstring:
+--   sharedState.KiloUI_Config = {
+--       KeySystem = {
+--           Enabled = true,
+--           Key = "KILO-PREMIUM-2026",   -- expected key (or nil for remote check)
+--           Url = "https://your-api/validate", -- optional remote validation
+--           Discord = "discord.gg/kilo",
+--       },
+--   }
+-- ============================================================
+local KEY_SOUND_ID = "rbxassetid://9113486434"
+local function playKeySound()
+    local ok, snd = pcall(function()
+        local s = Instance.new("Sound")
+        s.SoundId = KEY_SOUND_ID
+        s.Volume = 0.3
+        s.Parent = SoundService
+        s:Play()
+        game:GetService("Debris"):AddItem(s, 5)
+        return s
+    end)
+end
+
+local function getKeyConfig()
+    local cfg = sharedState.KiloUI_Config
+    if type(cfg) == "table" then
+        return cfg.KeySystem or {}
+    end
+    return {}
+end
+
+local function validateKeyLocally(inputKey, expectedKey)
+    if not expectedKey or expectedKey == "" then return true end
+    return inputKey == expectedKey
+end
+
+local function validateKeyRemotely(inputKey, url)
+    if not url or url == "" then return false end
+    local ok, result = pcall(function()
+        return game:HttpPostAsync(url, game:GetService("HttpService"):JSONEncode({
+            key = inputKey,
+            hwid = tostring(game:GetService("RbxAnalyticsService"):GetClientId() or "unknown"),
+        }), Enum.HttpContentType.ApplicationJson, false)
+    end)
+    if ok and type(result) == "string" then
+        local decoded = game:GetService("HttpService"):JSONDecode(result)
+        if type(decoded) == "table" then
+            return decoded.valid == true or decoded.success == true
+        end
+    end
+    return false
+end
+
+local function runKeySystem()
+    local keyConfig = getKeyConfig()
+    if keyConfig.Enabled ~= true then
+        return true
+    end
+
+    local expectedKey = keyConfig.Key
+    local validateUrl = keyConfig.Url
+    local discordLink = keyConfig.Discord or "https://discord.gg/kilo"
+
+    -- Check for an already-cached valid key
+    local cachedKey = sharedState.KiloUI_CachedKey
+    if type(cachedKey) == "string" and cachedKey ~= "" then
+        if validateKeyLocally(cachedKey, expectedKey) or validateKeyRemotely(cachedKey, validateUrl) then
+            sharedState.KiloUI_ValidatedKey = cachedKey
+            return true
+        end
+    end
+
+    -- Build key input overlay on top of the bootstrap loader
+    local keyGui = Instance.new("ScreenGui")
+    keyGui.Name = "KiloUI_KeySystem"
+    keyGui.ResetOnSpawn = false
+    keyGui.IgnoreGuiInset = true
+    keyGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    keyGui.DisplayOrder = 2147483647
+    keyGui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
+
+    local keyBackdrop = Instance.new("Frame")
+    keyBackdrop.Name = "Backdrop"
+    keyBackdrop.Size = UDim2.fromScale(1, 1)
+    keyBackdrop.BackgroundColor3 = Color3.fromRGB(2, 3, 7)
+    keyBackdrop.BackgroundTransparency = 0.05
+    keyBackdrop.BorderSizePixel = 0
+    keyBackdrop.Parent = keyGui
+
+    local keyGlow = Instance.new("Frame")
+    keyGlow.Name = "Glow"
+    keyGlow.Size = UDim2.fromOffset(460, 460)
+    keyGlow.Position = UDim2.fromScale(0.5, 0.5)
+    keyGlow.AnchorPoint = Vector2.new(0.5, 0.5)
+    keyGlow.BackgroundColor3 = ACCENT
+    keyGlow.BackgroundTransparency = 0.94
+    keyGlow.BorderSizePixel = 0
+    keyGlow.Parent = keyBackdrop
+    local keyGlowCorner = Instance.new("UICorner")
+    keyGlowCorner.CornerRadius = UDim.new(1, 0)
+    keyGlowCorner.Parent = keyGlow
+
+    local keyCard = Instance.new("Frame")
+    keyCard.Name = "Card"
+    keyCard.Size = UDim2.fromOffset(420, 300)
+    keyCard.Position = UDim2.fromScale(0.5, 0.5)
+    keyCard.AnchorPoint = Vector2.new(0.5, 0.5)
+    keyCard.BackgroundColor3 = Color3.fromRGB(14, 20, 32)
+    keyCard.BorderSizePixel = 0
+    keyCard.Parent = keyBackdrop
+    local keyCardCorner = Instance.new("UICorner")
+    keyCardCorner.CornerRadius = UDim.new(0, 20)
+    keyCardCorner.Parent = keyCard
+    local keyCardStroke = Instance.new("UIStroke")
+    keyCardStroke.Color = ACCENT
+    keyCardStroke.Thickness = 1.5
+    keyCardStroke.Transparency = 0.3
+    keyCardStroke.Parent = keyCard
+
+    local keyLogo = Instance.new("ImageLabel")
+    keyLogo.Name = "Logo"
+    keyLogo.BackgroundTransparency = 1
+    keyLogo.Size = UDim2.fromOffset(44, 44)
+    keyLogo.Position = UDim2.fromOffset(24, 22)
+    keyLogo.Image = LOGO
+    keyLogo.ScaleType = Enum.ScaleType.Fit
+    keyLogo.Parent = keyCard
+
+    local keyTitle = Instance.new("TextLabel")
+    keyTitle.Name = "Title"
+    keyTitle.Size = UDim2.new(1, -70, 0, 26)
+    keyTitle.Position = UDim2.fromOffset(78, 24)
+    keyTitle.BackgroundTransparency = 1
+    keyTitle.Text = "Kilo UI"
+    keyTitle.TextColor3 = Color3.fromRGB(240, 245, 255)
+    keyTitle.TextSize = 20
+    keyTitle.Font = Enum.Font.GothamBold
+    keyTitle.TextXAlignment = Enum.TextXAlignment.Left
+    keyTitle.Parent = keyCard
+
+    local keySub = Instance.new("TextLabel")
+    keySub.Name = "Sub"
+    keySub.Size = UDim2.new(1, -48, 0, 18)
+    keySub.Position = UDim2.fromOffset(24, 52)
+    keySub.BackgroundTransparency = 1
+    keySub.Text = "Premium access required"
+    keySub.TextColor3 = Color3.fromRGB(150, 170, 190)
+    keySub.TextSize = 11
+    keySub.Font = Enum.Font.GothamMedium
+    keySub.TextXAlignment = Enum.TextXAlignment.Left
+    keySub.Parent = keyCard
+
+    local keyInput = Instance.new("TextBox")
+    keyInput.Name = "Input"
+    keyInput.Size = UDim2.new(1, -48, 0, 40)
+    keyInput.Position = UDim2.fromOffset(24, 84)
+    keyInput.BackgroundColor3 = Color3.fromRGB(10, 14, 22)
+    keyInput.BackgroundTransparency = 0.2
+    keyInput.BorderSizePixel = 0
+    keyInput.Text = ""
+    keyInput.PlaceholderText = "Enter license key..."
+    keyInput.PlaceholderColor3 = Color3.fromRGB(120, 140, 160)
+    keyInput.TextColor3 = Color3.new(1, 1, 1)
+    keyInput.TextSize = 14
+    keyInput.Font = Enum.Font.Gotham
+    keyInput.TextTruncate = Enum.TextTruncate.AtEnd
+    keyInput.Parent = keyCard
+    local keyInputCorner = Instance.new("UICorner")
+    keyInputCorner.CornerRadius = UDim.new(0, 8)
+    keyInputCorner.Parent = keyInput
+    local keyInputStroke = Instance.new("UIStroke")
+    keyInputStroke.Color = Color3.fromRGB(60, 70, 90)
+    keyInputStroke.Thickness = 1
+    keyInputStroke.Parent = keyInput
+
+    local keyError = Instance.new("TextLabel")
+    keyError.Name = "Error"
+    keyError.Size = UDim2.new(1, -48, 0, 16)
+    keyError.Position = UDim2.fromOffset(24, 130)
+    keyError.BackgroundTransparency = 1
+    keyError.Text = ""
+    keyError.TextColor3 = Color3.fromRGB(255, 90, 100)
+    keyError.TextSize = 10
+    keyError.Font = Enum.Font.Gotham
+    keyError.TextXAlignment = Enum.TextXAlignment.Left
+    keyError.TextWrapped = true
+    keyError.Parent = keyCard
+
+    local keySubmit = Instance.new("TextButton")
+    keySubmit.Name = "Submit"
+    keySubmit.Size = UDim2.new(0, 120, 0, 40)
+    keySubmit.Position = UDim2.fromOffset(24, 160)
+    keySubmit.BackgroundColor3 = ACCENT
+    keySubmit.BorderSizePixel = 0
+    keySubmit.Text = "VALIDATE"
+    keySubmit.TextColor3 = Color3.new(1, 1, 1)
+    keySubmit.TextSize = 13
+    keySubmit.Font = Enum.Font.GothamBold
+    keySubmit.AutoButtonColor = false
+    keySubmit.Parent = keyCard
+    local keySubmitCorner = Instance.new("UICorner")
+    keySubmitCorner.CornerRadius = UDim.new(0, 8)
+    keySubmitCorner.Parent = keySubmit
+
+    local keyDiscord = Instance.new("TextButton")
+    keyDiscord.Name = "Discord"
+    keyDiscord.Size = UDim2.new(1, -48, 0, 40)
+    keyDiscord.Position = UDim2.new(0, 160, 0, 160)
+    keyDiscord.BackgroundColor3 = Color3.fromRGB(10, 14, 22)
+    keyDiscord.BackgroundTransparency = 0.2
+    keyDiscord.BorderSizePixel = 0
+    keyDiscord.Text = "JOIN DISCORD  " .. discordLink:gsub("https://discord.gg/", "")
+    keyDiscord.TextColor3 = Color3.fromRGB(150, 170, 190)
+    keyDiscord.TextSize = 11
+    keyDiscord.Font = Enum.Font.Gotham
+    keyDiscord.TextXAlignment = Enum.TextXAlignment.Left
+    keyDiscord.AutoButtonColor = false
+    keyDiscord.Parent = keyCard
+    local keyDiscordCorner = Instance.new("UICorner")
+    keyDiscordCorner.CornerRadius = UDim.new(0, 8)
+    keyDiscordCorner.Parent = keyDiscord
+
+    local keyResult = Instance.new("BindableEvent")
+
+    local function attemptKey(inputText)
+        inputText = inputText:gsub("%s+", "")
+        if inputText == "" then
+            keyError.Text = "Please enter a key."
+            keyInputStroke.Color = Color3.fromRGB(255, 90, 100)
+            playKeySound()
+            task.delay(0.12, function()
+                keyInputStroke.Color = Color3.fromRGB(60, 70, 90)
+            end)
+            return
+        end
+        keySubmit.Text = "VALIDATING..."
+        keySubmit.BackgroundColor3 = Color3.fromRGB(60, 70, 90)
+        keySubmit.Active = false
+        local ok = validateKeyLocally(inputText, expectedKey) or validateKeyRemotely(inputText, validateUrl)
+        keySubmit.Active = true
+        if ok then
+            sharedState.KiloUI_CachedKey = inputText
+            sharedState.KiloUI_ValidatedKey = inputText
+            keySubmit.Text = "ACCESS GRANTED"
+            keySubmit.BackgroundColor3 = Color3.fromRGB(76, 220, 137)
+            playKeySound()
+            task.delay(0.4, function()
+                Tween.Play(keyBackdrop, { BackgroundTransparency = 1 }, { Time = 0.25 })
+                task.delay(0.28, function()
+                    keyGui:Destroy()
+                end)
+                keyResult:Fire(true)
+            end)
+        else
+            keyError.Text = "Invalid key. Join the discord for a license."
+            keyInputStroke.Color = Color3.fromRGB(255, 90, 100)
+            keySubmit.Text = "VALIDATE"
+            keySubmit.BackgroundColor3 = ACCENT
+            playKeySound()
+            task.delay(0.12, function()
+                keyInputStroke.Color = Color3.fromRGB(60, 70, 90)
+            end)
+        end
+    end
+
+    keySubmit.MouseButton1Click:Connect(function()
+        attemptKey(keyInput.Text)
+    end)
+    keyInput.FocusLost:Connect(function(enterPressed)
+        if enterPressed then
+            attemptKey(keyInput.Text)
+        end
+    end)
+    keyDiscord.MouseButton1Click:Connect(function()
+        if setclipboard then
+            pcall(setclipboard, discordLink)
+        end
+    end)
+
+    task.spawn(function()
+        Tween.Play(keyCard, { Position = UDim2.fromScale(0.5, 0.5) }, { Time = 0.4, EasingStyle = Enum.EasingStyle.Back })
+    end)
+
+    local validated = keyResult.Event:Wait()
+    return validated == true
+end
+
+local keyOk = runKeySystem()
+if not keyOk then
+    if bootstrap then
+        bootstrap:Destroy()
+    end
+    sharedState.KiloUI_BootstrapLoader = nil
+    error("Kilo UI key validation failed or was cancelled.", 0)
+end
+
 -- Download every module with an explicit error so a bad/missing GitHub file
 -- no longer looks like Kilo UI simply "closing".
 local sources: { [string]: string } = {}

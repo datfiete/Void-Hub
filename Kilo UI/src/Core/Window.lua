@@ -1,5 +1,7 @@
 --!strict
-
+-- Kilo UI Premium Window Engine
+-- Animated boot sequence, responsive layout, animated floating island,
+-- premium watermark, key-system hooks, and smooth theme transitions.
 local Theme = require(script.Parent.Theme)
 local Tab = require(script.Parent.Tab)
 local Maid = require(script.Parent.Parent.Utils.Maid)
@@ -13,222 +15,100 @@ local TweenService = game:GetService("TweenService")
 local Lighting = game:GetService("Lighting")
 local SoundService = game:GetService("SoundService")
 local Stats = game:GetService("Stats")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local MarketplaceService = game:GetService("MarketplaceService")
 
 local GUI_NAME = "Kilo UI"
 local VERSION = "2.0"
 local Kilo_Logo = "rbxassetid://135320038058277"
 local LEGACY_LOGO = "rbxassetid://128228297210141"
 
-local function createWeather(parent: Instance)
-	local RunService = game:GetService("RunService")
-	local layer = Instance.new("Frame")
-	layer.Name = "WeatherLayer"
-	layer.BackgroundTransparency = 1
-	layer.Size = UDim2.fromScale(1, 1)
-	layer.ZIndex = 100
-	layer.ClipsDescendants = false
-	layer.Visible = false
-	layer.Active = false
-	layer.Parent = parent
-
-	local STAR = "rbxassetid://99851851"
-	local GLOW = "rbxassetid://6014261993"
-
-	local presets = {
-		Rain = {
-			count = 70,
-			vy = { 280, 460 }, vx = { -25, 10 },
-			size = { 1, 2, 14, 22 },
-			color = Color3.fromRGB(180, 210, 240),
-			image = nil,
-			rot = 12,
-			spin = 0,
-			trans = { 0.25, 0.55 },
-		},
-		Snow = {
-			count = 48,
-			vy = { 28, 70 }, vx = { -40, 40 },
-			size = { 6, 14, 6, 14 },
-			color = Color3.fromRGB(255, 255, 255),
-			image = STAR,
-			rot = 0,
-			spin = 25,
-			trans = { 0.05, 0.35 },
-		},
-		Sakura = {
-			count = 36,
-			vy = { 35, 75 }, vx = { -60, 60 },
-			size = { 8, 16, 8, 16 },
-			color = Color3.fromRGB(255, 150, 190),
-			image = STAR,
-			rot = 0,
-			spin = 80,
-			trans = { 0.05, 0.3 },
-		},
-		Stars = {
-			count = 50,
-			vy = { 6, 18 }, vx = { -10, 10 },
-			size = { 4, 12, 4, 12 },
-			color = Color3.fromRGB(255, 245, 255),
-			image = STAR,
-			rot = 0,
-			spin = 10,
-			trans = { 0.1, 0.6 },
-			twinkle = true,
-		},
-		Leaves = {
-			count = 28,
-			vy = { 45, 95 }, vx = { -90, 90 },
-			size = { 10, 18, 8, 14 },
-			color = Color3.fromRGB(210, 150, 60),
-			image = STAR,
-			rot = 0,
-			spin = 120,
-			trans = { 0.05, 0.25 },
-		},
-	}
-
-	local api = {
-		_kind = "None",
-		_items = {} :: { any },
-		_conn = nil :: RBXScriptConnection?,
-		_scope = "Screen",
-		_screenParent = parent,
-		_uiParent = nil,
-	}
-
-	function api:SetParentTargets(screenParent: Instance?, uiParent: Instance?)
-		self._screenParent = screenParent or self._screenParent
-		self._uiParent = uiParent
-	end
-
-	function api:SetScope(scope: string)
-		scope = scope or "Screen"
-		self._scope = scope
-		local target = if scope == "UI" and self._uiParent then self._uiParent else self._screenParent
-		if target and layer.Parent ~= target then
-			layer.Parent = target
-		end
-		layer.ClipsDescendants = (scope == "UI")
-		layer.ZIndex = if scope == "UI" then 2 else 100
-	end
-
-	function api:Set(kind: string)
-		kind = kind or "None"
-		if self._conn then
-			self._conn:Disconnect()
-			self._conn = nil
-		end
-		for _, item in self._items do
-			if item.inst then item.inst:Destroy() end
-		end
-		table.clear(self._items)
-		self._kind = kind
-		local preset = presets[kind]
-		if not preset then
-			layer.Visible = false
-			return
-		end
-		layer.Visible = true
-		local rng = Random.new()
-
-		for i = 1, preset.count do
-			local w = rng:NextInteger(preset.size[1], preset.size[2])
-			local h = rng:NextInteger(preset.size[3], preset.size[4])
-			local inst: GuiObject
-			if preset.image then
-				local img = Instance.new("ImageLabel")
-				img.BackgroundTransparency = 1
-				img.Image = preset.image
-				img.ImageColor3 = preset.color
-				img.ImageTransparency = rng:NextNumber(preset.trans[1], preset.trans[2])
-				img.ScaleType = Enum.ScaleType.Fit
-				inst = img
-			else
-				local f = Instance.new("Frame")
-				f.BorderSizePixel = 0
-				f.BackgroundColor3 = preset.color
-				f.BackgroundTransparency = rng:NextNumber(preset.trans[1], preset.trans[2])
-				inst = f
-			end
-			inst.Size = UDim2.fromOffset(w, h)
-			inst.AnchorPoint = Vector2.new(0.5, 0.5)
-			inst.ZIndex = 101
-			inst.Active = false
-			inst.Parent = layer
-
-			local abs = layer.AbsoluteSize
-			local startX = rng:NextNumber(0, math.max(abs.X, 200))
-			local startY = rng:NextNumber(-abs.Y * 0.3, math.max(abs.Y, 200))
-			inst.Position = UDim2.fromOffset(startX, startY)
-			inst.Rotation = preset.rot + rng:NextNumber(-20, 20)
-
-			self._items[i] = {
-				inst = inst,
-				x = startX,
-				y = startY,
-				vx = rng:NextNumber(preset.vx[1], preset.vx[2]),
-				vy = rng:NextNumber(preset.vy[1], preset.vy[2]),
-				spin = (if preset.spin ~= 0 then rng:NextNumber(-preset.spin, preset.spin) else 0),
-				baseT = if inst:IsA("ImageLabel") then inst.ImageTransparency else inst.BackgroundTransparency,
-				phase = rng:NextNumber(0, math.pi * 2),
-				twinkle = preset.twinkle == true,
-				isImage = inst:IsA("ImageLabel"),
-			}
-		end
-
-		self._conn = RunService.RenderStepped:Connect(function(dt)
-			dt = math.clamp(dt, 0, 0.05)
-			local abs = layer.AbsoluteSize
-			if abs.X < 4 or abs.Y < 4 then
-				return
-			end
-			local t = os.clock()
-			for _, item in self._items do
-				local inst = item.inst
-				if not inst or not inst.Parent then
-					continue
-				end
-				item.x += item.vx * dt + math.sin(t * 1.4 + item.phase) * 18 * dt
-				item.y += item.vy * dt
-				inst.Rotation += item.spin * dt
-
-				if item.twinkle then
-					local pulse = 0.15 + 0.45 * (0.5 + 0.5 * math.sin(t * 3.2 + item.phase))
-					if item.isImage then
-						(inst :: ImageLabel).ImageTransparency = pulse
-					end
-				end
-
-				if item.y > abs.Y + 40 then
-					item.y = rng:NextNumber(-50, -10)
-					item.x = rng:NextNumber(0, abs.X)
-				elseif item.x < -40 then
-					item.x = abs.X + 20
-				elseif item.x > abs.X + 40 then
-					item.x = -20
-				end
-
-				inst.Position = UDim2.fromOffset(item.x, item.y)
-			end
-		end)
-	end
-
-	function api:Destroy()
-		if self._conn then self._conn:Disconnect() end
-		for _, item in self._items do
-			if item.inst then item.inst:Destroy() end
-		end
-		layer:Destroy()
-	end
-
-	return api
-end
-
 local SHADOW_IMAGE = "rbxassetid://6014261993"
 local SHADOW_SLICE_CENTER = Rect.new(49, 49, 450, 450)
-
 local CLICK_SOUND_ID = "rbxassetid://876939830"
+
+local INFO_BAR_REFRESH_INTERVAL = 1
+local WATERMARK_REFRESH_INTERVAL = 0.5
+
+local Window = {}
+Window.__index = Window
+
+export type WindowOptions = {
+	Title: string?,
+	Subtitle: string?,
+	Size: Vector2?,
+	Center: boolean?,
+	BackgroundImage: string?,
+	Logo: string?,
+	Badges: { { Text: string, Color: Color3? } }?,
+	Footer: { Avatar: string?, Username: string? }?,
+	ShowSearch: boolean?,
+	ShowWindowControls: boolean?,
+	ToggleKey: Enum.KeyCode?,
+	TopMost: boolean?,
+	HideCoreUI: boolean?,
+	Watermark: boolean?,
+	KeySystem: { Enabled: boolean?, Key: string?, Url: string? }?,
+}
+
+export type DeveloperPanelHandle = {
+	SetStats: (self: DeveloperPanelHandle, stats: { [string]: any }) -> (),
+	SetContent: (self: DeveloperPanelHandle, content: string) -> (),
+	Close: (self: DeveloperPanelHandle) -> (),
+	Open: (self: DeveloperPanelHandle) -> (),
+}
+
+export type WindowHandle = {
+	CreateTab: (self: WindowHandle, name: string) -> any,
+	CreateDeveloperWindow: (self: WindowHandle, options: any?) -> DeveloperPanelHandle,
+	OpenDeveloperWindow: (self: WindowHandle, options: any?) -> DeveloperPanelHandle,
+	CreateESPBuilder: (self: WindowHandle, options: any?) -> any,
+	CreateESPWorldRenderer: (self: WindowHandle, options: any?) -> any,
+	CreateNotice: (self: WindowHandle, data: any) -> any,
+	CreateStat: (self: WindowHandle, data: any) -> any,
+	CreateDivider: (self: WindowHandle, data: any?) -> any,
+	CreateIconButton: (self: WindowHandle, data: any?) -> any,
+	CreateCard: (self: WindowHandle, data: any) -> any,
+	CreateBadge: (self: WindowHandle, data: any) -> any,
+	CreateProgress: (self: WindowHandle, data: any) -> any,
+	CreateStatus: (self: WindowHandle, data: any) -> any,
+	Notify: (self: WindowHandle, options: any) -> any,
+	Destroy: (self: WindowHandle) -> (),
+}
+
+local function getExecutorName(): string
+	local ok, result = pcall(function()
+		if syn and syn.getexecutorname then
+			return syn.getexecutorname()
+		elseif getexecutorname then
+			return getexecutorname()
+		elseif identifyexecutor then
+			local name = identifyexecutor()
+			return name
+		end
+		return "Unknown"
+	end)
+	if ok and typeof(result) == "string" and result ~= "" then
+		return result
+	end
+	return "Unknown"
+end
+
+local function playSound(soundId: string, volume: number?)
+	local ok, snd = pcall(function()
+		local s = Instance.new("Sound")
+		s.SoundId = soundId
+		s.Volume = volume or 0.3
+		s.Parent = SoundService
+		s:Play()
+		game:GetService("Debris"):AddItem(s, 5)
+		return s
+	end)
+	return ok and snd or nil
+end
+
 local function cleanDisplayName(name: string): string
 	local cleaned = name
 	cleaned = cleaned:gsub("^%s%c+", "")
@@ -279,71 +159,6 @@ local function createMagnifier(parent: Instance, theme: any)
 	return root, stroke, handle
 end
 
-local INFO_BAR_REFRESH_INTERVAL = 1
-local WATERMARK_REFRESH_INTERVAL = 0.5
-
-local Window = {}
-Window.__index = Window
-
-export type WindowOptions = {
-	Title: string?,
-	Subtitle: string?,
-	Size: Vector2?,
-	Center: boolean?,
-	BackgroundImage: string?,
-	Logo: string?,
-	Badges: { { Text: string, Color: Color3? } }?,
-	Footer: { Avatar: string?, Username: string? }?,
-	ShowSearch: boolean?,
-	ShowWindowControls: boolean?,
-	ToggleKey: Enum.KeyCode?,
-	TopMost: boolean?,
-	HideCoreUI: boolean?,
-}
-
-export type DeveloperPanelHandle = {
-	SetStats: (self: DeveloperPanelHandle, stats: { [string]: any }) -> (),
-	SetContent: (self: DeveloperPanelHandle, content: string) -> (),
-	Close: (self: DeveloperPanelHandle) -> (),
-	Open: (self: DeveloperPanelHandle) -> (),
-}
-
-export type WindowHandle = {
-	CreateTab: (self: WindowHandle, name: string) -> any,
-	CreateDeveloperWindow: (self: WindowHandle, options: any?) -> DeveloperPanelHandle,
-	OpenDeveloperWindow: (self: WindowHandle, options: any?) -> DeveloperPanelHandle,
-	CreateESPBuilder: (self: WindowHandle, options: any?) -> any,
-	CreateESPWorldRenderer: (self: WindowHandle, options: any?) -> any,
-	CreateNotice: (self: WindowHandle, data: any) -> any,
-	CreateStat: (self: WindowHandle, data: any) -> any,
-	CreateDivider: (self: WindowHandle, data: any?) -> any,
-	CreateIconButton: (self: WindowHandle, data: any?) -> any,
-	CreateCard: (self: WindowHandle, data: any) -> any,
-	CreateBadge: (self: WindowHandle, data: any) -> any,
-	CreateProgress: (self: WindowHandle, data: any) -> any,
-	CreateStatus: (self: WindowHandle, data: any) -> any,
-	Notify: (self: WindowHandle, options: any) -> any,
-	Destroy: (self: WindowHandle) -> (),
-}
-
-local function getExecutorName(): string
-	local ok, result = pcall(function()
-		if syn and syn.getexecutorname then
-			return syn.getexecutorname()
-		elseif getexecutorname then
-			return getexecutorname()
-		elseif identifyexecutor then
-			local name = identifyexecutor()
-			return name
-		end
-		return "Unknown"
-	end)
-	if ok and typeof(result) == "string" and result ~= "" then
-		return result
-	end
-	return "Unknown"
-end
-
 function Window.new(library: any, options: WindowOptions?): WindowHandle
 	local data = (typeof(options) == "table") and options or {}
 	local self = setmetatable({
@@ -352,14 +167,25 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		_Tabs = {} :: { any },
 		_ActiveTab = nil :: any,
 		_StartupTime = os.clock(),
+		_Visible = false,
+		_StartupComplete = false,
+		_Minimized = false,
+		_KeySystem = data.KeySystem or {},
+		_WatermarkEnabled = data.Watermark ~= false,
+		_Responsive = true,
+		_Mobile = false,
 	}, Window)
 
 	local Players = game:GetService("Players")
 	local localPlayer = Players.LocalPlayer and Players.LocalPlayer.Name or "Player"
-	local UserInputService = game:GetService("UserInputService")
-	local RunService = game:GetService("RunService")
+	local userInputService = game:GetService("UserInputService")
+	local runService = game:GetService("RunService")
 	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
 	local sharedState = (getgenv and getgenv()) or _G
+
+	-- Mobile detection
+	local viewport = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1280, 720)
+	self._Mobile = viewport.X < 1000 or viewport.Y < 600
 
 	local function getTopGuiParent(): Instance
 		local ok, hidden = pcall(function()
@@ -436,6 +262,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	screenGui.Parent = topGuiParent
 	self._Maid:Give(screenGui)
 
+	-- Core UI hiding
 	self._CoreUIState = nil
 	if data.TopMost ~= false and data.HideCoreUI ~= false then
 		local StarterGui = game:GetService("StarterGui")
@@ -489,6 +316,14 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		windowSize = Vector2.new(820, 540)
 	end
 
+	-- Responsive: shrink on mobile
+	if self._Mobile then
+		windowSize = Vector2.new(
+			math.clamp(windowSize.X, 560, viewport.X * 0.92),
+			math.clamp(windowSize.Y, 400, viewport.Y * 0.92)
+		)
+	end
+
 	local showSearch = data.ShowSearch ~= false
 	local showWindowControls = data.ShowWindowControls ~= false
 	local topBarHeight = Theme.TopBarHeight or 72
@@ -498,15 +333,12 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	local maxWindowSize = Vector2.new(1180, 760)
 
 	local camera = workspace.CurrentCamera
-	local viewport = camera and camera.ViewportSize or Vector2.new(1280, 720)
+	local vp = camera and camera.ViewportSize or Vector2.new(1280, 720)
 	local effectiveMinSize = Vector2.new(
-		math.min(minWindowSize.X, viewport.X * 0.76),
-		math.min(minWindowSize.Y, viewport.Y * 0.76)
+		math.min(minWindowSize.X, vp.X * 0.76),
+		math.min(minWindowSize.Y, vp.Y * 0.76)
 	)
-	local viewportMax = Vector2.new(
-		viewport.X * 0.82,
-		viewport.Y * 0.82
-	)
+	local viewportMax = Vector2.new(vp.X * 0.82, vp.Y * 0.82)
 	maxWindowSize = Vector2.new(
 		math.max(effectiveMinSize.X, math.min(maxWindowSize.X, viewportMax.X)),
 		math.max(effectiveMinSize.Y, math.min(maxWindowSize.Y, viewportMax.Y))
@@ -516,6 +348,9 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		math.clamp(windowSize.Y, effectiveMinSize.Y, maxWindowSize.Y)
 	)
 
+	-- ============================================================
+	-- PREMIUM ANIMATED BOOT SEQUENCE
+	-- ============================================================
 	local loadingGui = Instance.new("ScreenGui")
 	loadingGui.Name = "KiloBoot"
 	loadingGui.ResetOnSpawn = false
@@ -524,36 +359,49 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	loadingGui.Parent = screenGui
 
 	local bootBackdrop = Helpers.CreateFrame({ Name = "Backdrop", Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(2, 3, 7), BackgroundTransparency = 0.02, Parent = loadingGui })
-	local bootGlow = Helpers.CreateFrame({ Name = "Glow", Size = UDim2.fromOffset(460, 460), Position = UDim2.fromScale(0.5, 0.48), AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = library.Theme.Accent, BackgroundTransparency = 0.92, Parent = bootBackdrop })
+
+	-- Ambient glow pulses behind the boot card
+	local bootGlow = Helpers.CreateFrame({ Name = "Glow", Size = UDim2.fromOffset(460, 460), Position = UDim2.fromScale(0.5, 0.48), AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = library.Theme.Accent, BackgroundTransparency = 0.94, Parent = bootBackdrop })
 	Helpers.Corner(bootGlow, 999)
 
 	local bootCard = Helpers.CreateFrame({ Name = "Card", Size = UDim2.fromOffset(520, 320), Position = UDim2.fromScale(0.5, 0.5), AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = library.Theme.Secondary, Parent = bootBackdrop })
-	Helpers.Corner(bootCard, 22)
+	Helpers.Corner(bootCard, 24)
 	local bootStroke = Helpers.Stroke(bootCard, library.Theme.BorderStrong or library.Theme.Border, 1)
+	bootStroke.Transparency = 0.2
 
 	local bootTopLine = Helpers.CreateFrame({ Name = "TopLine", Size = UDim2.new(1, -56, 0, 2), Position = UDim2.fromOffset(28, 20), BackgroundColor3 = library.Theme.Accent, Parent = bootCard })
 	Helpers.Corner(bootTopLine, 2)
 
-	local bootTitle = Helpers.CreateLabel({ Name = "Title", Size = UDim2.new(1, -56, 0, 34), Position = UDim2.fromOffset(28, 42), Text = windowName, Font = Theme.FontBold, TextSize = 28, TextColor3 = library.Theme.Text, Parent = bootCard })
-	local bootSub = Helpers.CreateLabel({ Name = "Sub", Size = UDim2.new(1, -56, 0, 18), Position = UDim2.fromOffset(28, 76), Text = "INITIALIZING COMMAND INTERFACE", Font = Theme.FontBold, TextSize = 9, TextColor3 = library.Theme.Accent, Parent = bootCard })
-	local bootStatus = Helpers.CreateLabel({ Name = "Status", Size = UDim2.new(1, -56, 0, 22), Position = UDim2.fromOffset(28, 112), Text = "Preparing interface...", Font = Theme.Font, TextSize = 12, TextColor3 = library.Theme.TextMuted, Parent = bootCard })
+	local bootTitle = Helpers.CreateLabel({ Name = "Title", Size = UDim2.new(1, -56, 0, 36), Position = UDim2.fromOffset(28, 44), Text = windowName, Font = Theme.FontBold, TextSize = 30, TextColor3 = library.Theme.Text, Parent = bootCard })
+	local bootSub = Helpers.CreateLabel({ Name = "Sub", Size = UDim2.new(1, -56, 0, 18), Position = UDim2.fromOffset(28, 80), Text = "PREMIUM COMMAND INTERFACE", Font = Theme.FontBold, TextSize = 10, TextColor3 = library.Theme.Accent, Parent = bootCard })
+	local bootStatus = Helpers.CreateLabel({ Name = "Status", Size = UDim2.new(1, -56, 0, 22), Position = UDim2.fromOffset(28, 116), Text = "Initializing engine...", Font = Theme.Font, TextSize = 12, TextColor3 = library.Theme.TextMuted, Parent = bootCard })
 
-	local bootTrack = Helpers.CreateFrame({ Name = "Track", Size = UDim2.new(1, -56, 0, 8), Position = UDim2.fromOffset(28, 156), BackgroundColor3 = library.Theme.Background, Parent = bootCard })
-	Helpers.Corner(bootTrack, 4)
+	local bootTrack = Helpers.CreateFrame({ Name = "Track", Size = UDim2.new(1, -56, 0, 6), Position = UDim2.fromOffset(28, 162), BackgroundColor3 = library.Theme.Background, Parent = bootCard })
+	Helpers.Corner(bootTrack, 3)
 	local bootFill = Helpers.CreateFrame({ Name = "Fill", Size = UDim2.fromScale(0, 1), BackgroundColor3 = library.Theme.Accent, Parent = bootTrack })
-	Helpers.Corner(bootFill, 4)
+	Helpers.Corner(bootFill, 3)
 
-	local bootPercent = Helpers.CreateLabel({ Name = "Percent", Size = UDim2.fromOffset(70, 22), Position = UDim2.new(1, -98, 0, 176), Text = "0%", Font = Theme.FontBold, TextSize = 12, TextColor3 = library.Theme.Text, TextXAlignment = Enum.TextXAlignment.Right, Parent = bootCard })
-	local bootStage = Helpers.CreateLabel({ Name = "Stage", Size = UDim2.new(1, -56, 0, 18), Position = UDim2.fromOffset(28, 204), Text = "CORE / 00", Font = Theme.FontBold, TextSize = 9, TextColor3 = library.Theme.TextMuted, Parent = bootCard })
+	local bootPercent = Helpers.CreateLabel({ Name = "Percent", Size = UDim2.fromOffset(70, 22), Position = UDim2.new(1, -98, 0, 182), Text = "0%", Font = Theme.FontBold, TextSize = 12, TextColor3 = library.Theme.Text, TextXAlignment = Enum.TextXAlignment.Right, Parent = bootCard })
+	local bootStage = Helpers.CreateLabel({ Name = "Stage", Size = UDim2.new(1, -56, 0, 18), Position = UDim2.fromOffset(28, 210), Text = "CORE / 00", Font = Theme.FontBold, TextSize = 9, TextColor3 = library.Theme.TextMuted, Parent = bootCard })
 
 	local bootPips = {}
 	for i = 1, 5 do
-		local pip = Helpers.CreateFrame({ Name = "Pip" .. i, Size = UDim2.fromOffset(54, 4), Position = UDim2.fromOffset(28 + (i - 1) * 62, 244), BackgroundColor3 = library.Theme.BorderStrong or library.Theme.Border, Parent = bootCard })
+		local pip = Helpers.CreateFrame({ Name = "Pip" .. i, Size = UDim2.fromOffset(54, 4), Position = UDim2.fromOffset(28 + (i - 1) * 62, 250), BackgroundColor3 = library.Theme.BorderStrong or library.Theme.Border, Parent = bootCard })
 		Helpers.Corner(pip, 2)
 		table.insert(bootPips, pip)
 	end
 
-	local bootFooter = Helpers.CreateLabel({ Name = "Footer", Size = UDim2.new(1, -56, 0, 18), Position = UDim2.fromOffset(28, 274), Text = "KILO UI  " .. VERSION, Font = Theme.FontBold, TextSize = 8, TextColor3 = library.Theme.TextMuted, Parent = bootCard })
+	local bootFooter = Helpers.CreateLabel({ Name = "Footer", Size = UDim2.new(1, -56, 0, 18), Position = UDim2.fromOffset(28, 284), Text = "KILO UI  " .. VERSION .. "  ·  PREMIUM EDITION", Font = Theme.FontBold, TextSize = 8, TextColor3 = library.Theme.TextMuted, Parent = bootCard })
+
+	-- Subtle glow pulse animation on boot card
+	task.spawn(function()
+		while bootCard and bootCard.Parent do
+			Tween.Play(bootGlow, { BackgroundTransparency = 0.86 }, { Time = 2 })
+			task.wait(2)
+			Tween.Play(bootGlow, { BackgroundTransparency = 0.94 }, { Time = 2 })
+			task.wait(2)
+		end
+	end)
 
 	local bootPhases = {
 		{0.16, "Mounting interface...", "CORE / 01"},
@@ -586,18 +434,20 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		bootstrapLoader:Destroy()
 	end
 
+	-- ============================================================
+	-- MAIN WINDOW FRAME
+	-- ============================================================
 	local main = Helpers.CreateFrame({
 		Name = "Main",
 		Size = UDim2.fromOffset(windowSize.X, windowSize.Y),
 		Position = if data.Center ~= false then UDim2.fromScale(0.5, 0.5) else UDim2.fromOffset(40, 40),
 		AnchorPoint = if data.Center ~= false then Vector2.new(0.5, 0.5) else Vector2.new(0, 0),
 		BackgroundColor3 = library.Theme.Background,
-		BackgroundTransparency = 0.03,
+		BackgroundTransparency = 0.02,
 		Visible = false,
 		Parent = screenGui,
 	})
 	Helpers.Corner(main, Theme.CornerRadius)
-	local mainCorner = main:FindFirstChildOfClass("UICorner")
 	local mainStroke = Helpers.Stroke(main, library.Theme.Border, 1)
 	main.ClipsDescendants = true
 
@@ -606,7 +456,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	shadow.BackgroundTransparency = 1
 	shadow.Image = SHADOW_IMAGE
 	shadow.ImageColor3 = Color3.new(0, 0, 0)
-	shadow.ImageTransparency = 0.45
+	shadow.ImageTransparency = 0.5
 	shadow.ScaleType = Enum.ScaleType.Slice
 	shadow.SliceCenter = SHADOW_SLICE_CENTER
 	shadow.ZIndex = 0
@@ -615,8 +465,8 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	local function syncShadow()
 		shadow.AnchorPoint = main.AnchorPoint
 		shadow.Position = main.Position
-		shadow.Size = UDim2.new(main.Size.X.Scale, main.Size.X.Offset + 46, main.Size.Y.Scale, main.Size.Y.Offset + 46)
-		shadow.Visible = main.Visible
+		shadow.Size = UDim2.new(main.Size.X.Scale, main.Size.X.Offset + 50, main.Size.Y.Scale, main.Size.Y.Offset + 50)
+		shadow.Visible = main.Visible and not self._Minimized
 	end
 	syncShadow()
 	self._Maid:GiveTask(main:GetPropertyChangedSignal("Position"):Connect(syncShadow))
@@ -630,7 +480,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	ambientGlow.BorderSizePixel = 0
 	ambientGlow.Image = SHADOW_IMAGE
 	ambientGlow.ImageColor3 = library.Theme.Accent
-	ambientGlow.ImageTransparency = 0.86
+	ambientGlow.ImageTransparency = 0.88
 	ambientGlow.ScaleType = Enum.ScaleType.Slice
 	ambientGlow.SliceCenter = SHADOW_SLICE_CENTER
 	ambientGlow.ZIndex = 0
@@ -638,8 +488,8 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	local function syncAmbientGlow()
 		ambientGlow.AnchorPoint = main.AnchorPoint
 		ambientGlow.Position = main.Position
-		ambientGlow.Size = UDim2.new(main.Size.X.Scale, main.Size.X.Offset + 28, main.Size.Y.Scale, main.Size.Y.Offset + 28)
-		ambientGlow.Visible = main.Visible
+		ambientGlow.Size = UDim2.new(main.Size.X.Scale, main.Size.X.Offset + 32, main.Size.Y.Scale, main.Size.Y.Offset + 32)
+		ambientGlow.Visible = main.Visible and not self._Minimized
 	end
 	syncAmbientGlow()
 	self._Maid:GiveTask(main:GetPropertyChangedSignal("Position"):Connect(syncAmbientGlow))
@@ -664,7 +514,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	backgroundImage.Size = UDim2.fromScale(1, 1)
 	backgroundImage.BackgroundTransparency = 1
 	backgroundImage.Image = data.BackgroundImage or ""
-	backgroundImage.ImageTransparency = 0.66
+	backgroundImage.ImageTransparency = 0.68
 	backgroundImage.ScaleType = Enum.ScaleType.Crop
 	backgroundImage.ZIndex = 0
 	backgroundImage.Parent = main
@@ -675,7 +525,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	overlay.Name = "BackgroundOverlay"
 	overlay.Size = UDim2.fromScale(1, 1)
 	overlay.BackgroundColor3 = Color3.new(0, 0, 0)
-	overlay.BackgroundTransparency = 0.56
+	overlay.BackgroundTransparency = 0.58
 	overlay.BorderSizePixel = 0
 	overlay.ZIndex = 1
 	overlay.Parent = main
@@ -699,9 +549,9 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		ColorSequenceKeypoint.new(1, library.Theme.Background),
 	})
 	atmosphereGradient.Transparency = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 0.12),
+		NumberSequenceKeypoint.new(0, 0.14),
 		NumberSequenceKeypoint.new(0.5, 0.92),
-		NumberSequenceKeypoint.new(1, 0.12),
+		NumberSequenceKeypoint.new(1, 0.14),
 	})
 	atmosphereGradient.Rotation = 0
 	atmosphereGradient.Parent = atmosphere
@@ -711,7 +561,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Size = UDim2.new(1, 0, 0, topBarHeight),
 		Position = UDim2.fromOffset(0, 0),
 		BackgroundColor3 = library.Theme.Secondary,
-		BackgroundTransparency = 0.10,
+		BackgroundTransparency = 0.08,
 		Active = true,
 		Selectable = true,
 		Parent = main,
@@ -784,7 +634,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		BackgroundColor3 = library.Theme.Background,
 		Parent = brand,
 	})
-	Helpers.Corner(logoFrame, 13)
+	Helpers.Corner(logoFrame, 14)
 	local logoStroke = Helpers.Stroke(logoFrame, library.Theme.BorderStrong or library.Theme.Border, 1)
 	local logoAccentStroke = Helpers.Stroke(logoFrame, library.Theme.Accent, 1)
 	logoAccentStroke.Transparency = 0.62
@@ -866,7 +716,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		Name = "ProductMeta",
 		Size = UDim2.new(1, 0, 0, 13),
 		Position = UDim2.fromOffset(1, 57),
-		Text = "KILO UI  /  COMMAND CENTER  /  2.0",
+		Text = "KILO UI  /  PREMIUM EDITION  /  2.0",
 		Font = Theme.FontBold,
 		TextSize = 9,
 		TextColor3 = library.Theme.TextMuted,
@@ -997,6 +847,9 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		end))
 	end
 
+	-- ============================================================
+	-- CONTENT AREA: TabList + Pages
+	-- ============================================================
 	local content = Helpers.CreateFrame({
 		Name = "Content",
 		Size = UDim2.new(1, 0, 1, -topBarHeight),
@@ -1008,7 +861,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 
 	local tabList = Helpers.CreateFrame({
 		Name = "TabList",
-		Size = UDim2.new(0, 200, 1, 0),
+		Size = UDim2.new(0, self._Mobile and 140 or 200, 1, 0),
 		BackgroundColor3 = library.Theme.Secondary,
 		BackgroundTransparency = 0.05,
 		Parent = content,
@@ -1019,14 +872,17 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 
 	local pages = Helpers.CreateFrame({
 		Name = "Pages",
-		Size = UDim2.new(1, -200, 1, 0),
-		Position = UDim2.fromOffset(200, 0),
+		Size = UDim2.new(1, -(self._Mobile and 140 or 200), 1, 0),
+		Position = UDim2.fromOffset(self._Mobile and 140 or 200, 0),
 		BackgroundTransparency = 1,
 		Parent = content,
 	})
 	pages.ZIndex = 10
 	self.Pages = pages
 
+	-- ============================================================
+	-- FLOATING ISLAND (minimized state)
+	-- ============================================================
 	local island = Instance.new("CanvasGroup")
 	island.Name = "Island"
 	island.Size = UDim2.fromOffset(168, 34)
@@ -1187,7 +1043,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	})
 	actGame.ZIndex = 61
 	pcall(function()
-		local info = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId)
+		local info = MarketplaceService:GetProductInfo(game.PlaceId)
 		if info and info.Name then actGame.Text = info.Name end
 	end)
 
@@ -1399,6 +1255,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 	activityScale.Name = "Pop"
 	activityScale.Scale = 0.9
 
+	-- Boot completion: crossfade from boot screen to main window
 	task.delay(1.2, function()
 		if self._BootGui then
 			Tween.Play(bootBackdrop, { BackgroundTransparency = 1 }, { Time = 0.3 })
@@ -1421,6 +1278,9 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		end
 	end)
 
+	-- ============================================================
+	-- PUBLIC API
+	-- ============================================================
 	function self:SetVisible(visible: boolean)
 		self._Visible = visible
 		main.Visible = visible
@@ -1491,6 +1351,21 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 
 	function self:SetWatermarkEnabled(enabled: boolean)
 		self._WatermarkEnabled = enabled == true
+	end
+
+	function self:CreateESPBuilder(opts: any?)
+		local builder = ESPBuilder.new(opts)
+		return builder
+	end
+
+	function self:CreateESPWorldRenderer(opts: any?)
+		local renderer = ESPWorldRenderer.new(opts)
+		return renderer
+	end
+
+	function self:CreateLayoutVariants(mode: string)
+		local lv = LayoutVariants.new(self, mode)
+		return lv
 	end
 
 	return self :: any
