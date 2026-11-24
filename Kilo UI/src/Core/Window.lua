@@ -997,6 +997,36 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 		end))
 	end
 
+	local content = Helpers.CreateFrame({
+		Name = "Content",
+		Size = UDim2.new(1, 0, 1, -topBarHeight),
+		Position = UDim2.fromOffset(0, topBarHeight),
+		BackgroundTransparency = 1,
+		Parent = main,
+	})
+	content.ZIndex = 10
+
+	local tabList = Helpers.CreateFrame({
+		Name = "TabList",
+		Size = UDim2.new(0, 200, 1, 0),
+		BackgroundColor3 = library.Theme.Secondary,
+		BackgroundTransparency = 0.05,
+		Parent = content,
+	})
+	Helpers.Corner(tabList, Theme.CornerRadiusSmall)
+	Helpers.Stroke(tabList, library.Theme.Border, 1)
+	self.TabList = tabList
+
+	local pages = Helpers.CreateFrame({
+		Name = "Pages",
+		Size = UDim2.new(1, -200, 1, 0),
+		Position = UDim2.fromOffset(200, 0),
+		BackgroundTransparency = 1,
+		Parent = content,
+	})
+	pages.ZIndex = 10
+	self.Pages = pages
+
 	local island = Instance.new("CanvasGroup")
 	island.Name = "Island"
 	island.Size = UDim2.fromOffset(168, 34)
@@ -1371,7 +1401,7 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 
 	task.delay(1.2, function()
 		if self._BootGui then
-			Tween.Play(self._BootGui, { BackgroundTransparency = 1 }, { Time = 0.3 })
+			Tween.Play(bootBackdrop, { BackgroundTransparency = 1 }, { Time = 0.3 })
 			task.wait(0.32)
 			if self._BootGui then
 				self._BootGui:Destroy()
@@ -1444,6 +1474,23 @@ function Window.new(library: any, options: WindowOptions?): WindowHandle
 
 	if data.BackgroundImage then
 		self:SetBackgroundImage(data.BackgroundImage)
+	end
+
+	function self:CreateTab(name: string)
+		local tab = Tab.new(self, name)
+		table.insert(self._Tabs, tab)
+		if #self._Tabs == 1 then
+			self:_selectTab(tab)
+		end
+		return tab
+	end
+
+	function self:SetProfileStatus(status: string)
+		self._ProfileStatus = tostring(status or "")
+	end
+
+	function self:SetWatermarkEnabled(enabled: boolean)
+		self._WatermarkEnabled = enabled == true
 	end
 
 	return self :: any
