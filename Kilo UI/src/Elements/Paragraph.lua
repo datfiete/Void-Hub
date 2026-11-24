@@ -1,0 +1,128 @@
+--!strict
+
+local Theme = require(script.Parent.Parent.Core.Theme)
+local Maid = require(script.Parent.Parent.Utils.Maid)
+local Helpers = require(script.Parent.Parent.Utils.Helpers)
+
+local Paragraph = {}
+Paragraph.__index = Paragraph
+
+export type ParagraphOptions = {
+	Title: string?,
+	Content: string?,
+}
+
+export type ParagraphHandle = {
+	Set: (self: ParagraphHandle, content: string) -> (),
+	Get: (self: ParagraphHandle) -> string,
+	SetTitle: (self: ParagraphHandle, title: string) -> (),
+	GetTitle: (self: ParagraphHandle) -> string,
+	Destroy: (self: ParagraphHandle) -> (),
+}
+
+function Paragraph.new(section: any, data: ParagraphOptions): ParagraphHandle
+	local self = setmetatable({
+		_Section = section,
+		_Data = data,
+		_Maid = Maid.new(),
+		_Title = data.Title or "",
+		_Content = data.Content or "",
+	}, Paragraph)
+
+	local library = section.Tab.Window.Library
+
+	local row = Helpers.CreateFrame({
+		Name = "Paragraph",
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundColor3 = library.Theme.ElementBackground or library.Theme.Background,
+		Parent = section.Inner,
+	})
+	Helpers.Corner(row, Theme.CornerRadiusSmall)
+	local rowStroke = Helpers.Stroke(row, library.Theme.Border, 1)
+	local rowGlow = Helpers.Stroke(row, library.Theme.Accent, 2)
+	self._RowStroke = rowStroke
+	self._RowGlow = rowGlow
+	rowGlow.Transparency = 0.95
+	rowStroke.Transparency = 0.18
+	Helpers.Padding(row, 12)
+	Helpers.ListLayout(row, 6)
+
+	local titleLabel = Helpers.CreateLabel({
+		Name = "Title",
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Text = self._Title,
+		Font = Theme.FontBold,
+		TextSize = 17,
+		TextWrapped = true,
+		Visible = self._Title ~= "",
+		Parent = row,
+	})
+
+	local contentLabel = Helpers.CreateLabel({
+		Name = "Content",
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Text = self._Content,
+		TextColor3 = library.Theme.TextMuted,
+		TextWrapped = true,
+		Parent = row,
+	})
+
+	self.RowGlow = rowGlow
+
+	self.Instance = row
+	self.TitleLabel = titleLabel
+	self.ContentLabel = contentLabel
+
+	return self :: any
+end
+
+function Paragraph:RefreshTheme()
+	local theme = self._Section.Tab.Window.Library.Theme
+	local Tween = require(script.Parent.Parent.Utils.Tween)
+	Tween.Play(self.Instance, { BackgroundColor3 = theme.ElementBackground or theme.Background }, { Time = 0.22 })
+	Tween.Play(self.TitleLabel, { TextColor3 = theme.Text }, { Time = 0.22 })
+	Tween.Play(self.ContentLabel, { TextColor3 = theme.TextMuted }, { Time = 0.22 })
+	if self._RowStroke then
+		Tween.Play(self._RowStroke, { Color = theme.Border }, { Time = 0.22 })
+	end
+	if self._RowGlow then
+		Tween.Play(self._RowGlow, { Color = theme.Accent }, { Time = 0.22 })
+	end
+	for _, d in self.Instance:GetDescendants() do
+		if d:IsA("UIStroke") then
+			if d.Transparency > 0.5 then
+				Tween.Play(d, { Color = theme.Accent }, { Time = 0.22 })
+			else
+				Tween.Play(d, { Color = theme.Border }, { Time = 0.22 })
+			end
+		end
+	end
+end
+
+function Paragraph:Set(content: string)
+	self._Content = content
+	self.ContentLabel.Text = content
+end
+
+function Paragraph:Get(): string
+	return self._Content
+end
+
+function Paragraph:SetTitle(title: string)
+	self._Title = title
+	self.TitleLabel.Text = title
+	self.TitleLabel.Visible = title ~= ""
+end
+
+function Paragraph:GetTitle(): string
+	return self._Title
+end
+
+function Paragraph:Destroy()
+	self._Maid:DoCleaning()
+end
+
+return Paragraph

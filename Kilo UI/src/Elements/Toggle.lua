@@ -1,0 +1,213 @@
+--!strict
+
+local Theme = require(script.Parent.Parent.Core.Theme)
+local Maid = require(script.Parent.Parent.Utils.Maid)
+local Helpers = require(script.Parent.Parent.Utils.Helpers)
+local Tween = require(script.Parent.Parent.Utils.Tween)
+
+local Toggle = {}
+Toggle.__index = Toggle
+
+export type ToggleOptions = {
+	Name: string,
+	CurrentValue: boolean?,
+	Default: boolean?,
+	Flag: string?,
+	Save: boolean?,
+	Callback: ((value: boolean) -> ())?,
+}
+
+export type ToggleHandle = {
+	Set: (self: ToggleHandle, value: boolean) -> (),
+	Get: (self: ToggleHandle) -> boolean,
+	OnChanged: (self: ToggleHandle, callback: (value: boolean) -> ()) -> RBXScriptConnection,
+	Destroy: (self: ToggleHandle) -> (),
+}
+
+function Toggle.new(section: any, data: ToggleOptions): ToggleHandle
+	local self = setmetatable({
+		_Section = section,
+		_Data = data,
+		_Maid = Maid.new(),
+		_Value = data.CurrentValue == true or data.Default == true,
+		_Changed = Instance.new("BindableEvent"),
+	}, Toggle)
+
+	local library = section.Tab.Window.Library
+	local defaultValue = self._Value
+	local savedRaw = nil
+	if data.Flag and library:_shouldSaveFlag(data.Flag, data.Save) and library.Config then
+		savedRaw = library.Config:Get(`Flags.{data.Flag}`)
+	end
+	self._Value = library:_getSavedFlag(data.Flag, defaultValue, data.Save)
+
+	local row = Helpers.CreateFrame({
+		Name = "Toggle",
+		Size = UDim2.new(1, 0, 0, Theme.ElementHeight),
+		BackgroundColor3 = library.Theme.ElementBackground or library.Theme.Background,
+		Parent = section.Inner,
+	})
+	Helpers.Corner(row, Theme.CornerRadiusSmall)
+	local rowStroke = Helpers.Stroke(row, library.Theme.Border, 1)
+	rowStroke.Transparency = 0.18
+	local pop = Instance.new("UIScale")
+	pop.Scale = 0.94
+	pop.Parent = row
+	task.defer(function()
+		Tween.Play(pop, { Scale = 1 }, { Time = 0.18, EasingStyle = Enum.EasingStyle.Back })
+	end)
+
+	local label = Helpers.CreateLabel({
+		Name = "Label",
+		Size = UDim2.new(1, -56, 1, 0),
+		Position = UDim2.new(0, 12, 0, 0),
+		Text = data.Name,
+		Parent = row,
+	})
+
+	local switch = Helpers.CreateFrame({
+		Name = "Switch",
+		Size = UDim2.fromOffset(42, 22),
+		Position = UDim2.new(1, -12, 0.5, 0),
+		AnchorPoint = Vector2.new(1, 0.5),
+		BackgroundColor3 = library.Theme.Border,
+		Parent = row,
+	})
+	Helpers.Corner(switch, 999)
+	local switchStroke = Helpers.Stroke(switch, library.Theme.BorderStrong or library.Theme.Border, 1)
+	local switchGlow = Helpers.Glow(switch, library.Theme.Accent, 7, 0.93)
+	switchGlow.ZIndex = 0
+
+	local knob = Helpers.CreateFrame({
+		Name = "Knob",
+		Size = UDim2.fromOffset(16, 16),
+		Position = UDim2.new(0, 3, 0.5, 0),
+		AnchorPoint = Vector2.new(0, 0.5),
+		BackgroundColor3 = library.Theme.Text,
+		ZIndex = 2,
+		Parent = switch,
+	})
+	Helpers.Corner(knob, 999)
+
+	local clickTarget = Helpers.CreateButton({
+		Name = "ClickTarget",
+		Size = UDim2.fromScale(1, 1),
+		Text = "",
+		BackgroundTransparency = 1,
+		ZIndex = 3,
+		Parent = row,
+	})
+
+	self.Instance = row
+	self.Label = label
+	self.Switch = switch
+	self.Knob = knob
+	self.SwitchGlow = switchGlow
+
+	function self:_applyVisual(value: boolean, animate: boolean?)
+		local onColor = library.Theme.Accent
+		local offColor = library.Theme.Border
+		local targetPosition = if value then UDim2.new(1, -19, 0.5, 0) else UDim2.new(0, 3, 0.5, 0)
+		local targetColor = if value then onColor else offColor
+
+		if animate then
+			Tween.Play(knob, { Position = targetPosition })
+			Tween.Play(switch, { BackgroundColor3 = targetColor })
+			Tween.Play(switchStroke, { Color = if value then library.Theme.Accent else (library.Theme.BorderStrong or library.Theme.Border), Transparency = if value then 0.35 else 0.65 })
+		else
+			knob.Position = targetPosition
+			switch.BackgroundColor3 = targetColor
+			switchStroke.Color = if value then library.Theme.Accent else (library.Theme.BorderStrong or library.Theme.Border)
+			switchStroke.Transparency = if value then 0.35 else 0.65
+			switchGlow.ImageColor3 = library.Theme.Accent
+			switchGlow.ImageTransparency = if value then 0.88 else 1
+		end
+	end
+
+	function self:_commit(value: boolean, fireCallback: boolean?)
+		self._Value = value
+		self:_applyVisual(value, true)
+		library:_setFlag(data.Flag, value, data.Save)
+		self._Changed:Fire(value)
+
+		if fireCallback ~= false and type(data.Callback) == "function" then
+			task.spawn(function()
+				local ok, err = pcall(data.Callback, value)
+				if not ok then
+					warn("[Kilo UI] Toggle callback error:", err)
+				end
+			end)
+		end
+	end
+
+	self._Maid:Give(self._Changed)
+	self._Maid:GiveTask(clickTarget.MouseButton1Click:Connect(function()
+		self:_commit(not self._Value)
+	end))
+
+	if data.Flag then
+		library:_setFlag(data.Flag, self._Value, data.Save)
+		if library._bindFlagControl then
+			library:_bindFlagControl(data.Flag, self)
+		end
+	end
+
+	self:_applyVisual(self._Value, false)
+
+	if type(data.Callback) == "function" and data.FireOnLoad ~= false and savedRaw ~= nil then
+		task.defer(function()
+			local ok, err = pcall(data.Callback, self._Value)
+			if not ok then
+				warn("[Kilo UI] Toggle FireOnLoad error:", err)
+			end
+		end)
+	end
+
+	return self :: any
+end
+
+function Toggle:RefreshTheme()
+	local theme = self._Section.Tab.Window.Library.Theme
+	Tween.Play(self.Instance, { BackgroundColor3 = theme.ElementBackground or theme.Background }, { Time = 0.22 })
+	local rootStroke = self.Instance:FindFirstChildOfClass("UIStroke")
+	if rootStroke then
+		Tween.Play(rootStroke, { Color = theme.Border }, { Time = 0.22 })
+	end
+	if self.Label then
+		Tween.Play(self.Label, { TextColor3 = theme.Text }, { Time = 0.22 })
+	end
+	Tween.Play(self.Switch, { BackgroundColor3 = if self._Value then theme.Accent else theme.Border }, { Time = 0.22 })
+	if self.SwitchGlow then
+		if self.SwitchGlow:IsA("ImageLabel") then
+			self.SwitchGlow.ImageColor3 = theme.Accent
+			self.SwitchGlow.ImageTransparency = if self._Value then 0.84 else 1
+		elseif self.SwitchGlow:IsA("UIStroke") then
+			self.SwitchGlow.Color = theme.Accent
+			self.SwitchGlow.Transparency = if self._Value then 0.84 else 1
+		end
+	end
+	local switchStroke = self.Switch:FindFirstChildOfClass("UIStroke")
+	if switchStroke then
+		switchStroke.Color = if self._Value then theme.Accent else (theme.BorderStrong or theme.Border)
+		switchStroke.Transparency = if self._Value then 0.35 else 0.65
+	end
+	self.Knob.BackgroundColor3 = theme.Text
+end
+
+function Toggle:Set(value: boolean, fireCallback: boolean?)
+	self:_commit(value, fireCallback == true)
+end
+
+function Toggle:Get(): boolean
+	return self._Value
+end
+
+function Toggle:OnChanged(callback: (value: boolean) -> ()): RBXScriptConnection
+	return self._Changed.Event:Connect(callback)
+end
+
+function Toggle:Destroy()
+	self._Maid:DoCleaning()
+end
+
+return Toggle

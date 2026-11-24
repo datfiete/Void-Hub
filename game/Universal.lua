@@ -1,18 +1,3 @@
---[[
-    Universal Vaxiron Script - Improved ESP + Fixed Aimbot
-    Features:
-    - Box ESP (2D corners)
-    - Skeleton ESP (R6 + R15)
-    - Body ESP (filled body highlight / chams style)
-    - Health Bar ESP
-    - Tracer ESP
-    - Name + Distance ESP
-    - Soft Aim (Mouse / Camera) with better targeting
-    - FOV Circle
-    - Trigger Bot
-    - WalkSpeed / JumpPower / Infinite Jump / Fly / NoClip / Anti-AFK
-]]
-
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
